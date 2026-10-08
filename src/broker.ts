@@ -1,46 +1,32 @@
-/** Broker holds secrets; grants only allow-listed env keys into skill subprocess. */
+// Broker: holds the keys; a skill child gets only env names the Warden decided (SPEC §9 "Broker").
+import type { Cap } from "./types.ts";
 
-const KEYS = [
-  "BRAVE_API_KEY",
-  "TAVILY_API_KEY",
-  "APIFY_TOKEN",
-  "OPENAI_API_KEY",
-  "OPENROUTER_API_KEY",
-] as const;
+/** The only key a hand can ever get (`llm:call` is denied by the charter). */
+export const BROKER_MAP: Record<string, Cap> = { BRAVE_API_KEY: "net:fetch" };
 
-export type GrantKey = (typeof KEYS)[number];
-
-let provisional: GrantKey[] | null = null;
-
-export function setProvisionalGrant(keys: GrantKey[]): void {
-  provisional = keys;
-}
-
-export function clearProvisionalGrant(): void {
-  provisional = null;
-}
-
-export function searchEnvKey(): GrantKey {
-  const p = (process.env.SEARCH_PROVIDER ?? "brave").toLowerCase();
-  if (p === "tavily") return "TAVILY_API_KEY";
-  return "BRAVE_API_KEY";
-}
-
-export function buildChildEnv(allowed: string[]): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
-    PATH: process.env.PATH,
-  };
-  if (process.platform === "win32") {
-    env.SYSTEMROOT = process.env.SYSTEMROOT;
+/** Values for the granted names: only Broker-mapped names set in process.env; `{}` when OFFLINE=1. */
+export function brokerGrant(envNames: string[]): Record<string, string> {
+  if (process.env.OFFLINE === "1") return {};
+  const grant: Record<string, string> = {};
+  for (const name of envNames) {
+    if (!Object.hasOwn(BROKER_MAP, name)) continue;
+    const value = process.env[name];
+    if (value) grant[name] = value;
   }
-  for (const k of allowed) {
-    const v = process.env[k];
-    if (v !== undefined) env[k] = v;
-  }
-  return env;
+  return grant;
 }
 
-export function provisionalOr(decisionEnv: string[]): string[] {
-  if (provisional) return [...provisional];
-  return decisionEnv;
+// PRE provisional grant, held in memory for the Test of one run.
+const provisional = new Map<string, string[]>();
+
+export function setProvisionalGrant(runId: string, envNames: string[]): void {
+  provisional.set(runId, envNames.filter((n) => Object.hasOwn(BROKER_MAP, n)));
+}
+
+export function getProvisionalGrant(runId: string): string[] {
+  return [...(provisional.get(runId) ?? [])];
+}
+
+export function clearProvisionalGrant(runId: string): void {
+  provisional.delete(runId);
 }
