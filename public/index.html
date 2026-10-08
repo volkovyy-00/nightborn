@@ -153,6 +153,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .dstamp.on{display:inline-block}
 .conn{font:500 12px 'Geist Mono',monospace;color:var(--mute)}
 .conn.err{color:var(--red)}
+.audit-tog{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font:600 12px 'Geist Mono',monospace;letter-spacing:.08em;color:var(--mute);border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:36px}
+.audit-tog:hover{border-color:#3A464E;color:var(--ink)}
+.audit-tog input{accent-color:var(--cyan);margin:0}
+.audit-tog.on{color:var(--cyan);border-color:#1F5A50}
+.audit-panel{display:none;padding:16px 14px;flex-direction:column;gap:6px}
+.audit-panel.on{display:flex}
+.audit-row{font:400 12px/1.45 'Geist Mono',monospace;color:var(--mute);padding:3px 8px;border-radius:4px;overflow-wrap:anywhere;white-space:pre-wrap}
+.audit-row .a-ts{color:#6E7880}.audit-row .a-type{color:var(--cyan)}.audit-row .a-sum{color:var(--ink)}.audit-row .a-why{color:var(--amber);display:block;padding-left:1ch;margin-top:2px}
 @keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes blink{50%{opacity:.2}}
@@ -181,6 +189,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:36px;line-height:1">Nightborn</div>
     <div class="mono-muted" id="clock">night shift · --:--</div>
     <div class="conn" id="conn">connecting…</div>
+    <label class="audit-tog" id="auditTog" title="Show goal audit trail">
+      <input type="checkbox" id="auditChk" autocomplete="off">
+      <span>Audit</span>
+    </label>
   </div>
   <div style="display:flex;align-items:center;gap:14px">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
@@ -308,6 +320,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   </aside>
 </div>
 
+<section class="panel audit-panel" id="auditPanel" aria-hidden="true">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px;gap:12px;flex-wrap:wrap">
+    <span class="kicker">AUDIT</span>
+    <span class="mono-muted" id="auditMeta">ts · type · summary</span>
+  </div>
+  <div id="auditList"></div>
+</section>
+
 <section class="panel" style="padding:16px 14px;display:flex;flex-direction:column;gap:4px">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px">
     <span class="kicker">SURGERY LOG</span>
@@ -358,6 +378,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     input: document.getElementById("nbf-in"),
     send: document.getElementById("sendBtn"),
     wave: document.getElementById("wave"),
+    auditTog: document.getElementById("auditTog"),
+    auditChk: document.getElementById("auditChk"),
+    auditPanel: document.getElementById("auditPanel"),
+    auditList: document.getElementById("auditList"),
+    auditMeta: document.getElementById("auditMeta"),
     sutA: document.getElementById("sutA"),
     stA: document.getElementById("stA"),
     sutX: document.getElementById("sutX"),
@@ -373,7 +398,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   };
   const chips = [...document.querySelectorAll("[data-chip]")];
 
-  /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[]}} */
+  /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[], auditOn: boolean, goalId: string|null, auditRecords: any[]}} */
   const state = {
     lines: [],
     since: 0,
@@ -382,6 +407,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     audioUnlocked: false,
     bootHash: null,
     msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
+    auditOn: false,
+    goalId: null,
+    auditRecords: [],
   };
 
   /** @type {HTMLAudioElement[]} */
@@ -786,6 +814,91 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     }
   }
 
+  function setAuditOn(on) {
+    state.auditOn = !!on;
+    el.auditChk.checked = state.auditOn;
+    el.auditTog.classList.toggle("on", state.auditOn);
+    el.auditPanel.classList.toggle("on", state.auditOn);
+    el.auditPanel.setAttribute("aria-hidden", state.auditOn ? "false" : "true");
+    if (state.auditOn) pollAudit();
+    else {
+      state.auditRecords = [];
+      el.auditList.replaceChildren();
+      el.auditMeta.textContent = "ts · type · summary";
+    }
+  }
+
+  function renderAudit() {
+    if (!state.auditOn) return;
+    const rows = state.auditRecords.slice(-80);
+    el.auditList.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement("div");
+      empty.className = "audit-row";
+      empty.textContent = state.goalId
+        ? "no records for " + state.goalId
+        : "no audit records yet";
+      el.auditList.appendChild(empty);
+    } else {
+      rows.forEach((r) => {
+        const div = document.createElement("div");
+        div.className = "audit-row";
+        const ts = (r.ts || "").replace("T", " ").replace(/\.\d+Z$/, "Z");
+        const why = r.why ? '<span class="a-why">why: ' + escapeHtml(String(r.why)) + "</span>" : "";
+        div.innerHTML =
+          '<span class="a-ts">' + escapeHtml(ts) + "</span> " +
+          '<span class="a-type">' + escapeHtml(String(r.type || "")) + "</span> " +
+          '<span class="a-sum">' + escapeHtml(String(r.summary || "")) + "</span>" +
+          why;
+        el.auditList.appendChild(div);
+      });
+    }
+    el.auditMeta.textContent = state.goalId
+      ? "goal · " + state.goalId + " · " + rows.length + " shown"
+      : "all goals · " + rows.length + " shown";
+  }
+
+  function escapeHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  async function pollAudit() {
+    if (!state.auditOn) return;
+    try {
+      const q = state.goalId
+        ? "?goalId=" + encodeURIComponent(state.goalId)
+        : "";
+      const res = await fetch("/api/audit" + q);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      let records = Array.isArray(data.records) ? data.records : [];
+      // Prefer latest goalId from records when talk has not supplied one yet
+      if (!state.goalId) {
+        for (let i = records.length - 1; i >= 0; i--) {
+          const g = records[i].goalId;
+          if (typeof g === "string" && g) {
+            state.goalId = g;
+            records = records.filter((r) => r.goalId === g);
+            break;
+          }
+        }
+      }
+      state.auditRecords = records;
+      renderAudit();
+    } catch (_) {
+      if (!el.auditList.childElementCount) {
+        const err = document.createElement("div");
+        err.className = "audit-row";
+        err.textContent = "audit unreachable";
+        el.auditList.appendChild(err);
+      }
+    }
+  }
+
   async function talk(text) {
     const t = (text || "").trim();
     if (!t || state.busy) return;
@@ -802,6 +915,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
+      if (typeof data.goalId === "string" && data.goalId) state.goalId = data.goalId;
       if (data.kind === "chat") {
         state.msgs.push({ who: "nb", text: data.text || "", plain: true });
       } else if (data.kind === "job") {
@@ -815,6 +929,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
       }
+      if (state.auditOn) pollAudit();
     } catch (e) {
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {
@@ -989,11 +1104,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     })
     .catch(() => {});
 
+  el.auditChk.addEventListener("change", () => setAuditOn(el.auditChk.checked));
+  setAuditOn(false);
+
   fmtClock();
   setInterval(fmtClock, 15_000);
   render();
   poll();
   setInterval(poll, 1000);
+  setInterval(() => { if (state.auditOn) pollAudit(); }, 2000);
 })();
 </script>
 </body>

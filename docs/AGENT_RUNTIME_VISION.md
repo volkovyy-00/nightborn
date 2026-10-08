@@ -1,8 +1,8 @@
 # Nightborn agent runtime vision
 
-**Status:** design vision (not implemented).  
+**Status:** MVP implemented on `feature/agent-runtime` (Doctor async, wait/resume, secrets reload, scheduler, OFFLINE smoke). Evaluation (approve/deny/raise / Jev) remains **deferred**; the audit trail is ready to feed it.  
 **Audience:** humans and coding agents shaping the next architecture.  
-**Relation to today:** the current host is a synchronous workshop — one Talk emit → one Job → Create/Reuse → reply. This document describes the async, capability-growing runtime we want next. Evaluation (approve/deny/raise) is **deferred**; the audit trail must be ready to feed it.
+**Relation to today:** the host grew an async agent loop beside the workshop path — Talk can request capabilities, park on Doctor, and resume on events without the user re-stating the goal. Indicative APIs below remain guidance, not a frozen contract.
 
 Indicative APIs, types, and file layouts below are **examples for discussion**, not a frozen contract. Prefer the ergonomics principles over any particular name.
 

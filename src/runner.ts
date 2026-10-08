@@ -24,11 +24,26 @@ import {
   loadForgeFixture,
   writeForgedSkill,
 } from "./forge.ts";
-import { findJudgeFixture, loadTalkFixture, pushHistory, talkViaPi, type TalkFixture } from "./talk.ts";
+import {
+  findJudgeFixture,
+  loadTalkFixture,
+  planAgentTurn,
+  pushHistory,
+  talkEmitToActions,
+  type TalkFixture,
+} from "./talk.ts";
 import type { ForgeArtifact } from "./types.ts";
 import { runSkill } from "./exec.ts";
 import { validateHttpOutput } from "../templates/schemas.ts";
 import { clearProvisionalGrant, grantKeysForCaps, provisionalOr } from "./broker.ts";
+import {
+  newGoalId,
+  runAgentLoop,
+  wireAgentResume,
+  type AgentLoopResult,
+} from "./agent/loop.ts";
+import { append as auditAppend } from "./audit.ts";
+import type { ResumeContext } from "./agent/resume.ts";
 
 function skillsRoot(): string {
   return dataPath("skills");
@@ -478,7 +493,12 @@ async function runEmailDenied(source?: "live" | "fixture"): Promise<TalkResult> 
   };
 }
 
-async function handleJob(job: Job, forge: TalkFixture["forge"] | undefined, source?: "live" | "fixture"): Promise<TalkResult> {
+/** Existing Runner Create/Reuse path — used as sequential `run_skill` by the agent loop. */
+export async function executeJob(
+  job: Job,
+  forge?: TalkFixture["forge"],
+  source?: "live" | "fixture",
+): Promise<TalkResult> {
   appendLog({
     actor: "talk",
     event: "job",
@@ -505,6 +525,39 @@ async function handleJob(job: Job, forge: TalkFixture["forge"] | undefined, sour
   return runCreate(job, forge, source, /* gapLogged */ true);
 }
 
+function loopResultToTalk(result: AgentLoopResult): TalkResult {
+  if (result.status === "waiting") {
+    return { kind: "chat", text: result.text };
+  }
+  const last = result.skillResults[result.skillResults.length - 1];
+  if (last?.kind === "job") return last;
+  return { kind: "chat", text: result.text };
+}
+
+async function runLoopFromActions(
+  goalId: string,
+  userText: string | undefined,
+  actions: ReturnType<typeof talkEmitToActions>,
+  forge: TalkFixture["forge"] | undefined,
+  source: "live" | "fixture",
+): Promise<TalkResult> {
+  let planned = false;
+  const loopResult = await runAgentLoop(
+    { goalId, userText },
+    {
+      plan: async () => {
+        if (planned) return [];
+        planned = true;
+        return actions;
+      },
+      runSkill: (job) => executeJob(job, forge, source),
+    },
+  );
+  const talk = loopResultToTalk(loopResult);
+  pushHistory("assistant", talk.kind === "chat" ? talk.text : talk.reply);
+  return talk;
+}
+
 export async function handleTalk(text: string, fixtureName?: string): Promise<TalkResult> {
   pushHistory("user", text);
 
@@ -519,7 +572,7 @@ export async function handleTalk(text: string, fixtureName?: string): Promise<Ta
     return finishFromEmit(text, fx.talk, fx.forge, "fixture");
   }
 
-  // Tripwire before Talk
+  // Tripwire before Talk — DENIED specimen; no doctor / agent loop
   if (tripwireMatch(text)) {
     const r = await runEmailDenied("live");
     pushHistory("assistant", r.kind === "chat" ? r.text : r.reply);
@@ -531,8 +584,28 @@ export async function handleTalk(text: string, fixtureName?: string): Promise<Ta
     return finishFromEmit(text, judged.talk, judged.forge, "fixture");
   }
 
-  const emit = await talkViaPi(text);
-  return finishFromEmit(text, emit, undefined, "live");
+  // Live planner → host action loop (Doctor submit is non-blocking; wait parks)
+  const goalId = newGoalId(text);
+  const loopResult = await runAgentLoop(
+    { goalId, userText: text },
+    {
+      plan: planAgentTurn,
+      runSkill: (job) => executeJob(job, undefined, "live"),
+    },
+  );
+  await auditAppend({
+    type: "agent.turn",
+    goalId,
+    summary: `Agent turn ${loopResult.status}`,
+    data: {
+      status: loopResult.status,
+      steps: loopResult.steps,
+      actionsExecuted: loopResult.actionsExecuted,
+    },
+  });
+  const talk = loopResultToTalk(loopResult);
+  pushHistory("assistant", talk.kind === "chat" ? talk.text : talk.reply);
+  return talk;
 }
 
 async function finishFromEmit(
@@ -559,12 +632,39 @@ async function finishFromEmit(
     return r;
   }
 
-  if (emit.kind === "chat") {
-    pushHistory("assistant", emit.text);
-    return { kind: "chat", text: emit.text };
-  }
+  const goalId = newGoalId(userText);
+  return runLoopFromActions(goalId, userText, talkEmitToActions(emit), forge, source);
+}
 
-  const r = await handleJob(emit.job, forge, source);
-  pushHistory("assistant", r.kind === "chat" ? r.text : r.reply);
-  return r;
+/**
+ * Boot agent event bridge + resume handler (no user text on wake).
+ * Call once from server startup.
+ */
+export function startAgentRuntime(): () => void {
+  return wireAgentResume({
+    plan: planAgentTurn,
+    runSkill: (job) => executeJob(job, undefined, "live"),
+    async onResult(result: AgentLoopResult, resume: ResumeContext) {
+      appendLog({
+        actor: "talk",
+        event: "job",
+        skill: resume.skill,
+        decision: "allow",
+        charterHash: getCharterHash(),
+        detail: `resume:${result.status}:${resume.requestId}`,
+      });
+      await auditAppend({
+        type: "agent.resume",
+        goalId: resume.goalId,
+        summary: `Resumed on capability.ready → ${resume.skill}`,
+        data: {
+          requestId: resume.requestId,
+          skill: resume.skill,
+          status: result.status,
+          allSatisfied: resume.allSatisfied,
+        },
+      });
+      if (result.text) pushHistory("assistant", result.text);
+    },
+  });
 }

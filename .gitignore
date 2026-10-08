@@ -5,3 +5,18 @@ video/
 *.mp4
 *.mov
 .DS_Store
+
+# Runtime ephemera (keep README / .gitkeep)
+audit/*.jsonl
+doctor/inbox/*.md
+doctor/wip/*.md
+doctor/done/*.md
+doctor/failed/*.md
+memory/goals/**
+memory/journal/**
+memory/waits/**
+!memory/**/.gitkeep
+schedules/*.json
+skills/smoke_*
+surgery.log
+surgery.*.log

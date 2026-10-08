@@ -1,0 +1,34 @@
+{
+  "name": "used-car-path",
+  "description": "Fixture-driven agent actions for T14 smoke: explore → scrapers → wait → (optional) call/needs_secret.",
+  "goalText": "Look at used-car listings and give me the best deals.",
+  "exploreQuery": "Where are used cars listed in this region?",
+  "scrapeQuery": "BMW under 10k",
+  "callQuery": "+15555550100|||Used-car listing follow-up. Still available?",
+  "sites": [
+    {
+      "key": "a",
+      "title": "Site A marketplace",
+      "url": "https://a.example/cars",
+      "skillTitle": "smoke_scrape_site_a",
+      "defaultsHint": "listings.http_scrape"
+    },
+    {
+      "key": "b",
+      "title": "Site B classifieds",
+      "url": "https://b.example/used",
+      "skillTitle": "smoke_scrape_site_b",
+      "defaultsHint": "listings.http_scrape"
+    }
+  ],
+  "call": {
+    "skillTitle": "smoke_place_outbound_call",
+    "defaultsHint": "voice.outbound_bland",
+    "suggestedCaps": ["notify:phone", "net:fetch"],
+    "why": "Listings expose phones; goal asks for best deals → verify availability by call"
+  },
+  "exploreItems": [
+    { "title": "Site A marketplace", "url": "https://a.example/cars" },
+    { "title": "Site B classifieds", "url": "https://b.example/used" }
+  ]
+}

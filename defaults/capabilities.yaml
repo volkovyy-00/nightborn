@@ -1,0 +1,23 @@
+# Defaults capability registry — Doctor consults before inventing APIs.
+# Keys align with docs/AGENT_RUNTIME_VISION.md §6.5.
+
+listings.http_scrape:
+  description: Fetch listing cards over HTTP and map to items[]
+  caps: [net:fetch]
+  envKeys: []
+  notes: |
+    Prefer site HTML/JSON already public. No headless browser in MVP unless charter grows.
+
+search.web:
+  description: Web search via Brave Search (Tavily as fallback env)
+  caps: [net:fetch]
+  envKeys: [BRAVE_API_KEY]
+  fallbackEnvKeys: [TAVILY_API_KEY]
+
+voice.outbound_bland:
+  description: Outbound phone call via Bland AI
+  caps: [notify:phone, net:fetch]
+  envKeys: [BLAND_API_KEY]
+  notes: |
+    POST https://api.bland.ai/v1/calls
+    Conversational: one question per turn.
