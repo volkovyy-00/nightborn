@@ -235,7 +235,9 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
         if (r.timedOut || r.overflow || !r.ok) {
           const code = r.timedOut ? "timeout" : "test_exit_nonzero";
           step(`test ${k}: ${code}`, r.ms);
-          throw new Error(`${code}: ${scrubPaths(r.stderr, runDir).slice(0, STDERR_MAX) || `exit ${r.code ?? "signal"}`}`);
+          const err = scrubPaths(r.stderr, runDir).slice(0, STDERR_MAX) || `exit ${r.code ?? "signal"}`;
+          console.warn(`[builder] ${name} test ${k} ${code}: ${err.slice(0, 400).replace(/\s+/g, " ")}`); // server console only, never the log
+          throw new Error(`${code}: ${err}`);
         }
         const v = validateOutput(r.stdout);
         if (!v.ok) {
