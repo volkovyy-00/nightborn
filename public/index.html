@@ -1,96 +1,828 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Nightborn · stub</title>
-    <style>
-      body { font-family: ui-monospace, monospace; background: #0d0f12; color: #d8dde6; margin: 1.5rem; }
-      h1 { letter-spacing: 0.08em; }
-      #reply { white-space: pre-wrap; min-height: 3rem; border-left: 2px solid #3d8; padding-left: 0.75rem; }
-      #log { font-size: 12px; max-height: 50vh; overflow: auto; }
-      .ln { opacity: 0.85; }
-      button, input { font: inherit; }
-      input { width: min(40rem, 100%); background: #161a20; color: inherit; border: 1px solid #333; padding: 0.4rem; }
-      .chips button { margin: 0.25rem 0.25rem 0 0; }
-      .muted { opacity: 0.6; font-size: 12px; }
-    </style>
-  </head>
-  <body>
-    <h1>NIGHTBORN <span class="muted">stub UI — real surface from UI worktree</span></h1>
-    <p>CHARTER LOCKED · <code id="hash">—</code> · <span id="strip">charter unchanged since boot · granted ⊆ charter</span></p>
-    <p class="muted">VOICE · WAV · see docs/UI_CONTRACT.md</p>
-    <div id="reply">Awake. Waiting for /api/talk.</div>
-    <div class="chips">
-      <button data-t="News on Microsoft">News on Microsoft</button>
-      <button data-t="News on OpenAI">News on OpenAI</button>
-      <button data-t="Email this news digest to my boss every morning.">Email digest…</button>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nightborn</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+:root{
+  --bg:#07090B; --panel:#0E1215; --line:#232A30; --ink:#E8E4DA; --mute:#8A9299;
+  --cyan:#5CF2D6; --amber:#FFB547; --violet:#9B7BFF; --red:#FF6B6B; --red-deep:#FF3B3B;
+}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-ui,sans-serif}
+*{box-sizing:border-box}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.kicker{font:600 12px/1 'Geist',system-ui,sans-serif;letter-spacing:.16em;color:var(--mute)}
+.mono-muted{font:500 12.5px/1.35 'Geist Mono',monospace;color:var(--mute)}
+.mode{font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.06em;padding:8px 12px;border-radius:999px;border:1px solid #2B343B;color:var(--mute);white-space:nowrap}
+.mode-build{color:var(--amber);border-color:#5A4320}
+.mode-done,.mode-reuse{color:var(--cyan);border-color:#1F5A50}
+.mode-deny{color:var(--red);border-color:#6B2226}
+.st{border:1px solid var(--line);border-top:3px solid #2B343B;border-radius:10px;padding:10px 10px 12px;min-height:98px;background:#0B0F12}
+.st-top{display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:var(--mute)}
+.st-label{font:700 15px/1.2 'Geist',sans-serif;letter-spacing:.1em;margin-top:8px;color:var(--ink)}
+.st-det{font:400 12px/1.35 'Geist Mono',monospace;color:var(--mute);margin-top:6px;overflow-wrap:anywhere}
+.st-active{border-top-color:var(--amber);background:#15120B}
+.st-active .st-mark{color:var(--amber);animation:blink .8s steps(2) infinite}
+.st-w.st-active{border-top-color:var(--violet);background:#120F1C}
+.st-w.st-active .st-mark{color:var(--violet)}
+.st-done{border-top-color:var(--cyan)}
+.st-done .st-mark{color:var(--cyan)}
+.st-fail{border-color:#6B2226;border-top-color:var(--red-deep);background:#1A0C0D}
+.st-fail .st-mark,.st-fail .st-label{color:var(--red)}
+.st-fail .st-det{color:#FF8A8A}
+.st-bypass{opacity:.3}
+.st-bypass .st-label{text-decoration:line-through}
+.cap{font:500 12.5px 'Geist Mono',monospace;padding:5px 9px;border-radius:6px;border:1px solid #1F5A50;color:var(--cyan);white-space:nowrap}
+.cap-no{border-color:#4A2023;color:#D07478;text-decoration:line-through}
+.cap-pulse{animation:cappulse 1s ease-in-out infinite}
+.board{position:relative;width:100%;max-width:860px;aspect-ratio:600/440;margin:0 auto;border:1px solid #1C2328;border-radius:12px;background-color:#090C0E;background-image:linear-gradient(#11171B 1px,transparent 1px),linear-gradient(90deg,#11171B 1px,transparent 1px);background-size:28px 28px;overflow:hidden}
+.board-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bcap{position:absolute;font:500 clamp(8px,.85vw,11px)/1 'Geist Mono',monospace;letter-spacing:.18em;color:#6E7880;white-space:nowrap}
+.bcap-tl{left:3.3%;top:3%}
+.bcap-bc{left:50%;bottom:3%;transform:translateX(-50%)}
+.wire{fill:none;stroke:#3A464E;stroke-width:2}
+.term{fill:#1A2228;stroke:#5A666E;stroke-width:1.5}
+.bolt{fill:var(--mute)}
+.clamp{fill:#2A3339;stroke:var(--mute);stroke-width:1.2}
+.arc{fill:none;stroke:#D9D0FF;stroke-width:1.6;stroke-linejoin:round;opacity:0}
+.arc-on{animation:flicker .16s steps(2) infinite}
+.arc-on2{animation:flicker .23s steps(2) infinite}
+.arc-deny{stroke:#FF5A5A;animation:flicker .12s steps(2) 6}
+.ring-line{fill:none;stroke:var(--violet);stroke-width:1.5;stroke-dasharray:2 4;opacity:.7;transform-box:fill-box;transform-origin:center}
+.ring-cinch{stroke:var(--red-deep);opacity:1;animation:cinch .45s ease-out 3}
+.ring-txt{fill:var(--violet);font:500 9.5px 'Geist Mono',monospace;letter-spacing:.3em}
+.ring-deny{fill:var(--red)}
+.orb{fill:#12181C;transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out infinite}
+.orb-frozen{animation:none}
+.patch{fill:#1A2329}
+.patch2{fill:#0E1316}
+.orb-edge{fill:none;stroke:var(--ink);stroke-width:1.8}
+.orb-edge-dead{stroke:var(--red-deep)}
+.seam{fill:none;stroke:#C8C2B6;stroke-width:1.2;stroke-linecap:round}
+.seam-st{fill:none;stroke:#C8C2B6;stroke-width:8;stroke-dasharray:1.4 6.5}
+.life{fill:var(--cyan);transform-box:fill-box;transform-origin:center;animation:beat 1.1s ease-in-out infinite}
+.life-dead{fill:var(--red-deep);animation:none}
+.halo{fill:none;stroke:var(--cyan);stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ripple 1.1s ease-out infinite}
+.halo-dead{stroke:var(--red-deep);animation:none;opacity:.8}
+.sut{fill:none;stroke-width:1.6;stroke-linecap:round}
+.sut-vacant{stroke:#2B343B;stroke-dasharray:3 5}
+.sut-forging{stroke:var(--amber);stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s ease-out forwards}
+.sut-scan{stroke:var(--violet);animation:pulse .9s ease-in-out infinite}
+.sut-testing{stroke:var(--amber);stroke-dasharray:6 8;animation:flowdash .5s linear infinite}
+.sut-alive{stroke:var(--cyan)}
+.sut-flow{stroke:var(--cyan);stroke-dasharray:6 8;animation:flowdash .4s linear infinite}
+.sut-rejected,.sut-broken{stroke:var(--red-deep);stroke-dasharray:4 6}
+.st8{fill:none;stroke-width:9;stroke-dasharray:1.6 8;opacity:0}
+.st8-forging{stroke:var(--amber);animation:fade .3s .8s forwards}
+.st8-scan{stroke:#B9A6FF;opacity:.9}
+.st8-testing{stroke:var(--amber);opacity:.9}
+.st8-alive{stroke:var(--ink);opacity:.75}
+.st8-flow{stroke:var(--cyan);opacity:1}
+.tag{position:absolute;width:30%;height:22.73%;border-radius:8px;background:#10161A;border:1px solid #2B343B;display:flex;flex-direction:column;justify-content:center;gap:.2em;font-size:clamp(8px,1.02vw,13px);overflow:hidden}
+.tag-a{left:3.33%;top:10.45%;padding:.6em 2.4em .6em .9em}
+.tag-b{left:66.67%;top:10.45%;padding:.6em .9em .6em 2.4em}
+.tag-c{left:3.33%;top:65.9%;padding:.6em 2.4em .6em .9em}
+.tag-x{left:66.67%;top:65.9%;padding:.6em .9em .6em 2.4em}
+.hole{position:absolute;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;background:var(--bg);box-shadow:0 0 0 .22em #3A464E}
+.tag-a .hole,.tag-c .hole{right:calc(7.8% - .45em)}
+.tag-b .hole,.tag-x .hole{left:calc(7.8% - .45em)}
+.t-k{font:600 .76em/1.2 'Geist',sans-serif;letter-spacing:.14em;color:var(--mute)}
+.t-n{font:600 1.08em/1.2 'Geist Mono',monospace;color:var(--ink);overflow-wrap:anywhere}
+.t-l2{font:500 .88em/1.25 'Geist Mono',monospace;color:var(--cyan)}
+.t-l3{font:500 .8em/1.25 'Geist Mono',monospace;color:#6E7880}
+.badge{position:absolute;top:.6em;font:700 .68em/1 'Geist',sans-serif;letter-spacing:.14em;padding:.35em .55em;border-radius:4px}
+.tag-a .badge,.tag-c .badge{right:calc(7.8% + 1.2em)}
+.tag-b .badge,.tag-x .badge{right:.7em}
+.b-none{display:none}
+.b-amber{color:var(--amber);border:1px solid #5A4320}
+.b-violet{color:#B9A6FF;border:1px solid #3E3366}
+.b-cyan{color:var(--cyan);border:1px solid #1F5A50}
+.b-red{color:#FF8A8A;border:1px solid #6B2226}
+.tag-vacant{background:rgba(9,12,14,.6);border:1px dashed #2B343B}
+.tag-vacant .t-n{color:#6E7880;font-weight:500}
+.tag-vacant .t-l2{color:#6E7880}
+.tag-forging{border-color:var(--amber);animation:flick 1.2s ease-in-out infinite}
+.tag-scan{border-color:var(--violet)}
+.tag-scan::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--violet);animation:scan 1s linear infinite}
+.tag-testing{border-color:var(--amber)}
+.tag-testing .t-l2{color:var(--amber)}
+.tag-alive{border-color:#1F5A50}
+.tag-flow{border-color:var(--cyan);animation:glow .5s ease-in-out 3}
+.tag-rejected,.tag-broken{border-color:var(--red-deep);background:#1A0C0D}
+.tag-rejected .t-l2,.tag-broken .t-l2{color:#FF8A8A}
+.stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);font:800 1.45em/1 'Geist',sans-serif;letter-spacing:.12em;color:var(--red-deep);border:2px solid var(--red-deep);border-radius:4px;padding:.15em .4em;opacity:0;background:rgba(26,12,13,.85)}
+.tag-rejected .stamp,.tag-broken .stamp{opacity:1}
+.deny{position:absolute;inset:0;background:rgba(7,9,11,.55);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px;z-index:5;animation:fade .2s ease-out}
+.deny.on{display:flex}
+.deny-band{align-self:stretch;background:#C81E25;color:#F4F0E6;text-align:center;padding:12px 16px 14px;transform:rotate(-2deg);animation:slam .24s cubic-bezier(.2,.9,.3,1.25)}
+.deny-word{font:800 clamp(44px,7vw,104px)/1 'Geist',sans-serif;letter-spacing:.06em}
+.deny-code{font:500 clamp(12px,1.3vw,16px)/1.4 'Geist Mono',monospace;margin-top:6px}
+.cap1,.cap2{font:italic clamp(20px,2.4vw,32px)/1.2 'Instrument Serif',serif;color:var(--ink);text-align:center}
+.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px;justify-content:flex-end}
+.row{display:flex}
+.row-u{justify-content:flex-end}
+.bubble-u{max-width:85%;background:#161C21;border:1px solid var(--line);border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:var(--ink)}
+.bubble-n{max-width:96%;width:100%}
+.nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:var(--ink)}
+.nb-voice{color:#FF8A8A}
+.nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
+.chip{font:500 13px/1.25 'Geist',sans-serif;color:var(--ink);background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
+.chip:hover{border-color:var(--cyan)}
+.chip-deny{border-color:#4A2023}
+.chip-deny:hover{border-color:var(--red)}
+.chip:disabled{opacity:.4;cursor:default;border-color:#2B343B}
+.inp{flex:1 1 200px;min-width:0;background:var(--bg);border:1px solid #2B343B;border-radius:10px;padding:12px 14px;min-height:48px;color:var(--ink);font:500 15px 'Geist Mono',monospace}
+.inp:disabled{opacity:.5}
+.send{background:var(--ink);color:var(--bg);border:0;border-radius:10px;padding:0 20px;min-height:48px;font:600 14px 'Geist',sans-serif;cursor:pointer}
+.send:disabled{opacity:.4;cursor:default}
+.vlabel{display:flex;align-items:center;gap:10px;border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:44px;color:var(--ink);font:600 12.5px 'Geist Mono',monospace;letter-spacing:.08em}
+.wave{display:flex;gap:3px;align-items:center;height:22px}
+.wave span{display:block;width:3px;height:4px;background:#3A464E;border-radius:2px}
+.wave-on span{background:var(--violet);animation:wv .6s ease-in-out infinite alternate}
+.ln{display:flex;flex-wrap:wrap;gap:2px 12px;font:400 12.5px/1.5 'Geist Mono',monospace;color:var(--mute);padding:4px 8px;border-radius:6px}
+.ln-new{color:var(--ink);background:#131A1F}
+.ln-deny{color:#FF8A8A}
+.ln-deny.ln-new{background:#1E0F11}
+.c-t{min-width:8ch}.c-e{min-width:8ch}.c-a{min-width:6ch}.c-d{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.c-h{color:var(--cyan)}
+.hash-bad{color:var(--red)!important}
+.dstamp{display:none;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:var(--red);border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}
+.dstamp.on{display:inline-block}
+.conn{font:500 12px 'Geist Mono',monospace;color:var(--mute)}
+.conn.err{color:var(--red)}
+@keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes blink{50%{opacity:.2}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes cinch{0%{transform:scaleX(1)}50%{transform:scaleX(.72)}100%{transform:scaleX(1)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes flowdash{to{stroke-dashoffset:-22}}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes beat{50%{transform:scale(1.35)}}
+@keyframes wv{from{height:4px}to{height:22px}}
+@keyframes flicker{0%{opacity:.95}100%{opacity:.1}}
+@keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+@keyframes flick{50%{box-shadow:0 0 0 3px rgba(255,181,71,.18)}}
+@keyframes scan{from{top:0}to{top:100%}}
+@keyframes glow{50%{box-shadow:0 0 0 5px rgba(92,242,214,.22)}}
+@keyframes cappulse{50%{box-shadow:0 0 0 4px rgba(255,59,59,.35);border-color:var(--red-deep);color:#FF8A8A}}
+@media (max-width:620px){.st-det{display:none}.st{min-height:62px;padding:8px 6px}.st-label{font-size:11px;letter-spacing:.03em}.t-k,.t-l3,.badge{display:none}.tag-a,.tag-c{padding:.4em 1.8em .4em .5em}.tag-b,.tag-x{padding:.4em .5em .4em 1.8em}.bcap-bc{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</head>
+<body>
+<div style="min-height:100vh;padding:20px;display:flex;flex-direction:column;gap:16px">
+
+<header class="panel" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 32px;padding:14px 22px">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:36px;line-height:1">Nightborn</div>
+    <div class="mono-muted" id="clock">night shift · --:--</div>
+    <div class="conn" id="conn">connecting…</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+    <div>
+      <div class="kicker">CHARTER LOCKED</div>
+      <div id="hashDisp" style="font-family:'Geist Mono',monospace;font-size:28px;font-weight:600;letter-spacing:0.04em;margin-top:4px">————————</div>
+      <div class="mono-muted" id="authStrip" style="margin-top:4px">waiting for boot line…</div>
     </div>
-    <p>
-      <input id="msg" placeholder="Message Nightborn" />
-      <button id="send">Send</button>
-    </p>
-    <h2>SURGERY LOG</h2>
-    <div id="log"></div>
-    <script>
-      let since = 0;
-      let first = true;
-      const reply = document.getElementById("reply");
-      const logEl = document.getElementById("log");
-      const hashEl = document.getElementById("hash");
-      const sendBtn = document.getElementById("send");
-      const chips = [...document.querySelectorAll(".chips button")];
+    <div class="mono-muted" id="lineCount">log · 0 lines</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:24px;font-weight:800;letter-spacing:0.03em">
+      <span style="color:var(--cyan)" id="forged">+0 FORGED</span><span style="color:#6E7880"> · </span><span id="authority">+0 AUTHORITY</span>
+    </div>
+    <div class="dstamp" id="lastDenied"></div>
+  </div>
+</header>
 
-      function setBusy(b) {
-        sendBtn.disabled = b;
-        chips.forEach((c) => (c.disabled = b));
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:stretch">
+  <section class="panel" style="flex:999 1 600px;min-width:0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <span class="kicker">PIPELINE</span>
+      <span class="mode" id="modePill">IDLE · WAITING FOR A JOB</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px" id="stations"></div>
+
+    <div style="flex-grow:1;display:flex;align-items:center;justify-content:center">
+      <div class="board" role="img" aria-label="Nightborn specimen: a stitched core sealed by a charter ring; each installed skill is a tagged graft sewn to it">
+        <svg class="board-svg" viewBox="0 0 600 440" aria-hidden="true">
+          <defs>
+            <path id="nbf-ring" d="M300 110 a90 90 0 1 1 -0.01 0"></path>
+            <clipPath id="nbf-orb"><circle cx="300" cy="200" r="52"></circle></clipPath>
+          </defs>
+          <path id="sutA" class="sut sut-vacant" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path id="stA" class="st8" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path class="sut sut-vacant" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path class="sut sut-vacant" d="M186 340 C 210 336, 236 300, 250 262"></path>
+          <path id="sutX" class="sut sut-vacant" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path class="wire" d="M250 48 C 250 100, 254 132, 266 160"></path>
+          <path class="wire" d="M350 48 C 350 100, 346 132, 334 160"></path>
+          <rect class="term" x="241" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="250" cy="38" r="3.5"></circle>
+          <rect class="term" x="341" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="350" cy="38" r="3.5"></circle>
+          <path id="arc1" class="arc" d="M258 36 L 270 26 L 280 40 L 292 22 L 304 38 L 316 21 L 328 37 L 342 36"></path>
+          <path id="arc2" class="arc" d="M258 40 L 268 47 L 282 32 L 294 46 L 306 30 L 318 44 L 330 30 L 342 40"></path>
+          <circle id="ring" class="ring-line" cx="300" cy="200" r="80"></circle>
+          <text id="ringTxt" class="ring-txt"><textPath href="#nbf-ring" id="ringPath">CHARTER LOCKED · ———————— · CHARTER LOCKED · ———————— ·</textPath></text>
+          <circle id="orb" class="orb" cx="300" cy="200" r="52"></circle>
+          <g clip-path="url(#nbf-orb)">
+            <path class="patch" d="M240 130 H 362 V 170 Q 300 206 246 178 Z"></path>
+            <path class="patch2" d="M292 148 Q 318 206 290 252 L 362 262 L 362 182 Q 330 194 305 190 Z"></path>
+          </g>
+          <path class="seam" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam-st" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam" d="M292 150 Q 318 206 290 250"></path>
+          <path class="seam-st" d="M292 150 Q 318 206 290 250"></path>
+          <circle id="orbEdge" class="orb-edge" cx="300" cy="200" r="52"></circle>
+          <circle id="halo" class="halo" cx="306" cy="194" r="16"></circle>
+          <circle id="life" class="life" cx="306" cy="194" r="6"></circle>
+          <rect class="clamp" x="259" y="155" width="14" height="9" rx="2" transform="rotate(-35 266 160)"></rect>
+          <rect class="clamp" x="327" y="155" width="14" height="9" rx="2" transform="rotate(35 334 160)"></rect>
+        </svg>
+        <div class="bcap bcap-tl">CASE 03 · ASSEMBLED FROM PARTS</div>
+        <div class="bcap bcap-bc">STITCHED AT NIGHT · GRAFTS NEVER WIDEN THE CHARTER</div>
+        <div id="slots"></div>
+        <div class="deny" id="denyOverlay" role="alert">
+          <div class="deny-band">
+            <div class="deny-word">DENIED</div>
+            <div class="deny-code" id="denyCode">capability_not_allowed · notify:email ∉ charter</div>
+          </div>
+          <div>
+            <div class="cap1">“I can build hands for that.</div>
+            <div class="cap2">I’m not allowed to use them.”</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+      <span class="kicker" style="margin-right:4px">CHARTER GRANTS</span>
+      <span class="cap">net:fetch</span>
+      <span class="cap">llm:call</span>
+      <span class="cap">fs:read_own</span>
+      <span class="kicker" style="margin:0 4px 0 12px">NEVER</span>
+      <span class="cap cap-no" id="emailCap">notify:email</span>
+      <span class="cap cap-no">budget:write</span>
+      <span class="cap cap-no">charter:write</span>
+      <span class="cap cap-no">secrets:read</span>
+      <span class="cap cap-no">fs:write_own</span>
+    </div>
+  </section>
+
+  <aside style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:16px">
+    <section class="panel" style="padding:18px;display:flex;flex-direction:column;gap:14px;flex-grow:1">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <span class="kicker">WORKBENCH</span>
+        <span class="vlabel">
+          <span class="wave" id="wave" aria-hidden="true"><span style="animation-delay:0ms"></span><span style="animation-delay:120ms"></span><span style="animation-delay:240ms"></span><span style="animation-delay:60ms"></span><span style="animation-delay:180ms"></span><span style="animation-delay:300ms"></span><span style="animation-delay:90ms"></span></span>
+          <span>VOICE · WAV</span>
+        </span>
+      </div>
+      <div class="msgs" id="msgs" style="flex-grow:1"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button type="button" class="chip" data-chip>News on Microsoft</button>
+        <button type="button" class="chip" data-chip>News on OpenAI</button>
+        <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
+      </div>
+      <form id="talkForm" style="display:flex;gap:8px;flex-wrap:wrap">
+        <label for="nbf-in" class="sr">Message Nightborn</label>
+        <input id="nbf-in" class="inp" type="text" autocomplete="off" placeholder="Message Nightborn">
+        <button type="submit" class="send" id="sendBtn">Send</button>
+      </form>
+    </section>
+  </aside>
+</div>
+
+<section class="panel" style="padding:16px 14px;display:flex;flex-direction:column;gap:4px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px">
+    <span class="kicker">SURGERY LOG</span>
+    <span class="mono-muted">time · event · actor · detail · charter</span>
+  </div>
+  <div id="logTail"></div>
+</section>
+</div>
+
+<script>
+(() => {
+  const ALLOW = new Set(["net:fetch", "llm:call", "fs:read_own"]);
+  const STAGE_DEFS = [
+    ["gap", "01", "GAP", "need vs installed"],
+    ["forge", "02", "FORGE", "fill a recipe"],
+    ["warden", "03", "WARDEN", "check vs charter"],
+    ["test", "04", "TEST", "run · validate"],
+    ["install", "05", "INSTALL", "permit + fingerprint"],
+  ];
+  const EVENT_STAGE = {
+    gap: "gap", matched: "gap",
+    forge: "forge",
+    precheck: "warden", denied: "warden",
+    test: "test", broken: "test",
+    final: "install", install: "install", reuse: "install",
+  };
+  const SLOT_POS = ["a", "b", "c", "x"];
+  const MARKS = { idle: "", active: "●", done: "✓", fail: "✕", bypass: "—" };
+
+  const el = {
+    clock: document.getElementById("clock"),
+    conn: document.getElementById("conn"),
+    hashDisp: document.getElementById("hashDisp"),
+    authStrip: document.getElementById("authStrip"),
+    lineCount: document.getElementById("lineCount"),
+    forged: document.getElementById("forged"),
+    authority: document.getElementById("authority"),
+    lastDenied: document.getElementById("lastDenied"),
+    modePill: document.getElementById("modePill"),
+    stations: document.getElementById("stations"),
+    slots: document.getElementById("slots"),
+    denyOverlay: document.getElementById("denyOverlay"),
+    denyCode: document.getElementById("denyCode"),
+    emailCap: document.getElementById("emailCap"),
+    msgs: document.getElementById("msgs"),
+    logTail: document.getElementById("logTail"),
+    form: document.getElementById("talkForm"),
+    input: document.getElementById("nbf-in"),
+    send: document.getElementById("sendBtn"),
+    wave: document.getElementById("wave"),
+    sutA: document.getElementById("sutA"),
+    stA: document.getElementById("stA"),
+    sutX: document.getElementById("sutX"),
+    arc1: document.getElementById("arc1"),
+    arc2: document.getElementById("arc2"),
+    ring: document.getElementById("ring"),
+    ringTxt: document.getElementById("ringTxt"),
+    ringPath: document.getElementById("ringPath"),
+    orb: document.getElementById("orb"),
+    orbEdge: document.getElementById("orbEdge"),
+    halo: document.getElementById("halo"),
+    life: document.getElementById("life"),
+  };
+  const chips = [...document.querySelectorAll("[data-chip]")];
+
+  /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[]}} */
+  const state = {
+    lines: [],
+    since: 0,
+    firstPoll: true,
+    busy: false,
+    audioUnlocked: false,
+    bootHash: null,
+    msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
+  };
+
+  /** @type {HTMLAudioElement[]} */
+  const voiceQueue = [];
+  let voicePlaying = false;
+  /** @type {HTMLAudioElement|null} */
+  let unlockAudio = null;
+
+  function shortHash(h) {
+    if (!h || typeof h !== "string") return "————————";
+    return h.slice(0, 8);
+  }
+
+  function fmtClock() {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, "0");
+    el.clock.textContent = "night shift · " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+
+  function setBusy(b) {
+    state.busy = b;
+    el.send.disabled = b;
+    el.input.disabled = b;
+    chips.forEach((c) => { c.disabled = b; });
+  }
+
+  function unlockAudioOnce() {
+    if (state.audioUnlocked) return;
+    state.audioUnlocked = true;
+    try {
+      unlockAudio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+      unlockAudio.play().catch(() => {});
+    } catch (_) {}
+  }
+
+  function enqueueVoice(path) {
+    if (!path || state.firstPoll) return;
+    const src = path.startsWith("/") ? path : "/" + path;
+    const a = new Audio(src);
+    voiceQueue.push(a);
+    pumpVoice();
+  }
+
+  function pumpVoice() {
+    if (voicePlaying || !voiceQueue.length) {
+      if (!voicePlaying) el.wave.classList.remove("wave-on");
+      return;
+    }
+    voicePlaying = true;
+    el.wave.classList.add("wave-on");
+    const a = voiceQueue.shift();
+    a.onended = a.onerror = () => {
+      voicePlaying = false;
+      pumpVoice();
+    };
+    a.play().catch(() => {
+      voicePlaying = false;
+      pumpVoice();
+    });
+  }
+
+  function derive(log) {
+    const st = { gap: "idle", forge: "idle", warden: "idle", test: "idle", install: "idle" };
+    const det = { gap: "", forge: "", warden: "", test: "", install: "" };
+    let jobIdx = -1;
+    log.forEach((l, i) => { if (l.event === "job") jobIdx = i; });
+    const out = { st, det, pending: false, term: null, skill: null, lastStage: null, job: null };
+    if (jobIdx < 0) return out;
+    out.job = log[jobIdx];
+    out.skill = out.job.skill;
+    log.slice(jobIdx + 1).forEach((l) => {
+      const stage = EVENT_STAGE[l.event];
+      if (!stage) return;
+      st[stage] = "done";
+      if (l.event !== "broken") {
+        det[stage] = l.event === "final"
+          ? ("PRE ✓ · " + (l.detail || ""))
+          : (l.detail || l.event);
+      }
+      out.lastStage = stage;
+      if (["install", "reuse", "denied", "broken"].includes(l.event)) out.term = l;
+    });
+    const t = out.term;
+    if (!t) {
+      out.pending = true;
+      if (out.lastStage) st[out.lastStage] = "active";
+    } else if (t.event === "denied") {
+      st.warden = "fail";
+      det.warden = "PRE · " + ((t.caps || []).join(", ") || t.failureCode || "") + " ∉ charter";
+      st.test = "bypass"; det.test = "never reached";
+      st.install = "bypass"; det.install = "never reached";
+      if (st.gap === "idle" && /tripwire/i.test(String(out.job.detail || ""))) {
+        st.gap = "bypass"; det.gap = "tripwire · talk skipped";
+      }
+    } else if (t.event === "broken") {
+      st.test = "fail";
+      det.test = (t.failureCode || "broken") + " · " + (t.detail || "");
+      st.install = "bypass"; det.install = "never reached";
+    } else if (t.event === "reuse") {
+      ["forge", "warden", "test"].forEach((k) => { st[k] = "bypass"; det[k] = "skipped"; });
+      det.install = "reuse · " + (t.detail || "");
+    }
+    return out;
+  }
+
+  function lineDetail(l) {
+    const parts = [];
+    if (l.skill) parts.push(l.skill);
+    if (l.decision) parts.push(l.decision);
+    if (l.failureCode) parts.push(l.failureCode);
+    if (l.caps && l.event === "denied") parts.push("caps " + l.caps.join(","));
+    if (l.detail) parts.push(l.detail);
+    return parts.join(" · ");
+  }
+
+  function timeOf(l) {
+    if (!l.ts) return "--:--:--";
+    try {
+      const d = new Date(l.ts);
+      if (Number.isNaN(d.getTime())) return String(l.ts).slice(11, 19) || String(l.ts);
+      const p = (n) => String(n).padStart(2, "0");
+      return p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+    } catch (_) {
+      return String(l.ts).slice(0, 8);
+    }
+  }
+
+  function renderMsgs() {
+    el.msgs.innerHTML = "";
+    state.msgs.slice(-8).forEach((m) => {
+      const row = document.createElement("div");
+      row.className = m.who === "user" ? "row row-u" : "row";
+      if (m.who === "user") {
+        const b = document.createElement("div");
+        b.className = "bubble-u";
+        b.textContent = m.text;
+        row.appendChild(b);
+      } else {
+        const b = document.createElement("div");
+        b.className = "bubble-n";
+        const t = document.createElement("div");
+        t.className = m.voice ? "nb-text nb-voice" : (m.plain ? "nb-plain" : "nb-text");
+        t.textContent = m.text;
+        b.appendChild(t);
+        row.appendChild(b);
+      }
+      el.msgs.appendChild(row);
+    });
+  }
+
+  function tagView(pos, num, slotState, name, extra) {
+    const badges = {
+      forging: ["SEWING", "b-amber"],
+      scan: ["WARDEN", "b-violet"],
+      testing: ["TESTING", "b-amber"],
+      alive: ["ALIVE", "b-cyan"],
+      flow: ["REUSED", "b-cyan"],
+      rejected: ["DENIED", "b-red"],
+      broken: ["BROKEN", "b-red"],
+    };
+    const b = badges[slotState] || ["", "b-none"];
+    const o = {
+      cls: "tag tag-" + pos + " tag-" + slotState,
+      kicker: "GRAFT " + num,
+      name: name || "— vacant —",
+      l2: "",
+      l3: "",
+      badge: b[0],
+      badgeCls: "badge " + b[1],
+      stamp: "",
+    };
+    if (slotState === "vacant") { o.name = "— vacant —"; o.l2 = "awaiting a need"; }
+    else if (slotState === "forging") { o.kicker += " · SEWING"; o.l2 = "recipe http · params"; }
+    else if (slotState === "scan") { o.kicker += " · WARDEN"; o.l2 = (extra && extra.caps) || "net:fetch ⊆ charter"; }
+    else if (slotState === "testing") { o.kicker += " · TEST"; o.l2 = "run · validate"; }
+    else if (slotState === "alive" || slotState === "flow") {
+      o.kicker += " · ALIVE";
+      o.l2 = ((extra && extra.caps) || "net:fetch") + (extra && extra.runs ? " · runs ×" + extra.runs : "");
+      o.l3 = (extra && extra.detail) || "";
+    } else if (slotState === "rejected") {
+      o.kicker += " · REJECTED"; o.l2 = "notify:email ∉ charter"; o.l3 = "staging wiped"; o.stamp = "REJECTED";
+    } else if (slotState === "broken") {
+      o.kicker += " · BROKEN"; o.l2 = (extra && extra.code) || "broken"; o.l3 = "staging wiped"; o.stamp = "BROKEN";
+    }
+    return o;
+  }
+
+  function render() {
+    const log = state.lines;
+    const d = derive(log);
+    const t = d.term;
+    const boot = log.find((l) => l.event === "boot");
+    if (boot && boot.charterHash) state.bootHash = boot.charterHash;
+
+    const hash = state.bootHash || (log[0] && log[0].charterHash) || "";
+    const short = shortHash(hash);
+    el.hashDisp.textContent = short;
+    el.ringPath.textContent = "CHARTER LOCKED · " + short + " · CHARTER LOCKED · " + short + " · ";
+
+    let drift = false;
+    for (const l of log) {
+      if (state.bootHash && l.charterHash && l.charterHash !== state.bootHash) { drift = true; break; }
+    }
+    el.hashDisp.classList.toggle("hash-bad", drift);
+    el.authStrip.textContent = drift
+      ? "CHARTER DRIFT · hash mismatch since boot"
+      : (hash ? "charter unchanged since boot · granted ⊆ charter" : "waiting for boot line…");
+    el.authStrip.classList.toggle("hash-bad", drift);
+
+    const installs = log.filter((l) => l.event === "install");
+    el.forged.textContent = "+" + installs.length + " FORGED";
+    el.lineCount.textContent = "log · " + log.length + " lines";
+
+    const granted = new Set();
+    log.forEach((l) => {
+      if ((l.event === "install" || l.event === "reuse") && Array.isArray(l.caps)) {
+        l.caps.forEach((c) => granted.add(c));
+      }
+    });
+    const extra = [...granted].filter((c) => !ALLOW.has(c));
+    el.authority.textContent = (extra.length ? "+" + extra.length : "+0") + " AUTHORITY";
+    el.authority.style.color = extra.length ? "var(--red)" : "";
+
+    const denied = [...log].reverse().find((l) => l.event === "denied");
+    if (denied) {
+      el.lastDenied.classList.add("on");
+      el.lastDenied.textContent = "LAST DENIED · " + (denied.failureCode || "denied") + " · " + timeOf(denied);
+    } else {
+      el.lastDenied.classList.remove("on");
+    }
+
+    // stations
+    el.stations.innerHTML = "";
+    STAGE_DEFS.forEach(([key, num, label, fallback]) => {
+      const s = d.st[key];
+      const div = document.createElement("div");
+      div.className = "st st-" + s + (key === "warden" ? " st-w" : "");
+      div.innerHTML =
+        '<div class="st-top"><span>' + num + '</span><span class="st-mark">' + (MARKS[s] || "") + "</span></div>" +
+        '<div class="st-label">' + label + "</div>" +
+        '<div class="st-det">' + (d.det[key] || fallback) + "</div>";
+      el.stations.appendChild(div);
+    });
+
+    // mode pill
+    let mode = "idle";
+    let modeText = "IDLE · WAITING FOR A JOB";
+    if (d.pending) {
+      mode = "build";
+      const names = { gap: "GAP", forge: "FORGE", warden: "WARDEN", test: "TEST", install: "INSTALL" };
+      modeText = "BUILD · " + (d.skill || "…") + (d.lastStage ? " · " + names[d.lastStage] : "");
+    } else if (t && t.event === "install") { mode = "done"; modeText = "INSTALLED · " + t.skill; }
+    else if (t && t.event === "reuse") { mode = "reuse"; modeText = "REUSE · NO BUILD · " + t.skill; }
+    else if (t && t.event === "denied") { mode = "deny"; modeText = "DENIED · " + (t.failureCode || "denied"); }
+    else if (t && t.event === "broken") { mode = "deny"; modeText = "BROKEN · " + (t.failureCode || "broken"); }
+    el.modePill.className = "mode mode-" + mode;
+    el.modePill.textContent = modeText;
+
+    // grafts: successive installs fill a,b,c; denied/broken email on x
+    const graftSkills = installs.map((l) => l.skill).filter(Boolean);
+    const runCounts = {};
+    log.forEach((l) => {
+      if ((l.event === "install" || l.event === "reuse") && l.skill) {
+        runCounts[l.skill] = (runCounts[l.skill] || 0) + 1;
+      }
+    });
+    const building = d.pending && ["forge", "warden", "test"].includes(d.lastStage);
+    const aName = graftSkills[0] || (d.skill && d.skill !== "email_send" ? d.skill : null);
+    let aState = "vacant";
+    if (graftSkills[0]) {
+      aState = (t && t.event === "reuse" && t.skill === graftSkills[0]) ? "flow" : "alive";
+    } else if (d.skill && d.skill !== "email_send" && d.pending) {
+      aState = ({ forge: "forging", warden: "scan", test: "testing" })[d.lastStage] || "vacant";
+    } else if (t && t.event === "broken" && t.skill && t.skill !== "email_send") {
+      aState = "broken";
+    }
+    const xState = (t && t.event === "denied") ? "rejected"
+      : (t && t.event === "broken" && t.skill === "email_send") ? "broken" : "vacant";
+
+    const slotModels = [
+      tagView("a", "01", aState, aName || "", {
+        caps: (installs[0] && installs[0].caps) ? installs[0].caps.join(",") : "net:fetch",
+        runs: aName ? runCounts[aName] : 0,
+        detail: "",
+        code: t && t.failureCode,
+      }),
+      tagView("b", "02", graftSkills[1] ? "alive" : "vacant", graftSkills[1] || "", {
+        caps: (installs[1] && installs[1].caps) ? installs[1].caps.join(",") : "net:fetch",
+        runs: graftSkills[1] ? runCounts[graftSkills[1]] : 0,
+      }),
+      tagView("c", "03", graftSkills[2] ? "alive" : "vacant", graftSkills[2] || "", {
+        caps: (installs[2] && installs[2].caps) ? installs[2].caps.join(",") : "net:fetch",
+        runs: graftSkills[2] ? runCounts[graftSkills[2]] : 0,
+      }),
+      tagView("x", "04", xState, xState === "vacant" ? "" : "email_send", { code: t && t.failureCode }),
+    ];
+
+    el.slots.innerHTML = "";
+    slotModels.forEach((sl) => {
+      const div = document.createElement("div");
+      div.className = sl.cls;
+      div.innerHTML =
+        '<span class="hole" aria-hidden="true"></span>' +
+        '<div class="t-k"></div><div class="t-n"></div><div class="t-l2"></div><div class="t-l3"></div>' +
+        '<span class="badge"></span><span class="stamp" aria-hidden="true"></span>';
+      div.querySelector(".t-k").textContent = sl.kicker;
+      div.querySelector(".t-n").textContent = sl.name;
+      div.querySelector(".t-l2").textContent = sl.l2;
+      div.querySelector(".t-l3").textContent = sl.l3;
+      const badge = div.querySelector(".badge");
+      badge.className = sl.badgeCls;
+      badge.textContent = sl.badge;
+      div.querySelector(".stamp").textContent = sl.stamp;
+      el.slots.appendChild(div);
+    });
+
+    el.sutA.className = "sut sut-" + aState;
+    el.stA.className = "st8 st8-" + aState;
+    el.sutX.className = "sut sut-" + xState;
+
+    const isDeny = !!(t && t.event === "denied");
+    el.denyOverlay.classList.toggle("on", isDeny);
+    if (isDeny) {
+      el.denyCode.textContent = (t.failureCode || "capability_not_allowed") +
+        (t.caps && t.caps.length ? " · " + t.caps.join(",") + " ∉ charter" : " · notify:email ∉ charter");
+    }
+    el.emailCap.className = isDeny ? "cap cap-no cap-pulse" : "cap cap-no";
+    el.arc1.className = isDeny ? "arc arc-deny" : (building ? "arc arc-on" : "arc");
+    el.arc2.className = isDeny ? "arc arc-deny" : (building ? "arc arc-on2" : "arc");
+    el.ring.className = isDeny ? "ring-line ring-cinch" : "ring-line";
+    el.ringTxt.className = isDeny ? "ring-txt ring-deny" : "ring-txt";
+    el.orb.className = isDeny ? "orb orb-frozen" : "orb";
+    el.orbEdge.className = isDeny ? "orb-edge orb-edge-dead" : "orb-edge";
+    el.halo.className = isDeny ? "halo halo-dead" : "halo";
+    el.life.className = isDeny ? "life life-dead" : "life";
+
+    // log tail
+    el.logTail.innerHTML = "";
+    const tail = log.slice(-12);
+    tail.forEach((l, i) => {
+      const bad = l.decision === "deny" || l.decision === "fail" || l.event === "denied" || l.event === "broken";
+      const div = document.createElement("div");
+      div.className = "ln" + (i === tail.length - 1 ? " ln-new" : "") + (bad ? " ln-deny" : "");
+      const sh = shortHash(l.charterHash);
+      div.innerHTML =
+        '<span class="c-t"></span><span class="c-e"></span><span class="c-a"></span><span class="c-d"></span><span class="c-h"></span>';
+      div.querySelector(".c-t").textContent = timeOf(l);
+      div.querySelector(".c-e").textContent = l.event || "";
+      div.querySelector(".c-a").textContent = l.actor || "";
+      div.querySelector(".c-d").textContent = lineDetail(l);
+      const h = div.querySelector(".c-h");
+      h.textContent = sh;
+      if (state.bootHash && l.charterHash && l.charterHash !== state.bootHash) h.classList.add("hash-bad");
+      el.logTail.appendChild(div);
+    });
+
+    renderMsgs();
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("/api/log?since=" + state.since);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      const next = typeof data.next === "number" ? data.next : state.since;
+      const lines = Array.isArray(data.lines) ? data.lines : [];
+
+      if (next < state.since) {
+        state.lines = [];
+        state.since = 0;
+        state.firstPoll = true;
+        state.bootHash = null;
       }
 
-      async function poll() {
-        const r = await fetch("/api/log?since=" + since);
-        const data = await r.json();
-        if (data.next < since) {
-          since = 0;
-          first = true;
-          logEl.innerHTML = "";
-          return poll();
-        }
-        for (const line of data.lines) {
-          if (!hashEl.dataset.set) {
-            hashEl.textContent = (line.charterHash || "").slice(0, 8);
-            hashEl.dataset.set = "1";
-          }
-          if (!first) {
-            const div = document.createElement("div");
-            div.className = "ln";
-            div.textContent = [line.ts, line.event, line.actor, line.detail || "", (line.charterHash || "").slice(0, 8)].join(" · ");
-            logEl.appendChild(div);
-          }
-        }
-        if (first) first = false;
-        since = data.next;
+      if (state.firstPoll) {
+        state.lines = state.lines.concat(lines);
+        state.since = next;
+        state.firstPoll = false;
+        el.conn.textContent = "live · /api/log";
+        el.conn.classList.remove("err");
+        render();
+        return;
       }
 
-      async function talk(text) {
-        setBusy(true);
-        try {
-          const r = await fetch("/api/talk", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-          const data = await r.json();
-          reply.textContent = data.kind === "chat" ? data.text : data.reply;
-        } catch (e) {
-          reply.textContent = String(e);
-        } finally {
-          setBusy(false);
-        }
+      for (const l of lines) {
+        state.lines.push(l);
+        if (l.voice) enqueueVoice(l.voice);
       }
+      state.since = next;
+      el.conn.textContent = "live · /api/log";
+      el.conn.classList.remove("err");
+      render();
+    } catch (e) {
+      el.conn.textContent = "offline · waiting for host :8787";
+      el.conn.classList.add("err");
+    }
+  }
 
-      sendBtn.onclick = () => talk(document.getElementById("msg").value);
-      chips.forEach((b) => (b.onclick = () => talk(b.dataset.t)));
-      setInterval(poll, 1000);
-      poll();
-    </script>
-  </body>
+  async function talk(text) {
+    const t = (text || "").trim();
+    if (!t || state.busy) return;
+    unlockAudioOnce();
+    setBusy(true);
+    state.msgs.push({ who: "user", text: t });
+    renderMsgs();
+    el.input.value = "";
+    try {
+      const res = await fetch("/api/talk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text: t }),
+      });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const data = await res.json();
+      if (data.kind === "chat") {
+        state.msgs.push({ who: "nb", text: data.text || "", plain: true });
+      } else if (data.kind === "job") {
+        const voiceish = data.outcome === "denied" || data.outcome === "broken";
+        state.msgs.push({
+          who: "nb",
+          text: data.reply || data.outcome || "",
+          voice: voiceish,
+          plain: data.outcome === "broken",
+        });
+      } else {
+        state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
+      }
+    } catch (e) {
+      state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
+    } finally {
+      setBusy(false);
+      render();
+    }
+  }
+
+  el.form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    talk(el.input.value);
+  });
+  chips.forEach((c) => {
+    c.addEventListener("click", () => talk(c.textContent || ""));
+  });
+  document.addEventListener("pointerdown", unlockAudioOnce, { once: false });
+  document.addEventListener("keydown", unlockAudioOnce, { once: false });
+
+  fmtClock();
+  setInterval(fmtClock, 15_000);
+  render();
+  poll();
+  setInterval(poll, 1000);
+})();
+</script>
+</body>
 </html>
