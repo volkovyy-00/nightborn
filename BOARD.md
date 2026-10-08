@@ -14,13 +14,13 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 ## P1 T1 smart Talk · 21:45–00:45 · tag `t1-smart`
 - [x] Charter v4 four blocks + parser + re-pin + `hand_probe` seed (§6)
 - [x] Sandbox flags + output caps (§9 "Execution")
-- [ ] `hash_mismatch` on Reuse → Warden DENIED (§8)
-- [ ] Runner rule v4 (§9)
-- [ ] Talk v4: `use_hand`, plain-text chat, snapshot, summary, stopReason, timeouts, templates (§10)
-- [ ] Recipe template + news recipe; skill I/O `{inputs}` (§9)
-- [ ] Token fields on log + `/api/talk` (§12, §13)
-- [ ] OFFLINE without key; `source:"fixture"` when OFFLINE (§9)
-- [ ] `.env.example` + `docs/UI_CONTRACT.md` match v4
+- [x] `hash_mismatch` on Reuse → Warden DENIED (§8)
+- [x] Runner rule v4 (§9)
+- [x] Talk v4: `use_hand`, plain-text chat, snapshot, summary, stopReason, timeouts, templates (§10)
+- [x] Recipe template + news recipe; skill I/O `{inputs}` (§9)
+- [x] Token fields on log + `/api/talk` (§12, §13)
+- [x] OFFLINE without key; `source:"fixture"` when OFFLINE (§9)
+- [x] `.env.example` + `docs/UI_CONTRACT.md` match v4
 - [ ] GATE: chat · News Install w/ tokens · restart → Reuse hand 0 tok · email → one DENIED + WAV
 - [ ] take0 recorded, watched, uploaded (agent meanwhile: validate rows 1–4, 6–10)
 
