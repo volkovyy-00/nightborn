@@ -31,6 +31,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 ### v4.1 → v4.2 (human call, 2026-10-08 ~22:00)
 1. HN Algolia = official second source: gate-only P2 ask + jury backup if sauto is down; not a video chip. `map.url` = `{url}` so `hn.algolia.com` is the only manifest host (§9, §13, §14, §18).
 
+### v4.2 → v4.3 (second-opinion review of the P2 plan, human call, 2026-10-08 ~23:30)
+1. Forge-time literal check: `prepareRecipe` rejects recipe strings that would trip the Warden's `protected_path` / `secret_in_file` regexes → Broken `forge_invalid`; the Warden scan remains the backstop (§9, §18 #13).
+
 ---
 
 ## 1. Product
@@ -302,7 +305,7 @@ User values arrive **only** at runtime on stdin — never rendered into `skill.m
                                    // json: templates over item fields, e.g. url "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}"
   inputs: Input[], example: Record<string, string | number> }
 ```
-- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
+- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · checks every string rendered into `skill.mjs` (`queryPattern`, `site`, `urlPattern`, `itemsPath`, `map.*`, `matchInput`, input names) against the Warden's `protected_path` / `secret_in_file` regexes (same frozen literals, imported from the Warden; fires before the scan, which remains the backstop) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
 - **Keys:** news/web hands read literal `process.env.BRAVE_API_KEY`; json hands use no key, so the Broker grants none.
 
 ### Code forge (T3, `FORGE_MODE=code`, stretch)
@@ -580,6 +583,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 10 | Repo visibility | Public |
 | 11 | Charter | §6 blocks (`llm:call` denied for hands); re-pinned in P1 with human Go |
 | 12 | Second source | HN Algolia (§9): gate-only ask + jury backup, not a video chip |
+| 13 | Forge-time literal check | A recipe string that trips `protected_path` / `secret_in_file` is a bad forge → Broken `forge_invalid` (no voiced DENIED for LLM noise); the Warden scan stays the backstop |
 
 ---
 
