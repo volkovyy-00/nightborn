@@ -1,4 +1,4 @@
-# Nightborn UI ↔ host contract (Pi branch)
+# Nightborn UI ↔ host contract (SPEC v4 §12, §13)
 
 **Audience:** UI agent working in worktree `../nightborn-ui` on branch `feat/ui`.  
 **Write set:** `public/**` only (plus regenerating `fixtures/sample-surgery.log` if needed).  
@@ -13,7 +13,7 @@ Backend write set is everything else (`src/`, `templates/`, …). Do not edit `s
 `http://127.0.0.1:${PORT}` — default `PORT=8787`.
 
 Static: `/` → `public/index.html`, `/voice/*` → `public/voice/*`.  
-`/mock/<provider>` only when server started with `OFFLINE=1`.
+`/mock/<host>/*` only when the server started with `OFFLINE=1`.
 
 ---
 
@@ -36,17 +36,20 @@ Response:
     job: {
       skill: string | null;
       intent: string;
-      query: string;
+      inputs: Record<string, string | number>;
       needs: string[];
     };
     outcome: "install" | "reuse" | "denied" | "broken";
     skill: string | null;
     failureCode?: string;
     reply: string;
+    items?: Array<{ title: string; url: string; snippet?: string; date?: string }>; // ≤5
+    tokens?: { talk: number; forge: number }; // Talk session tokens; forge tokens (0 on Reuse)
+    ms?: number;
   }
 ```
 
-- Synchronous; may take up to ~150s when Pi runs.
+- Synchronous; ≤300 s (server `requestTimeout` 310 s).
 - Disable Send + chips while a request is in flight.
 - For `denied` / `broken`, show `reply` (host template, not the model).
 
@@ -71,8 +74,11 @@ type LogLine = {
   charterHash: string; // full hex; display first 8 chars
   caps?: string[];
   voice?: string; // e.g. "voice/denied.wav" — only on denied|install|broken
-  source?: "live" | "fixture";
-  detail?: string;
+  source?: "live" | "fixture"; // "fixture" on every line while OFFLINE=1, and on fixture-path lines
+  detail?: string;  // short reason code; never raw errors or paths
+  tokens?: number;  // forge / install (forge cost) / reuse (always 0) / job (Talk tokens at use_hand)
+  costUsd?: number; // lower bound
+  ms?: number;
 };
 ```
 
@@ -93,8 +99,8 @@ type LogLine = {
 
 | Chip text | Beat |
 |-----------|------|
-| `News on Microsoft` | Forge (Create) |
-| `News on OpenAI` | Reuse (`job.skill: null` → capability match) |
+| `News on Anthropic` | P1 gate: Forge (Create) |
+| `News on OpenAI` | P1 gate: Reuse by name (`job.skill: "<installed hand>"`) |
 | `Email this news digest to my boss every morning.` | DENIED (tripwire; **exact** string) |
 
 Placeholder input: `Message Nightborn`.
@@ -111,7 +117,7 @@ Placeholder input: `Message Nightborn`.
 | FORGED | Count of `event === "install"` |
 | PIPELINE stages GAP→FORGE→WARDEN→TEST→INSTALL | Events since last `job` (see below) |
 | GRAFT 01–04 | Filled by successive `install` lines (`skill` + caps detail) |
-| CHARTER GRANTS / NEVER | Static copy from `charter.md` allow/deny lists |
+| CHARTER GRANTS / NEVER | Static copy of charter `caps-allow` / `caps-deny` (refreshed at every re-pin; `llm:call` is NEVER) |
 | WORKBENCH reply | `/api/talk` `text` or `reply` |
 | SURGERY LOG table | `/api/log` columns: time · event · actor · detail · charter |
 
@@ -144,7 +150,7 @@ cp charter.md staging/ui-dev/
 # Point the UI at http://127.0.0.1:8787
 
 # Optional keyless demos once JUDGE_MODE=1:
-# POST /api/talk { "text": "…", "fixture": "denied-email.json" }
+# POST /api/talk { "text": "…", "fixture": "news-anthropic.json" }
 ```
 
 Until the server is up, you may drive the UI from `fixtures/sample-surgery.log` shapes, then switch to live polling.
