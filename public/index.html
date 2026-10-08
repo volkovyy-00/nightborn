@@ -134,6 +134,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .nb-result .li{padding-left:1.1em;text-indent:-1.1em}
 .nb-result .li::first-letter{color:var(--cyan)}
 .nb-voice{color:#FF8A8A}
+.res{display:flex;flex-direction:column;gap:8px}
+.res-head{display:flex;align-items:center;gap:8px;font:600 11.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.res-head .tag{padding:3px 8px;border-radius:999px;border:1px solid #1F5A50;color:var(--cyan)}
+.res-head .tag-build{border-color:#5A4320;color:var(--amber)}
+.card{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0B0F12;transition:border-color .15s}
+.card:hover{border-color:#3A4A52}
+.card a{color:var(--ink);text-decoration:none;font:500 14px/1.35 'Geist',sans-serif}
+.card a:hover{color:var(--cyan)}
+.card .pill{font:600 12.5px 'Geist Mono',monospace;color:var(--cyan);background:#0F1F1C;border:1px solid #1F5A50;border-radius:999px;padding:3px 9px;white-space:nowrap;align-self:center}
+.card .meta{grid-column:1/-1;font:500 11px 'Geist Mono',monospace;color:var(--mute);letter-spacing:.04em}
+.card .meta span+span::before{content:" · ";color:#3A4A52}
 .nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
 .chip{font:500 13px/1.25 'Geist',sans-serif;color:var(--ink);background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
 .chip:hover{border-color:var(--cyan)}
@@ -607,6 +618,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     }
   }
 
+  /** "598000 Kč" → "598 000 Kč"; long snippets are cut. */
+  function fmtSnippet(sn) {
+    const s = String(sn).trim();
+    const m = s.match(/^(\d{4,})(\s*\S*)$/);
+    if (m) return m[1].replace(/\B(?=(\d{3})+(?!\d))/g, "\u2009") + m[2];
+    return s.length > 60 ? s.slice(0, 57) + "…" : s;
+  }
+  function hostOf(u) {
+    try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; }
+  }
+
   function renderMsgs() {
     el.msgs.innerHTML = "";
     state.msgs.slice(-40).forEach((m) => {
@@ -621,7 +643,38 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         const b = document.createElement("div");
         b.className = "bubble-n";
         const t = document.createElement("div");
-        if (m.result) {
+        if (m.items && m.items.length) {
+          t.className = "res";
+          const head = document.createElement("div");
+          head.className = "res-head";
+          const tag = document.createElement("span");
+          tag.className = m.outcome === "install" ? "tag tag-build" : "tag";
+          tag.textContent = m.outcome === "install" ? "forged" : "reused";
+          head.appendChild(tag);
+          head.appendChild(document.createTextNode(`${m.skill || "hand"} · ${m.items.length} result${m.items.length === 1 ? "" : "s"}`));
+          t.appendChild(head);
+          m.items.forEach((it) => {
+            const c = document.createElement("div");
+            c.className = "card";
+            const a = document.createElement("a");
+            a.textContent = it.title || it.url;
+            if (/^https?:\/\//.test(it.url || "")) { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
+            c.appendChild(a);
+            if (it.snippet) {
+              const pill = document.createElement("span");
+              pill.className = "pill";
+              pill.textContent = fmtSnippet(it.snippet);
+              c.appendChild(pill);
+            }
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            const host = hostOf(it.url);
+            if (host) { const h = document.createElement("span"); h.textContent = host; meta.appendChild(h); }
+            if (it.date) { const d = document.createElement("span"); d.textContent = String(it.date).slice(0, 10); meta.appendChild(d); }
+            if (meta.childNodes.length) c.appendChild(meta);
+            t.appendChild(c);
+          });
+        } else if (m.result) {
           t.className = "nb-result";
           String(m.text).split("\n").map((s) => s.trim()).filter(Boolean).forEach((s) => {
             const li = document.createElement("div");
@@ -938,6 +991,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           voice: voiceish,
           plain: data.outcome === "broken",
           result: !voiceish,
+          items: !voiceish && Array.isArray(data.items) ? data.items.slice(0, 5) : null,
+          outcome: data.outcome,
+          skill: data.skill,
         });
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
