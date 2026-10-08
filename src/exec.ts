@@ -15,7 +15,7 @@ export function runSkill(
   stdin: SkillStdin,
   grant: Record<string, string>,
   hosts: string[],
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
 ): Promise<ExecResult> {
   const timeoutMs = opts.timeoutMs ?? SKILL_TIMEOUT_MS;
   const env: Record<string, string> = { ...grant, NB_HOSTS: hosts.join(",") };
@@ -52,6 +52,13 @@ export function runSkill(
       timedOut = true;
       kill();
     }, timeoutMs);
+    // An aborted Builder session (SPEC §9 limits) must not leave a test child running.
+    const onAbort = () => {
+      timedOut = true;
+      kill();
+    };
+    if (opts.signal?.aborted) onAbort();
+    else opts.signal?.addEventListener("abort", onAbort, { once: true });
 
     const collect = (sink: Buffer[], which: "out" | "err") => (chunk: Buffer) => {
       if (overflow) return;
@@ -70,6 +77,7 @@ export function runSkill(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onAbort);
       const stderr = Buffer.concat(err).toString("utf8") + (spawnError ? `spawn: ${spawnError.message}` : "");
       resolve({
         ok: !spawnError && !timedOut && !overflow && code === 0,

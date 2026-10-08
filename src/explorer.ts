@@ -471,15 +471,20 @@ function describeUrl(rawUrl: string): string {
   }
 }
 
-/** T2 recipe forge: Explorer session → recipe + visited hosts. Each tool call is reported through `step`. */
-export async function exploreRecipe(job: Job, step: StepLogger, request?: string): Promise<ForgeResult> {
-  const t0 = Date.now();
-  const limits = getCharter().forge;
-  const visited: string[] = [];
-  let captured: Recipe | null = null;
-  const text = (s: string, terminate = false) => ({ content: [{ type: "text" as const, text: s }], details: {}, ...(terminate ? { terminate: true } : {}) });
-  const after = () => (captured ? text("recipe already emitted", true) : null);
+export type ToolText = { content: Array<{ type: "text"; text: string }>; details: Record<string, never>; terminate?: true };
 
+/** Plain-text tool result; `terminate` ends the session (Pi terminating tool). */
+export function toolText(s: string, terminate = false): ToolText {
+  return { content: [{ type: "text", text: s }], details: {}, ...(terminate ? { terminate: true as const } : {}) };
+}
+
+/**
+ * The research tools shared by the Explorer and the Builder (charter `recipe_tools` ∩ `code_tools`):
+ * `web_search` (Brave, host-side) and `http_get` (safe GET; a 2xx adds the host to `visited`).
+ * `after()` returns a result when the session is already finished (e.g. recipe emitted), else null.
+ */
+export function makeResearchTools(opts: { visited: string[]; step: StepLogger; after: () => ToolText | null }) {
+  const { visited, step, after } = opts;
   const webSearch = defineTool({
     name: "web_search",
     label: "Web search",
@@ -492,8 +497,8 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
       const s0 = Date.now();
       const r = await braveSearch(p.q, p.endpoint, signal);
       step(`explore: web_search "${p.q.slice(0, 60)}" → ${r.ok ? `${r.hits.length} hits` : r.reason}`, Date.now() - s0);
-      if (!r.ok) return text(`web_search failed: ${r.reason}`);
-      return text(JSON.stringify(r.hits));
+      if (!r.ok) return toolText(`web_search failed: ${r.reason}`);
+      return toolText(JSON.stringify(r.hits));
     },
   });
 
@@ -511,13 +516,30 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
       const where = describeUrl(p.url);
       if (!r.ok) {
         step(`explore: http_get ${where} → ${r.reason}`, Date.now() - s0);
-        return text(`http_get failed: ${r.reason}`);
+        return toolText(`http_get failed: ${r.reason}`);
       }
       if (r.status >= 200 && r.status < 300 && !visited.includes(r.host)) visited.push(r.host);
       step(`explore: http_get ${where} ${r.status}`, Date.now() - s0);
-      return text(`status ${r.status}\n${r.text}`);
+      return toolText(`status ${r.status}\n${r.text}`);
     },
   });
+  return [webSearch, httpGet];
+}
+
+/**
+ * T2 recipe forge: Explorer session → recipe + visited hosts. Each tool call is reported through `step`.
+ * `maxSeconds` may only tighten the charter's `recipe_max_seconds` (the fallback after a failed code forge
+ * has less of the request budget left); it never loosens it.
+ */
+export async function exploreRecipe(job: Job, step: StepLogger, request?: string, maxSeconds?: number): Promise<ForgeResult> {
+  const t0 = Date.now();
+  const limits = getCharter().forge;
+  const seconds = Math.max(5, Math.min(limits.recipeMaxSeconds, maxSeconds ?? limits.recipeMaxSeconds));
+  const visited: string[] = [];
+  let captured: Recipe | null = null;
+  const text = toolText;
+  const after = () => (captured ? text("recipe already emitted", true) : null);
+  const [webSearch, httpGet] = makeResearchTools({ visited, step, after });
 
   const emit = defineTool({
     name: "emit_recipe",
@@ -562,7 +584,7 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
     if (captured) return;
     limitHit = true;
     void session.abort();
-  }, limits.recipeMaxSeconds * 1000);
+  }, seconds * 1000);
   const unsub = session.subscribe((ev) => {
     if (ev.type === "turn_end" && ++turns >= limits.recipeMaxTurns && !captured) {
       limitHit = true;

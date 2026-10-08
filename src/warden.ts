@@ -159,6 +159,11 @@ export function wardenDeny(skill: string | null, failureCode: FailureCode, caps:
   });
 }
 
+/** Builder in-loop deny (SPEC §9 "Code forge"): a `precheck` deny line, no voice — not an outcome. */
+export function wardenPrecheckDeny(skill: string, failureCode: FailureCode, caps: string[], detail: string): void {
+  appendLog({ actor: "warden", event: "precheck", skill, decision: "deny", failureCode, charterHash: getCharterHash(), caps, detail });
+}
+
 export function denyAndWipe(runDir: string, skill: string | null, failureCode: FailureCode, caps: string[], detail: string): void {
   wardenDeny(skill, failureCode, caps, detail);
   wipeStaging(runDir);

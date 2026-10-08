@@ -141,7 +141,7 @@ export function forgeFromFixture(job: Job): ForgeResult {
 
 // ── Code checks + render (no LLM; SPEC §9 "Code then: …") ───────────────
 
-function slugifyName(s: string): string {
+export function slugifyName(s: string): string {
   let n = s
     .toLowerCase()
     .normalize("NFD")
@@ -153,7 +153,7 @@ function slugifyName(s: string): string {
   return n.slice(0, 40).replace(/_+$/, "");
 }
 
-function uniqueName(base: string, skillsRoot: string): string {
+export function uniqueName(base: string, skillsRoot: string): string {
   const taken = new Set(listSkillDirs(skillsRoot));
   if (!taken.has(base)) return base;
   for (let i = 2; ; i++) {

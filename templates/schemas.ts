@@ -11,6 +11,26 @@ export const itemSchema = z.object({
 
 export const outputSchema = z.object({ items: z.array(itemSchema) });
 
+/** A Builder-written manifest.json (SPEC §9 "Manifest"); name/kind are normalised by the host after this check. */
+export const manifestSchema = z.object({
+  name: z.string().min(1).max(60),
+  purpose: z.string().min(1).max(300),
+  inputs: z
+    .array(
+      z.object({
+        name: z.string().regex(/^[a-z_]{1,24}$/),
+        type: z.enum(["string", "number"]),
+        format: z.enum(["text", "slug"]),
+        required: z.boolean(),
+        description: z.string().max(120),
+      }),
+    )
+    .min(1)
+    .max(6),
+  capabilities: z.array(z.string()),
+  hosts: z.array(z.string().regex(/^[a-z0-9.-]+$/)),
+});
+
 export type ParseResult = { ok: true; items: Item[] } | { ok: false; reason: "not_json" | "shape" };
 export type TestResult =
   | { ok: true; items: Item[] }

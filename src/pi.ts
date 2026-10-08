@@ -82,12 +82,14 @@ export async function createPiSession(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   customTools: ToolDefinition<any, any>[];
   thinkingLevel?: "off" | "low";
+  /** Inline extensions, e.g. the Builder's `tool_call` hook (SPEC §9 "Code forge"). */
+  extensionFactories?: Parameters<typeof createPiResourceLoader>[0]["extensionFactories"];
 }): Promise<AgentSession> {
   const cwd = dataPath("staging");
   mkdirSync(cwd, { recursive: true });
   const { auth, registry } = createPiAuthAndRegistry();
   const model = resolvePiModel(registry, opts.role);
-  const loader = createPiResourceLoader({ systemPrompt: opts.systemPrompt, cwd });
+  const loader = createPiResourceLoader({ systemPrompt: opts.systemPrompt, cwd, extensionFactories: opts.extensionFactories });
   await loader.reload();
   const { session } = await createAgentSession({
     cwd,
