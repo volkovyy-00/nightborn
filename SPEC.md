@@ -21,6 +21,13 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 6. Token accounting on log + `/api/talk` (additive fields; event/actor enums unchanged) (§12, §13).
 7. Demo = sauto.cz public JSON API, prices in Kč (§13, §15).
 
+### v4.0 → v4.1 (second-opinion review: own hands-on checks + independent Fable reviewer, 2026-10-08 ~21:40)
+1. Fetch guard: undici's dispatcher is created lazily, so the guard creates it eagerly and freezes a host-checking proxy in its place (both passes found this; fix verified against 8 bypass probes) (§9).
+2. `llm:call` moved to `caps-deny`, `openrouter.ai` to `never-hosts`; the Broker maps only `BRAVE_API_KEY` — hands are deterministic by charter (§6, §9).
+3. Inputs: numbers coerced by code; `format:"slug"` inputs slugified by the template; recipe `matchInput` filters off-target items (a wrong sauto slug silently returns the whole make) (§9).
+4. Only the fetch-relevant recipe fields are rendered into `skill.mjs`; `itemsPath` `""` = root array; `http_get` cap 16 KB; OFFLINE forge mapping; reason codes in `detail` (§9, §12).
+5. Minimal fetch guard moves into P1; cut order updated; schedule risk stated (§5, §14).
+
 ---
 
 ## 1. Product
@@ -110,7 +117,7 @@ USER text
 T2 (P2) · T3 (P3) · UI token counter · stage tint · graft slots
 
 ### Cut first → last when behind
-T3 (stay `FORGE_MODE=recipe`) → graft slots / stage animation → UI token counter (keep log fields) → T2 `web` endpoint (keep `json` + `news`) → T2 exploration (Explorer one-shot with `sources.md` only)
+T3 (stay `FORGE_MODE=recipe`) → T2 `web` endpoint (keep `json` + `news`) → UI token counter (keep log fields) → `http_get` DNS/private-IP checks (keep https-only + never-hosts; disclose) → graft slots / stage animation → T2 exploration (Explorer one-shot with `sources.md` only)
 
 ---
 
@@ -121,10 +128,10 @@ T3 (stay `FORGE_MODE=recipe`) → graft slots / stage animation → UI token cou
 ````
 ```caps-allow
 net:fetch
-llm:call
 fs:read_own
 ```
 ```caps-deny
+llm:call
 notify:email
 budget:write
 charter:write
@@ -139,6 +146,7 @@ api.resend.com
 api.twilio.com
 api.stripe.com
 hooks.slack.com
+openrouter.ai
 ```
 ```forge
 recipe_tools: web_search http_get emit_recipe
@@ -217,14 +225,14 @@ TypeScript compiler API over `skill.mjs`: `ts.createSourceFile('skill.mjs', src,
 |---|---|
 | global `fetch(` | cap `net:fetch` |
 | literal `process.env.BRAVE_API_KEY` | cap `net:fetch`; env name `BRAVE_API_KEY` |
-| literal `process.env.OPENROUTER_API_KEY` | cap `llm:call`; env name `OPENROUTER_API_KEY` |
+| literal `process.env.OPENROUTER_API_KEY` or `openai`/`@anthropic-ai` import | cap `llm:call` (denied: hands are deterministic) |
 | any other `process.env` access (computed, destructuring, `process.env` as a value) | cap `secrets:read` |
 | import/require of `nodemailer` or `smtp` | cap `notify:email` |
 | fs write calls (`writeFile*`, `appendFile*`, `createWriteStream`, `mkdir*`, `rm*`, `unlink*`, `rename*`) | cap `fs:write_own` |
 | fs read calls | cap `fs:read_own` |
 | `eval`, `new Function`, dynamic `import()` | **deny** `forbidden_construct` |
 | import/require of `child_process`, `vm`, `worker_threads`, `net`, `tls`, `http`, `https`, `http2`, `dgram`, `module`, `undici` (with or without `node:`) | **deny** `forbidden_construct` |
-| identifiers `getBuiltinModule`, `createRequire`, `WebSocket`, `EventSource`, `Symbol.for`, `dlopen`, `binding` | **deny** `forbidden_construct` |
+| identifiers `getBuiltinModule`, `createRequire`, `WebSocket`, `getOwnPropertySymbols`, `Symbol.for`, `Reflect`, `dlopen`, `binding` | **deny** `forbidden_construct` |
 | computed element access on `process`, `globalThis` or `global` (`x[expr]`) | **deny** `forbidden_construct` |
 | string literal matching `/charter\.md\|\.\.\/\|\.env\|broker\|^\//` | **deny** `protected_path` |
 | string literal that looks like a key (`/sk-[A-Za-z0-9_-]{16,}\|BSA[A-Za-z0-9_-]{20,}/`) | **deny** `secret_in_file` |
@@ -242,7 +250,7 @@ TypeScript compiler API over `skill.mjs`: `ts.createSourceFile('skill.mjs', src,
 - **Install:** move staging → `skills/<name>/`, write `decision.json` (§9).
 - **Reuse:** folder hash and `charterHash` must equal `decision.json` → else `hash_mismatch` DENIED (`actor:"warden"`, `event:"denied"`, voice).
 
-**Honest limit:** the scan is static and the fetch guard is in-process. Filesystem and process isolation come from Node's permission model (verified). Network limits come from the guard plus the scan rules above; there is no OS-level network jail (§17).
+**Honest limit:** the scan is static and the fetch guard is in-process. Filesystem and process isolation come from Node's permission model (verified). Network limits come from the guard, which closes the known bypasses at runtime (verified against 8 probes, incl. aliasing via `getOwnPropertySymbols`); the scan rules are defence in depth. There is no OS-level network jail (§17).
 
 ---
 
@@ -257,8 +265,8 @@ spawn(process.execPath, [
 child.stdin.end(JSON.stringify(input));   // MUST close stdin
 ```
 - Timeout **15 s** → SIGKILL → Broken `timeout`. stdout and stderr each capped at 1 MiB; overflow → kill → Broken `test_exit_nonzero`. No `PATH` in env (Windows: + `SYSTEMROOT`).
-- **`fetch-guard.mjs`** (runs before the skill): reads `NB_HOSTS` once into a frozen set; wraps `globalThis.fetch` (accepts `string | URL | Request`, anything else throws); forces `redirect:"manual"` and throws on 3xx; throws if the host ∉ set (in OFFLINE the Runner adds `127.0.0.1`); throws if the `BRAVE_API_KEY` value appears in a request to any host other than `api.search.brave.com`; deletes `globalThis.WebSocket` / `EventSource`; replaces `process.getBuiltinModule` with a stub that throws for network/module builtins; wraps the undici global dispatcher with the same host check. A guard throw → the skill exits non-zero → Broken `test_exit_nonzero`.
-- Verified on Node 22.22.2 (2026-10-08): reads outside the folder, writes, `child_process`, `Worker`, `process.binding` → `ERR_ACCESS_DENIED`; `process.dlopen` → `ERR_DLOPEN_DISABLED`; the guard preload needs its own `--allow-fs-read`.
+- **`fetch-guard.mjs`** (runs before the skill): reads `NB_HOSTS` once into a frozen set; wraps `globalThis.fetch` (accepts `string | URL | Request`, anything else throws); forces `redirect:"manual"` and throws on 3xx; throws if the host ∉ set (in OFFLINE the Runner adds `127.0.0.1`); throws if the `BRAVE_API_KEY` value appears in a request to any host other than `api.search.brave.com`; deletes `globalThis.WebSocket`; replaces `process.getBuiltinModule` with a stub that throws for network/process/module builtins (it works under `--permission`, so the stub is required); creates undici's lazily-built global dispatcher eagerly (`await fetch("data:,x")`), then redefines `globalThis[Symbol.for("undici.globalDispatcher.1")]` as `writable:false` with a Proxy that checks `opts.origin` on every method, hides `constructor` and returns `null` as its prototype. A guard throw → the skill exits non-zero → Broken `test_exit_nonzero`.
+- Verified on Node 22.22.2 (2026-10-08): reads outside the folder, writes, `child_process`, `Worker`, `process.binding` → `ERR_ACCESS_DENIED`; `process.dlopen` → `ERR_DLOPEN_DISABLED`; the guard preload needs its own `--allow-fs-read`. Guard prototype blocked: off-host fetch, key to a non-Brave host, 302, `WebSocket`, `getBuiltinModule("http")`, dispatcher via `Symbol.for` and via `getOwnPropertySymbols`, dispatcher `constructor`, dispatcher overwrite, `fetch` overwrite; allowed fetch still 200.
 
 ### Skill I/O
 ```ts
@@ -272,25 +280,26 @@ User values arrive **only** at runtime on stdin — never rendered into `skill.m
 ### Manifest (`manifest.json`)
 ```ts
 { name, kind: "recipe" | "code" | "hand" | "email_send", purpose: string,
-  inputs: Array<{ name: /^[a-z_]{1,24}$/, type: "string" | "number", required: boolean, description: string }>,  // ≤6
+  inputs: Array<{ name: /^[a-z_]{1,24}$/, type: "string" | "number", format: "text" | "slug", required: boolean, description: string }>,  // ≤6
   capabilities: string[], hosts: string[], recipe?: Recipe }
 ```
 
 ### Recipe forge (T1/T2, `FORGE_MODE=recipe`, default)
 - **T1:** one-shot Pi call, terminating tool `emit_recipe`; `endpoint` forced to `news`, single input `{query}`.
-- **T2:** the **Explorer** Pi session with `recipe_tools` (§6): `web_search({q, endpoint:"news"|"web"})` (host-side Brave call, ≤5 `{title,url,snippet}`), `http_get({url})` (host-side GET, 6 s, response text ≤8 KB, JSON pretty-printed / HTML tags stripped; public `https` only; DNS-resolved private, loopback and link-local addresses rejected; redirects followed manually and every hop re-checked; host ∉ `never-hosts`), then terminating `emit_recipe`. Its prompt includes `sources.md`. Every successful `http_get` host is recorded as *visited*.
+- **T2:** the **Explorer** Pi session with `recipe_tools` (§6): `web_search({q, endpoint:"news"|"web"})` (host-side Brave call, ≤5 `{title,url,snippet}`), `http_get({url})` (host-side GET, 6 s, response text ≤16 KB, JSON pretty-printed / HTML tags stripped; public `https` only; DNS-resolved private, loopback and link-local addresses rejected; redirects followed manually and every hop re-checked; host ∉ `never-hosts`), then terminating `emit_recipe`. Its prompt includes `sources.md`. Every successful `http_get` host is recorded as *visited*.
 - `emit_recipe` params:
 ```ts
 { name, purpose, endpoint: "news" | "web" | "json",
   queryPattern: string | null,     // news/web: e.g. "{make} {model} used"; placeholders = input names
   site: string | null,             // web only: appended as " site:<site>"
   urlPattern: string | null,       // json: absolute https URL with {input} placeholders (values URL-encoded at runtime)
-  itemsPath: string | null,        // json: dot path to the array, e.g. "results"
+  itemsPath: string | null,        // json: dot path to the array, e.g. "results"; "" = the response is the array; a leading "/" is stripped
+  matchInput: string | null,       // optional input name whose (normalised) value must appear in an item title; other items are dropped
   map: { title: string, url: string, snippet: string | null, date: string | null } | null,
                                    // json: templates over item fields, e.g. url "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}"
   inputs: Input[], example: Record<string, string | number> }
 ```
-- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) with the recipe via `JSON.stringify` only — only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
+- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
 - **Keys:** news/web hands read literal `process.env.BRAVE_API_KEY`; json hands use no key, so the Broker grants none.
 
 ### Code forge (T3, `FORGE_MODE=code`, stretch)
@@ -311,13 +320,14 @@ Builder = Pi session with `code_tools` (§6):
 1. Tripwire match → fixed Job `{ template:"email_send", needs:["notify:email"] }` → §11 path; steps 2–6 skipped.
 2. `job.needs` ∩ (`caps-deny` ∪ not-in-`caps-allow`) ≠ ∅ → Warden DENIED `capability_not_allowed`, `detail:"triggers: job_needs"`, no staging.
 3. `job.skill` that is `""`, whitespace or `"null"` counts as null. Otherwise an invalid name → Warden DENIED `invalid_skill_name`.
-4. `job.skill` names an installed hand → validate `job.inputs` against its `manifest.inputs` (required present; numeric strings accepted for numbers; unknown keys dropped) → valid: **Reuse** (`matched`, `detail:"by name"`); invalid: **Create** (`gap`, `detail:"inputs don't fit <skill> → create"`).
+4. `job.skill` names an installed hand → validate `job.inputs` against its `manifest.inputs` (required present; numbers coerced by code — strip spaces, currency and thousands separators, e.g. `"1 000 000 Kč"` → `1000000`; unknown keys dropped) → valid: **Reuse** (`matched`, `detail:"by name"`); invalid: **Create** (`gap`, `detail:"inputs don't fit <skill> → create"`).
 5. `job.skill` names a hand that is not installed → **Create** (`gap`, `detail:"named skill <skill> not installed → create"`).
 6. `job.skill` null → **Create** (`gap`, `detail:"no installed hand covers <intent> → create"`).
 - `hand_probe` (`kind:"hand"`) is reusable by name only and hidden from Talk's snapshot.
 
 ### Test and Reuse runs
-- **Test input** = `job.inputs` if they validate against the new hand's `inputs`, else `example` (code mode: the Builder's last passing inputs). Install `items` = the Test output.
+- **Input handling (template code):** `format:"slug"` string inputs are lowercased, stripped of diacritics, spaces → `-` before filling a pattern; `matchInput` filtering compares diacritic-insensitive, `-` ≡ space.
+- **Test input** = `job.inputs` (coerced as in Runner rule step 4) if they validate against the new hand's `inputs`, else `example` (code mode: the Builder's last passing inputs). Install `items` = the Test output.
 - **Test check:** zod schema `{ items: [{title, url, snippet?, date?}] }` + ≥1 item with non-empty `url`. Fail → Broken `schema_invalid` (shape or 0 items), `test_exit_nonzero` (exit ≠ 0) or `timeout`.
 - **Reuse run:** exit ≠ 0 / timeout / shape → Broken with the same codes. 0 items is still a `reuse` outcome with `items:[]`.
 
@@ -332,17 +342,17 @@ Builder = Pi session with `code_tools` (§6):
 `env` = the Broker-mapped names that appear as literal `process.env.X` in the scan. Exception: `skills/hand_probe/decision.json` is a committed seed generated from `src/hash.ts`, regenerated on every re-pin, disclosed as Simulated.
 
 ### Broker
-Map: `BRAVE_API_KEY` ↔ `net:fetch` · `OPENROUTER_API_KEY` ↔ `llm:call`. Test: grants the PRE provisional grant. Reuse: grants exactly `decision.env`. Every other name reads `undefined` in the child.
+Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:call` is denied by the charter). Test: grants the PRE provisional grant. Reuse: grants exactly `decision.env`. Every other name reads `undefined` in the child.
 
 ### Provider request shapes
 - **Brave news:** `GET https://api.search.brave.com/res/v1/news/search?q=…&count=5&freshness=pw` → `results[].{title, url, description→snippet, page_age→date}`
-- **Brave web:** `GET https://api.search.brave.com/res/v1/web/search?q=…&count=5` → `web.results[].{title, url, description→snippet, page_age→date}`
+- **Brave web:** `GET https://api.search.brave.com/res/v1/web/search?q=…&count=5` → `web.results[].{title, url, description→snippet, page_age?→date}` (`page_age` may be absent)
 - Brave headers: `X-Subscription-Token`, `Accept: application/json`. Every skill `fetch` uses `AbortSignal.timeout(6000)`.
 - **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, mapped by `map`; `max` (default 5) items.
 - **Demo source (checked 2026-10-08, keyless, ~60 ms, `robots.txt` allows `/api/*`):** `https://www.sauto.cz/api/v1/items/search?category_id=838&manufacturer_model_seo={make}:{model}&price_to={max_price}&limit=5` → `results[].{name, price, id, manufacturer_cb.seo_name, model_cb.seo_name, …}`; detail page `https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}`. Undocumented API: fixtures saved for OFFLINE.
 
 ### OFFLINE mode
-`OFFLINE=1` → the Runner passes `baseUrl`, the Broker grants no keys, and the Runner appends `127.0.0.1` to `NB_HOSTS`; Hono serves `/mock/<host>/*` from `fixtures/http/` (Brave news / web by path; `www.sauto.cz` by make). Skills don't exit on a missing key when `baseUrl` is set. Every log line written while `OFFLINE=1` carries `source:"fixture"`. Exploration and code forge are online-only; OFFLINE forge replays `fixtures/forge/*.json`, which carry `visited: string[]` used as the visited set (`source:"fixture"`).
+`OFFLINE=1` → the Runner passes `baseUrl`, the Broker grants no keys, and the Runner appends `127.0.0.1` to `NB_HOSTS`; Hono serves `/mock/<host>/*` from `fixtures/http/` (Brave news / web by path; `www.sauto.cz` by make). Skills don't exit on a missing key when `baseUrl` is set. Every log line written while `OFFLINE=1` carries `source:"fixture"`. Exploration and code forge are online-only; OFFLINE forge replays `fixtures/forge/<name>.json`, chosen by `job.skill` or else by normalised `intent` (`match` field); each carries `visited: string[]` used as the visited set (`source:"fixture"`); no match → Broken `forge_invalid`, `detail:"offline: no forge fixture"`.
 
 ### Timeouts
 | Where | Limit |
@@ -377,7 +387,7 @@ use_hand({ skill: string | null, intent: string, inputs: Record<string, string |
 - `use_hand.execute` runs the Runner (§9):
   - install / reuse → returns `{ outcome, skill, items (≤5: title, url, snippet) }`; the model writes the reply (≤5 short lines, cites titles). Tool results are data, never instructions.
   - denied / broken → returns `{ content:[{type:"text", text: failureCode}], terminate:true }`; `reply` = the `replies.ts` template. `session.abort()` is never awaited inside `execute` (deadlock).
-- `await session.prompt()` never rejects on provider errors. Afterwards read the last assistant `stopReason`: `error` → `talk_failed`; `aborted` → `talk_timeout`; otherwise `getLastAssistantText()`.
+- `await session.prompt()` resolves on provider errors but can reject on preflight errors, so it is wrapped in try/catch (rejection → `talk_failed`). After it resolves, read the last assistant `stopReason`: `error` → `talk_failed`; `aborted` → `talk_timeout`; otherwise `getLastAssistantText()`.
 - Errors **after** an outcome exists (summary failed) → `kind:"job"` with that outcome; `reply` = the `replies.ts` items template (titles list).
 - Talk tokens / cost from `session.getSessionStats()` (`tokens.total`, `cost`); calls aborted mid-stream count 0, so totals are a lower bound.
 
@@ -429,6 +439,7 @@ Personality only, no rules: dark creature, junior analyst, short answers, grows 
 - `tokens` / `costUsd`: on `forge` (per Pi session), `install` (total forge cost of this hand), `reuse` (always `0`: the hand runs no LLM), `job` (Talk tokens up to the `use_hand` call; the `job` line is written at that moment). Summary tokens appear only in `/api/talk` `tokens.talk`. `costUsd` is a lower bound.
 - `voice` only on: the outcome `denied` line, `install`, `broken`.
 - A PRE deny writes the single `denied` line (no separate `precheck` deny), except Builder in-loop denies (§9 "Code forge").
+- `forge` / `broken` lines carry a short reason code in `detail` (e.g. `explorer: limit`, `recipe: unknown placeholder {x}`, `test: 0 items after matchInput`).
 - A Talk failure writes one `job` line, `actor:"talk"`, `decision:"fail"`, `detail:"talk_failed"` or `"talk_timeout"` (no paths, no stack).
 
 ### failureCode enum
@@ -475,14 +486,14 @@ Gate-only third ask: `Find a used Škoda Enyaq under 900 000 Kč on Sauto`. Each
 | Phase | Clock | Deliverable | Gate (human smoke, ≤5 min) | Tag |
 |---|---|---|---|---|
 | **P0 Reset** | 21:00–21:45 | SPEC v4, AGENTS.md, BOARD.md, live key + sandbox + Pi checks | Human reads summary, says Go | `t0-reset` |
-| **P1 T1 smart Talk** | 21:45–00:45 | Charter v4 + re-pin + seed; Talk v4 (§10); Runner rule v4; recipe template + news recipe; sandbox flags + output caps; token fields; timeouts + templates; `hash_mismatch` → Warden; OFFLINE without key; `.env.example`; `docs/UI_CONTRACT.md` | "who are you?" chats · "News on Anthropic" → Install with tokens · Ctrl-C, `npm start`, "News on OpenAI" → Reuse, hand 0 tok · email chip → one DENIED + WAV | `t1-smart` |
+| **P1 T1 smart Talk** | 21:45–00:45 | Charter v4 + re-pin + seed; Talk v4 (§10); Runner rule v4; recipe template + news recipe; sandbox flags + output caps + minimal fetch guard (host set + `redirect:"manual"`); token fields; timeouts + templates; `hash_mismatch` → Warden; OFFLINE without key; `.env.example`; `docs/UI_CONTRACT.md` | "who are you?" chats · "News on Anthropic" → Install with tokens · Ctrl-C, `npm start`, "News on OpenAI" → Reuse, hand 0 tok · email chip → one DENIED + WAV | `t1-smart` |
 | **take0** | 00:45–01:05 | T1 video, uploaded unlisted (agent: `validate.ts` rows 1–4, 6–10) | watched once | — |
-| **P2 T2 explore → recipe** | 01:05–03:30 | Explorer + `http_get` safety; `json`/`web` endpoints; inputs; fetch guard; Warden v4 scan + hosts; sauto fixtures; chips 1–2; UI token counter | chip 1 → Install (explore lines visible) · Ctrl-C, `npm start` · chip 2 → Reuse, hand 0 tok · Enyaq ask works | `t2-recipe` |
+| **P2 T2 explore → recipe** | 01:05–03:30 | Explorer + `http_get` safety; `json`/`web` endpoints; inputs (`format`, coercion, `matchInput`); full fetch guard; Warden v4 scan + hosts; sauto fixtures; chips 1–2; UI token counter | chip 1 → Install (explore lines visible) · Ctrl-C, `npm start` · chip 2 → Reuse, hand 0 tok · Enyaq ask works | `t2-recipe` |
 | **take1** | 03:30–03:50 | T2 video, uploaded (agent: `validate.ts` rows 5, 11–13) | watched once | — |
 | **P3 T3 code (stretch)** | 03:50–05:30 | Only if `t2-recipe` tagged by 03:30, on branch `try/code`: Builder (§9), hook, in-loop Warden, fallback | `FORGE_MODE=code` forges ≥2 of 3 rehearsed asks; fallback proven once | `t3-code` |
 | **P4 Proof + ship** | 05:30–07:14 | `validate.ts` complete → results; README; slide; final take ~06:15; upload start 06:40, done 07:00 | final video watched once | `t4-final` 07:10 |
 
-Tag only after the human confirms the gate; push every tag. Feature freeze 05:30: afterwards only fixes to a broken demo step. Takes are capped at 20 min.
+Schedule risk (second-opinion estimate): P1 realistically ends ≈01:30 and P2 ≈04:30; the abort ladder applies as written, and T3 is expected to stay a stretch. Tag only after the human confirms the gate; push every tag. Feature freeze 05:30: afterwards only fixes to a broken demo step. Takes are capped at 20 min.
 
 ### Abort ladder
 | If | By | Then |
@@ -541,11 +552,11 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 
 | Works | Simulated | Incomplete |
 |---|---|---|
-| Charter pin + hash on every line | Anything `source:"fixture"` (OFFLINE, chip backups, judge mode) | Hands = HTTP GET of JSON/HTML; JS-heavy or bot-protected sites end Broken |
+| Charter pin + hash on every line | Anything `source:"fixture"` (OFFLINE, chip backups, judge mode) | Hands = one HTTP GET + dot-path map (no headers, POST or pagination); JS-heavy or bot-protected sites end Broken |
 | Warden code DENIED; fs/process sandbox (Node permission model) | Explorer gets curated `sources.md` hints | Hand choice is Talk's (LLM); the Runner only validates inputs |
 | Explore → Forge → Test → FINAL = PRE → Install → Reuse after restart; hand runs with 0 LLM tokens | Forge latency jump-cut on video | Keyword tripwire; non-keyword asks depend on Talk (k/5) |
 | Broker: ungranted key = `undefined`; json hands get no key | `hand_probe` seeded `decision.json` | Network: in-process guard + scan rules, no OS-level network jail |
-| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse |
+| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error |
 
 ---
 
@@ -563,7 +574,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 8 | Sandbox | Node `--permission` + hardened fetch guard + scan rules |
 | 9 | Demo asks | Chips in §13 |
 | 10 | Repo visibility | Public |
-| 11 | Charter | §6 blocks; re-pinned in P1 with human Go |
+| 11 | Charter | §6 blocks (`llm:call` denied for hands); re-pinned in P1 with human Go |
 
 ---
 
