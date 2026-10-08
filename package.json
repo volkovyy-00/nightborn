@@ -16,5 +16,8 @@
     "typebox": "^1.0.0",
     "typescript": "5.9.3",
     "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5"
   }
 }
