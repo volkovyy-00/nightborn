@@ -1,0 +1,19 @@
+{
+  "match": ["news"],
+  "visited": [],
+  "recipe": {
+    "name": "company_news",
+    "purpose": "Recent news headlines for a company or topic.",
+    "endpoint": "news",
+    "queryPattern": "{query}",
+    "site": null,
+    "urlPattern": null,
+    "itemsPath": null,
+    "matchInput": null,
+    "map": null,
+    "inputs": [
+      { "name": "query", "type": "string", "format": "text", "required": true, "description": "Company or topic name, as the user wrote it" }
+    ],
+    "example": { "query": "Anthropic" }
+  }
+}

@@ -7,7 +7,8 @@ import { REPO_ROOT, repoPath } from "./paths.ts";
 import { loadAndPinCharter, getCharterHash } from "./charter.ts";
 import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
 import { handleTalk } from "./runner.ts";
-import { mockProviderResponse } from "./mock.ts";
+import { mockResponse } from "./mock.ts";
+import { chatReply } from "./replies.ts";
 
 // Load .env from repo root (not cwd)
 const envFile = path.join(REPO_ROOT, ".env");
@@ -55,40 +56,31 @@ app.get("/api/log", (c) => {
 });
 
 app.post("/api/talk", async (c) => {
-  const body = (await c.req.json()) as { text?: string; fixture?: string };
-  const text = String(body.text ?? "");
+  let text = "";
+  let fixture: string | undefined;
   try {
-    const result = await handleTalk(text, body.fixture);
-    return c.json(result);
+    const body = (await c.req.json()) as { text?: unknown; fixture?: unknown };
+    text = String(body.text ?? "");
+    fixture = typeof body.fixture === "string" ? body.fixture : undefined;
+  } catch {
+    /* empty body → empty text */
+  }
+  try {
+    return c.json(await handleTalk(text, fixture));
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("POST /api/talk failed:", e);
-    return c.json({ kind: "chat", text: `Talk failed: ${msg}` }, 500);
+    console.error("POST /api/talk failed:", e); // server console only; never in the reply or log
+    return c.json({ kind: "chat", text: chatReply("talk_failed") }, 500);
   }
 });
 
+// OFFLINE: skills request `new URL(u.host + u.pathname + u.search, baseUrl)` → /mock/<host>/<path>?<query>
 if (process.env.OFFLINE === "1") {
-  app.get("/mock/:provider", (c) => {
-    const provider = c.req.param("provider");
-    const q = c.req.query("q") ?? c.req.query("query") ?? "news";
-    return c.json(mockProviderResponse(provider, q));
-  });
-  app.post("/mock/:provider", async (c) => {
-    const provider = c.req.param("provider");
-    let q = "news";
-    try {
-      const body = (await c.req.json()) as { query?: string };
-      if (body.query) q = body.query;
-    } catch {
-      /* ignore */
-    }
-    return c.json(mockProviderResponse(provider, q));
-  });
-  // Brave-style path
-  app.get("/mock/:provider/res/v1/news/search", (c) => {
-    const provider = c.req.param("provider");
-    const q = c.req.query("q") ?? "news";
-    return c.json(mockProviderResponse(provider, q));
+  app.get("/mock/:host/*", (c) => {
+    const host = c.req.param("host");
+    const url = new URL(c.req.url);
+    const pathname = url.pathname.slice(`/mock/${host}`.length);
+    const body = mockResponse(host, pathname, url.searchParams);
+    return body === null ? c.json({ error: "no fixture" }, 404) : c.json(body);
   });
 }
 
@@ -96,4 +88,6 @@ app.use("/*", serveStatic({ root: repoPath("public") }));
 
 const port = Number(process.env.PORT ?? "8787");
 console.log(`Nightborn listening on http://127.0.0.1:${port} · charter ${getCharterHash().slice(0, 8)}`);
-serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+// POST /api/talk may take ≤300 s (forge); SPEC §9 "Timeouts": server requestTimeout 310 s.
+(server as unknown as { requestTimeout: number }).requestTimeout = 310_000;
