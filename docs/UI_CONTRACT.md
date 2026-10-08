@@ -123,6 +123,10 @@ Placeholder input: `Message Nightborn`.
 
 Artifact **frame tabs** (Boot…Broken) are mock storyboard only — do not require a frames API.
 
+### Token counter (SPEC §13 "Should")
+
+Header strip `FIRST ASK n tok · REUSE m tok (Talk only) · HAND 0 tok`, derived only from `/api/log` lines plus the `/api/talk` response. Lines are grouped into requests: a request starts at each `job` line and runs until the next one. **FIRST ASK** = latest request that ended in `install`: `job.tokens` (Talk up to `use_hand`) + `install.tokens` (forge total), with `install.ms` shown after it (`—` before any install). **REUSE** = latest request that ended in `reuse`: `job.tokens`. **HAND** = that `reuse` line's `tokens` (always `0`; `0` before any reuse too). When `POST /api/talk` returns `kind:"job"` with `tokens:{talk, forge}`, the matching slot takes the fuller numbers (talk includes the summary): `install` → `talk + forge` (+ response `ms`), `reuse` → `talk`. The override applies only once the matching outcome line has reached the board; the log-derived values are the fallback that survives a reload or a log rotation. Numbers use thin thousands spaces (`4 200 tok`).
+
 ### Pipeline mapping
 
 After the latest `job` line:
