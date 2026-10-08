@@ -34,12 +34,17 @@ export function findForgeFixture(job: Job): ForgeFixture | null {
     if (NAME_RE.test(job.skill) && existsSync(p)) return JSON.parse(readFileSync(p, "utf8")) as ForgeFixture;
   }
   const intent = normaliseText(job.intent);
+  let best: { fx: ForgeFixture; len: number } | null = null; // longest matching keyword wins ("hacker news" over "news")
   for (const f of readdirSync(dir).sort()) {
     if (!f.endsWith(".json")) continue;
     const fx = JSON.parse(readFileSync(path.join(dir, f), "utf8")) as ForgeFixture;
-    if (Array.isArray(fx.match) && fx.match.some((k) => intent.includes(normaliseText(k)))) return fx;
+    if (!Array.isArray(fx.match)) continue;
+    for (const k of fx.match) {
+      const kw = normaliseText(k);
+      if (kw && intent.includes(kw) && (!best || kw.length > best.len)) best = { fx, len: kw.length };
+    }
   }
-  return null;
+  return best?.fx ?? null;
 }
 
 // ── T1 recipe forge: one-shot Pi call, terminating `emit_recipe` ────────

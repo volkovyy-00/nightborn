@@ -8,7 +8,8 @@ import { dataPath } from "./paths.ts";
 import { tripwireMatch } from "./tripwire.ts";
 import { chatReply, itemsReply, replyFor } from "./replies.ts";
 import { deniedNeeds, denyAndWipe, installSkill, wardenDeny, wardenFinal, wardenPre, wardenReuse, wipeStaging } from "./warden.ts";
-import { coerceInputs, copyEmailSendTemplate, forgeFromFixture, forgeRecipeT1, prepareRecipe, renderRecipe, type ForgeResult } from "./forge.ts";
+import { coerceInputs, copyEmailSendTemplate, forgeFromFixture, prepareRecipe, renderRecipe, type ForgeResult } from "./forge.ts";
+import { exploreRecipe } from "./explorer.ts";
 import { buildSnapshot, findJudgeFixture, loadTalkFixture, recordTurn, talk } from "./talk.ts";
 import { runSkill } from "./exec.ts";
 import { parseItems, validateOutput } from "../templates/schemas.ts";
@@ -115,7 +116,10 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
   const named = nullishSkill(job.skill) ? null : job.skill;
   line({ actor: "runner", event: "gap", skill: named, decision: "allow", detail: gapDetail }, ctx);
 
-  const forge: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await forgeRecipeT1(job);
+  // Explorer steps are `forge` lines without tokens; the session total lands on the pass/fail line below (SPEC §12).
+  const step = (detail: string, ms?: number) =>
+    line({ actor: "forge", event: "forge", skill: named, decision: "pass", detail, ...(ms !== undefined ? { ms } : {}) }, ctx);
+  const forge: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step);
   const fctx: Ctx = forge.source === "fixture" ? { ...ctx, source: "fixture" } : ctx;
   if (!forge.ok) {
     line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: forge.reason, tokens: forge.tokens, costUsd: forge.costUsd, ms: forge.ms }, fctx);
