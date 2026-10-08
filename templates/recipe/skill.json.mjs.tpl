@@ -39,32 +39,25 @@ function fillUrl(pattern, inputs) {
   });
 }
 
-function fillItem(template, item) {
-  return String(template).replace(/\{([a-zA-Z0-9_.]+)\}/g, (_, p) => {
-    const v = dot(item, p);
-    return v === undefined || v === null ? "" : String(v);
-  });
-}
-
-// A link with a placeholder that has no value is no link: return "" so a wrong template fails the Test.
-function fillLink(template, item) {
+// strict (links): a placeholder without a value makes the whole result "", so a wrong template fails the Test.
+function fillItem(template, item, strict = false) {
   let missing = false;
   const out = String(template).replace(/\{([a-zA-Z0-9_.]+)\}/g, (_, p) => {
     const v = dot(item, p);
     if (v === undefined || v === null || String(v) === "") missing = true;
     return v === undefined || v === null ? "" : String(v);
   });
-  return missing ? "" : out;
+  return strict && missing ? "" : out;
 }
 
-// Numbers as they are; strings only when they hold a digit ("1 234 Kč" → 1234, "1 234,50" → 1234.5).
+// Numbers as they are; a string's first number, read like the host's coerceInputs (src/forge.ts):
+// "1 234 Kč" → 1234, "750.000 Kč" → 750000, "1 234,50" → 1234.5, "599 000 Kč s DPH 21%" → 599000.
 function num(v) {
-  if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
-  if (typeof v !== "string" || !/\d/.test(v)) return NaN;
-  let s = v.replace(/[\s\u00a0]/g, "");
-  if (/,\d{1,2}$/.test(s)) s = s.replace(/,(\d{1,2})$/, ".$1");
-  s = s.replace(/[^\d.]/g, "");
-  return s ? Number(s) : NaN;
+  if (typeof v === "number") return v;
+  const m = typeof v === "string" ? v.match(/\d[\d\s\u00a0.,]*/) : null;
+  if (!m) return NaN;
+  const s = m[0].replace(/[\s\u00a0]/g, "").replace(/[.,](?=\d{3}(\D|$))/g, "").replace(",", ".");
+  return Number(s.replace(/\.$/, ""));
 }
 
 let raw = "";
@@ -101,7 +94,7 @@ if (R.maxFilter) {
 }
 
 let items = arr.map((it) => {
-  const o = { title: fillItem(R.map.title, it), url: fillLink(R.map.url, it) };
+  const o = { title: fillItem(R.map.title, it), url: fillItem(R.map.url, it, true) };
   if (R.map.snippet) {
     const s = fillItem(R.map.snippet, it);
     if (s.trim()) o.snippet = s;

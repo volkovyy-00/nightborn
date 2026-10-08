@@ -163,7 +163,7 @@ function uniqueName(base: string, skillsRoot: string): string {
   }
 }
 
-function placeholders(pattern: string | null): string[] {
+export function placeholders(pattern: string | null): string[] {
   if (!pattern) return [];
   return [...pattern.matchAll(/\{([^{}]+)\}/g)].map((m) => m[1]);
 }
@@ -206,6 +206,20 @@ export function coerceInputs(inputs: Input[], values: InputValues): InputValues 
   return out;
 }
 
+/** Input rules shared by prepareRecipe and the Explorer's emit_recipe (SPEC §9): a reason code, or null. */
+function recipeInputError(recipe: Recipe): string | null {
+  const names = new Set(recipe.inputs.map((i) => i.name));
+  const used = [...placeholders(recipe.queryPattern), ...placeholders(recipe.urlPattern)];
+  const unknown = used.find((p) => !names.has(p));
+  if (unknown) return `unknown placeholder {${unknown}}`;
+  if (recipe.matchInput && !names.has(recipe.matchInput)) return "matchInput";
+  const mf = recipe.maxFilter;
+  if (mf && recipe.inputs.find((i) => i.name === mf.input)?.type !== "number") return "maxFilter";
+  const usedAnywhere = [...used, recipe.matchInput, mf?.input];
+  const unused = recipe.inputs.find((i) => i.required && !usedAnywhere.includes(i.name));
+  return unused ? `unused input ${unused.name}` : null;
+}
+
 export function prepareRecipe(
   recipe: Recipe,
   job: Job,
@@ -233,12 +247,8 @@ export function prepareRecipe(
     recipe = { ...recipe, urlPattern: null, itemsPath: null, map: null, maxFilter: null, site: recipe.endpoint === "web" ? recipe.site : null };
     if (!recipe.queryPattern) return fail("recipe: no queryPattern");
   }
-  const used = [...placeholders(recipe.queryPattern), ...placeholders(recipe.urlPattern)];
-  for (const p of used) if (!names.has(p)) return fail(`recipe: unknown placeholder {${p}}`);
-  if (recipe.matchInput && !names.has(recipe.matchInput)) return fail("recipe: matchInput");
-  if (recipe.maxFilter && recipe.inputs.find((i) => i.name === recipe.maxFilter!.input)?.type !== "number") return fail("recipe: maxFilter");
-  const usedAnywhere = [...used, recipe.matchInput, recipe.maxFilter?.input];
-  for (const i of recipe.inputs) if (i.required && !usedAnywhere.includes(i.name)) return fail(`recipe: unused input ${i.name}`);
+  const inputError = recipeInputError(recipe);
+  if (inputError) return fail(`recipe: ${inputError}`);
   const example = coerceInputs(recipe.inputs, recipe.example ?? {});
   if (!example) return fail("recipe: example");
 

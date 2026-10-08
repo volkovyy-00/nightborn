@@ -7,8 +7,9 @@ import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import type { Job, Recipe } from "./types.ts";
 import { getCharter } from "./charter.ts";
+import { dataPath } from "./paths.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
-import { hostOf, type ForgeResult } from "./forge.ts";
+import { hostOf, prepareRecipe, type ForgeResult } from "./forge.ts";
 
 const BRAVE_HOST = "api.search.brave.com";
 const HTTP_GET_TIMEOUT_MS = 6_000;
@@ -148,8 +149,7 @@ function jsonAt(s: string, i: number, cap = 400_000): unknown {
 }
 
 function preview(v: unknown): string {
-  const t = typeof v === "string" ? JSON.stringify(v.length > 40 ? v.slice(0, 40) + "…" : v) : String(v);
-  return t;
+  return typeof v === "string" ? JSON.stringify(v.length > 40 ? v.slice(0, 40) + "…" : v) : String(v);
 }
 
 /** "results[20] · item: id: 123, name: \"…\", manufacturer_cb.seo_name: \"tesla\", …" (≤600 chars). */
@@ -179,10 +179,10 @@ function shapeOf(body: unknown): string | null {
   };
   flat(arr[0] as Record<string, unknown>, "", 0);
   // Fields a recipe needs (names, prices, ids, links, dates) first; the rest as room allows.
-  const key = /(^|\.)(id|name|title|price|url|link|slug|seo_name|date|created_at|create_date)(:|$)/i;
-  parts.sort((x, y) => Number(key.test(y.split(": ")[0])) - Number(key.test(x.split(": ")[0])));
+  const key = /(^|\.)(id|name|title|price|url|link|slug|seo_name|date|created_at|create_date)$/i;
+  const isKey = (p: string) => key.test(p.split(": ")[0]);
   let out = `${path || "(root)"}[${arr.length}] · first item: `;
-  for (const p of parts) {
+  for (const p of [...parts.filter(isKey), ...parts.filter((p) => !isKey(p))]) {
     if (out.length + p.length > 600) break;
     out += p + ", ";
   }
@@ -222,10 +222,15 @@ export function pageDigest(raw: string, pageUrl: string): string {
     if (shape && !ep.shape) ep.shape = shape;
   };
   const re =
-    /(https?:\/\/[A-Za-z0-9.-]+)?(?:(?<=https?:\/\/[A-Za-z0-9.-]+)|(?<=["'(=]))(\/[A-Za-z0-9_\-./%]*)(\?\{[^{}]{0,800}\}|\?[^"'\s<>\\{]{1,400})?/g;
+    /(?:(https?:\/\/[A-Za-z0-9.-]+)|(?<=["'(=]))(\/[A-Za-z0-9_\-./%]*)(\?\{[^{}]{0,800}\}|\?[^"'\s<>\\{]{1,400})?/g;
   for (const m of u.matchAll(re)) {
-    const origin = m[1] ?? page.origin;
-    const path = m[2];
+    let origin = m[1] ?? page.origin;
+    let path = m[2];
+    if (!m[1] && path.startsWith("//")) {
+      const host = path.slice(2).split("/")[0];
+      origin = `https://${host}`;
+      path = path.slice(2 + host.length) || "/";
+    }
     if (!/\/api\/|\/graphql|\/_next\/data\/|\.json$/.test(path)) continue;
     let q: string | null = "";
     const rawQ = m[3] ?? "";
@@ -243,8 +248,9 @@ export function pageDigest(raw: string, pageUrl: string): string {
     const end = (m.index ?? 0) + m[0].length;
     const near = u.slice(end, end + 300);
     const b = near.indexOf('"body":');
-    if (b >= 0 && /"status":\s*200/.test(near.slice(0, b))) {
-      const body = jsonAt(u, end + b + 7);
+    // Only a cache key ("<url>": {...status 200, body}) carries a response; a plain URL near one does not.
+    if (b >= 0 && /^"\s*:/.test(near) && !eps.get(origin + path)?.shape && /"status":\s*200/.test(near.slice(0, b))) {
+      const body = jsonAt(u, end + b + 7 + (near.slice(b + 7).match(/^\s*/)?.[0].length ?? 0));
       if (body !== null) shape = shapeOf(body);
     }
     add(origin, path, q, shape);
@@ -332,7 +338,12 @@ export async function safeHttpGet(rawUrl: string, signal?: AbortSignal): Promise
       continue;
     }
     const ctype = res.headers.get("content-type") ?? "";
-    const raw = await readCapped(res, ctype.includes("json") ? JSON_READ_MAX : HTML_READ_MAX);
+    let raw: string;
+    try {
+      raw = await readCapped(res, ctype.includes("json") ? JSON_READ_MAX : HTML_READ_MAX);
+    } catch {
+      return { ok: false, reason: "read failed or timed out" };
+    }
     let text: string;
     if (ctype.includes("json") || /^\s*[[{]/.test(raw)) {
       try {
@@ -517,8 +528,7 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
     async execute(_id, p) {
       const done = after();
       if (done) return done;
-      // Cheap self-correction checks (the full checks run in prepareRecipe, SPEC §9 "Code then").
-      const names = new Set(p.inputs.map((i) => i.name));
+      // Self-correction: everything that would end the forge in prepareRecipe throws here instead (SPEC §9 "Code then").
       if (p.endpoint === "json") {
         if (!p.urlPattern) throw new Error("json recipe needs urlPattern");
         const host = hostOf(p.urlPattern);
@@ -527,22 +537,13 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
         if (!p.map) throw new Error("json recipe needs map {title, url}");
         const mapHost = hostOf(p.map.url);
         if (mapHost && !visited.includes(mapHost)) throw new Error(`map.url host ${mapHost} was not fetched: use a host you fetched or the item's own link field`);
-        for (const m of p.urlPattern.matchAll(/\{([^{}]+)\}/g)) if (!names.has(m[1])) throw new Error(`urlPattern placeholder {${m[1]}} is not an input name`);
-        if (/[?&](timestamp[a-z_]*)=\d/i.test(p.urlPattern)) throw new Error("urlPattern carries a timestamp param: drop volatile params");
-        if (p.maxFilter) {
-          const spec = p.inputs.find((i) => i.name === p.maxFilter!.input);
-          if (!spec || spec.type !== "number") throw new Error(`maxFilter.input ${p.maxFilter.input} must be a number input`);
-        }
-      } else {
-        if (!p.queryPattern) throw new Error("news/web recipe needs queryPattern");
-        for (const m of p.queryPattern.matchAll(/\{([^{}]+)\}/g)) if (!names.has(m[1])) throw new Error(`queryPattern placeholder {${m[1]}} is not an input name`);
-      }
-      const pattern = p.endpoint === "json" ? p.urlPattern : p.queryPattern;
-      const usedNames = new Set([...(pattern ?? "").matchAll(/\{([^{}]+)\}/g)].map((m) => m[1]));
-      if (p.matchInput) usedNames.add(p.matchInput);
-      if (p.endpoint === "json" && p.maxFilter) usedNames.add(p.maxFilter.input);
-      const unused = p.inputs.find((i) => i.required && !usedNames.has(i.name));
-      if (unused) throw new Error(`required input ${unused.name} is not used: put it in the pattern, matchInput or maxFilter, or make it not required`);
+        if (/[?&]timestamp\w*=\d/i.test(p.urlPattern)) throw new Error("urlPattern carries a timestamp param: drop volatile params");
+      } else if (!p.queryPattern) throw new Error("news/web recipe needs queryPattern");
+      const dry = prepareRecipe(p as Recipe, job, visited, dataPath("skills"));
+      if (!dry.ok)
+        throw new Error(
+          `${dry.reason}. Rules: input names match ^[a-z_]{1,24}$ (1–6 inputs); every placeholder is an input name; every required input is used by the pattern, matchInput or maxFilter; maxFilter.input is a number input; example holds a valid value for every required input; no paths, ".env" or key-like strings.`,
+        );
       captured = { ...p, maxFilter: p.endpoint === "json" && p.maxFilter ? { ...p.maxFilter } : null, map: p.map ? { ...p.map } : null, inputs: p.inputs.map((i) => ({ ...i })), example: { ...p.example } };
       step(`explore: emit_recipe ${p.endpoint} ${p.name}`);
       return text("recipe received", true);
