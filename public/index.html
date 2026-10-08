@@ -121,13 +121,18 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .deny-word{font:800 clamp(44px,7vw,104px)/1 'Geist',sans-serif;letter-spacing:.06em}
 .deny-code{font:500 clamp(12px,1.3vw,16px)/1.4 'Geist Mono',monospace;margin-top:6px}
 .cap1,.cap2{font:italic clamp(20px,2.4vw,32px)/1.2 'Instrument Serif',serif;color:var(--ink);text-align:center}
-.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px;justify-content:flex-end}
+.msgs{display:flex;flex-direction:column;gap:12px;min-height:220px;flex:1 1 0;overflow-y:auto;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin;scrollbar-color:#2B343B transparent}
+.msgs>:first-child{margin-top:auto}
+.wb{position:sticky;top:16px;max-height:calc(100vh - 32px);min-height:0}
 .row{display:flex}
 .row-u{justify-content:flex-end}
 .bubble-u{max-width:85%;background:#161C21;border:1px solid var(--line);border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:var(--ink)}
 .bubble-n{max-width:96%;width:100%}
 .nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:var(--ink)}
 .nb-text,.nb-plain{white-space:pre-line}
+.nb-result{font:400 15px/1.55 'Geist',sans-serif;color:var(--ink);display:flex;flex-direction:column;gap:6px}
+.nb-result .li{padding-left:1.1em;text-indent:-1.1em}
+.nb-result .li::first-letter{color:var(--cyan)}
 .nb-voice{color:#FF8A8A}
 .nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
 .chip{font:500 13px/1.25 'Geist',sans-serif;color:var(--ink);background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
@@ -276,7 +281,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   </section>
 
   <aside style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:16px">
-    <section class="panel" style="padding:18px;display:flex;flex-direction:column;gap:14px;flex-grow:1">
+    <section class="panel wb" style="padding:18px;display:flex;flex-direction:column;gap:14px;flex-grow:1">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
         <span class="kicker">WORKBENCH</span>
         <span class="vlabel">
@@ -284,7 +289,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           <span>VOICE · WAV</span>
         </span>
       </div>
-      <div class="msgs" id="msgs" style="flex-grow:1"></div>
+      <div class="msgs" id="msgs"></div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         <button type="button" class="chip" data-chip>News on Anthropic</button>
         <button type="button" class="chip" data-chip>News on OpenAI</button>
@@ -502,7 +507,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
   function renderMsgs() {
     el.msgs.innerHTML = "";
-    state.msgs.slice(-8).forEach((m) => {
+    state.msgs.slice(-40).forEach((m) => {
       const row = document.createElement("div");
       row.className = m.who === "user" ? "row row-u" : "row";
       if (m.who === "user") {
@@ -514,13 +519,24 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         const b = document.createElement("div");
         b.className = "bubble-n";
         const t = document.createElement("div");
-        t.className = m.voice ? "nb-text nb-voice" : (m.plain ? "nb-plain" : "nb-text");
-        t.textContent = m.text;
+        if (m.result) {
+          t.className = "nb-result";
+          String(m.text).split("\n").map((s) => s.trim()).filter(Boolean).forEach((s) => {
+            const li = document.createElement("div");
+            if (/^([•·*-]|\d+[.)])\s/.test(s)) li.className = "li";
+            li.textContent = s;
+            t.appendChild(li);
+          });
+        } else {
+          t.className = m.voice ? "nb-text nb-voice" : (m.plain ? "nb-plain" : "nb-text");
+          t.textContent = m.text;
+        }
         b.appendChild(t);
         row.appendChild(b);
       }
       el.msgs.appendChild(row);
     });
+    el.msgs.scrollTop = el.msgs.scrollHeight;
   }
 
   function tagView(pos, num, slotState, name, extra) {
@@ -796,6 +812,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           text: data.reply || data.outcome || "",
           voice: voiceish,
           plain: data.outcome === "broken",
+          result: !voiceish,
         });
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
