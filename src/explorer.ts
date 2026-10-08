@@ -16,7 +16,7 @@ const HTTP_GET_MAX_BYTES = 16 * 1024; // what the model sees
 const HTML_READ_MAX = 1024 * 1024; // what the host reads to build a page digest
 const JSON_READ_MAX = 256 * 1024;
 const HTTP_GET_MAX_HOPS = 3;
-const BRAVE_MIN_GAP_MS = 1_100; // free tier ≈ 1 req/s
+const BRAVE_MIN_GAP_MS = 1_500; // free tier ≈ 1 req/s; 1.1 s still drew 429s
 
 export type StepLogger = (detail: string, ms?: number) => void;
 
