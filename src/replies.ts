@@ -23,11 +23,14 @@ export function replyFor(code: FailureCode | undefined, fallback = "Something we
   return (code && FAILURE_REPLIES[code]) || fallback;
 }
 
-/** Items template (titles list, ≤5 lines). Used on the fixture path and when the summary fails. */
+/** Items template (one sentence citing titles). Used on the fixture path and when the summary fails. */
 export function itemsReply(items: Item[] | undefined): string {
-  const list = (items ?? []).filter((i) => i.title?.trim()).slice(0, 5);
-  if (list.length === 0) return "I looked. Nothing turned up.";
-  return list.map((i) => `- ${i.title.trim().replace(/\s+/g, " ")}`).join("\n");
+  const titles = (items ?? []).map((i) => i.title?.trim().replace(/\s+/g, " ")).filter(Boolean).slice(0, 5);
+  if (titles.length === 0) return "I looked. Nothing turned up.";
+  if (titles.length === 1) return `I found one: ${titles[0]}.`;
+  const named = titles.slice(0, 2).join(" and ");
+  const rest = titles.length - 2;
+  return `I found ${titles.length}. ${rest > 0 ? `Top of the pile: ${named}, and ${rest} more.` : `${named}.`}`;
 }
 
 const CHAT_REPLIES = {
