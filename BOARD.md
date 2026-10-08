@@ -27,9 +27,9 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 ## P2 T2 explore → recipe · 01:05–03:30 · tag `t2-recipe`
 - [ ] Explorer (`web_search`, safe `http_get`, `emit_recipe`) + `sources.md` (§9)
 - [ ] `json` + `web` endpoints, inputs, visited-host rule (§9)
-- [ ] Hardened fetch guard + Warden v4 scan rows + host checks (§8, §9)
-- [ ] sauto fixtures + chips 1–2 + chip backups (§13)
-- [ ] UI token counter (§13)
+- [x] Hardened fetch guard + Warden v4 scan rows + host checks (§8, §9)
+- [x] sauto fixtures + chips 1–2 + chip backups (§13)
+- [x] UI token counter (§13)
 - [ ] GATE: Tesla → Install · restart · BMW i4 → Reuse hand 0 tok · Enyaq works
 - [ ] take1 recorded, watched, uploaded (agent meanwhile: validate rows 5, 11–13)
 
