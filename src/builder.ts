@@ -2,7 +2,7 @@
 // (web_search, http_get, write_skill, run_test, submit_skill). Writes only into staging/<runId>/; iterates
 // against the Warden + sandboxed Test in-loop (≤ code_max_test_runs); limits enforced by the host.
 // A failure before submit_skill → the caller falls back to the recipe forge once. No retry after submit.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { Type } from "typebox";
@@ -13,7 +13,7 @@ import { dataPath, REPO_ROOT } from "./paths.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
 import { makeResearchTools, toolText, type StepLogger } from "./explorer.ts";
 import { coerceInputs, slugifyName, uniqueName } from "./forge.ts";
-import { wardenPre, wardenPrecheckDeny, wipeStaging } from "./warden.ts";
+import { PROTECTED, SECRET, wardenPre, wardenPrecheckDeny, wipeStaging } from "./warden.ts";
 import { runSkill } from "./exec.ts";
 import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisionalGrant } from "./broker.ts";
 import { manifestSchema, validateOutput } from "../templates/schemas.ts";
@@ -38,6 +38,18 @@ export type BuildCodeFn = (job: Job, step: StepLogger, deps: BuilderDeps, reques
 
 // ── system prompt ─────────────────────────────────────────────────────────
 
+/** The string literals in a draft that trip the Warden's regexes — for the model's feedback only (never logged). */
+function offendingLiterals(src: string, re: RegExp): string[] {
+  const out: string[] = [];
+  for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
+    const raw = m[1] ?? m[2] ?? m[3] ?? "";
+    // a backtick template is scanned part by part: the text between ${…} placeholders counts as a literal
+    const parts = m[3] !== undefined ? raw.split(/\$\{[^}]*\}/) : [raw];
+    for (const p of parts) if (re.test(p)) out.push(JSON.stringify(p.slice(0, 60)));
+  }
+  return [...new Set(out)].slice(0, 5);
+}
+
 const SKELETON = `// skill.mjs — plain ESM, NO imports. Reads stdin, writes stdout, exits 0.
 let raw = "";
 for await (const c of process.stdin) raw += c;
@@ -46,17 +58,23 @@ const inputs = input.inputs ?? {};
 const max = Number(input.max) > 0 ? Math.floor(Number(input.max)) : 5;
 const slug = (s) => String(s).toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim().replace(/\\s+/g, "-");
 const num = (v) => { const m = String(v).match(/\\d[\\d\\s\\u00a0.,]*/); return m ? Number(m[0].replace(/[\\s\\u00a0]/g, "").replace(/[.,](?=\\d{3}(\\D|$))/g, "").replace(",", ".")) : NaN; };
-// One absolute https URL literal; fill the user's values with searchParams (never paste values into the literal).
-const u = new URL("https://www.example.com/api/v1/items/search?limit=20");
-u.searchParams.set("q", slug(inputs.make) + ":" + slug(inputs.model));
-u.searchParams.set("price_to", String(inputs.max_price));
+// URLs: ONE absolute https template string per URL with {placeholders}, filled by .replace(). Never a "/" string,
+// never a backtick template with / between \${} parts, never a string starting with "/".
+const SEARCH = "https://www.example.com/api/v1/items/search?limit=20&q={make}:{model}&price_to={max_price}";
+const DETAIL = "https://www.example.com/detail/{make}/{model}/{id}";
+const fill = (tpl, vals) => tpl.replace(/\\{([a-z_]+)\\}/g, (_, k) => encodeURIComponent(vals[k] ?? ""));
+const u = new URL(fill(SEARCH, { make: slug(inputs.make), model: slug(inputs.model), max_price: String(inputs.max_price) }));
 const target = input.baseUrl ? new URL(u.host + u.pathname + u.search, input.baseUrl) : u; // baseUrl = offline mock, keep this line
 const res = await fetch(target, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
 if (!res.ok) { process.stderr.write("http " + res.status + "\\n"); process.exit(1); }
 const data = await res.json();
 const items = (data.results ?? [])
   .filter((it) => !(num(it.price) > Number(inputs.max_price)))
-  .map((it) => ({ title: String(it.name ?? ""), url: "https://www.example.com/detail/" + it.id, snippet: num(it.price) + " Kč" }));
+  .map((it) => ({
+    title: String(it.name ?? ""),
+    url: fill(DETAIL, { make: it.manufacturer_cb?.seo_name, model: it.model_cb?.seo_name, id: it.id }),
+    snippet: num(it.price) + " Kč",
+  }));
 process.stdout.write(JSON.stringify({ items: items.slice(0, max) }));`;
 
 function systemPrompt(limits: { turns: number; seconds: number; tests: number }): string {
@@ -83,7 +101,7 @@ function systemPrompt(limits: { turns: number; seconds: number; tests: number })
     "- No import/require of anything; no fs, no child processes, no eval/Function/dynamic import(), no Reflect, Symbol.for, WebSocket, getBuiltinModule, createRequire, no process[...] / globalThis[...] computed access.",
     "- Only the global fetch, always with signal: AbortSignal.timeout(6000) and header Accept: application/json. Follow no redirects (they throw).",
     "- No process.env at all (keyless APIs only). Never a key-like string.",
-    "- NO string literal that starts with \"/\" (write the whole absolute https URL in one literal, or use new URL(rel, base)); no string containing \"../\", \".env\", \"broker\" or \"charter.md\".",
+    "- NO string literal that starts with \"/\" — not even \"/\" as a path separator, and no backtick template with a / between ${} parts (each part between placeholders is scanned as its own string). Build every URL from ONE absolute https template string with {placeholders} filled by .replace(), exactly as in the skeleton. No string containing \"../\", \".env\", \"broker\" or \"charter.md\".",
     "- Every URL literal is absolute https:// and its host is one you fetched with http_get in this session, and is listed in manifest.hosts.",
     "- manifest.capabilities is exactly [\"net:fetch\"] — nothing else.",
     "",
@@ -167,13 +185,37 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
       if (done) return done;
       if (tests >= limits.codeMaxTestRuns) throw new Error("test budget exhausted: submit_skill if a run passed, otherwise stop");
       if (!manifest || !name) throw new Error("write manifest.json first");
+      const missing = [...FILES].filter((f) => !existsSync(path.join(runDir, f)));
+      if (missing.length) throw new Error(`write ${missing.join(", ")} first (all three files are hashed together)`);
       tests++;
       const k = `${tests}/${limits.codeMaxTestRuns}`;
-      const pre = wardenPre(runDir, { job, name, visited });
+      let pre: ReturnType<typeof wardenPre>;
+      try {
+        pre = wardenPre(runDir, { job, name, visited });
+      } catch {
+        step(`test ${k}: forge_invalid`);
+        throw new Error("warden: could not read the hand's files (manifest.json must be valid JSON)");
+      }
       if (!pre.ok) {
         wardenPrecheckDeny(name, pre.failureCode, pre.caps, pre.detail);
         step(`test ${k}: ${pre.failureCode}`);
-        throw new Error(`warden: ${pre.failureCode} — ${pre.detail}`);
+        // The log stays clean (SPEC §12); the model gets the offending literals so it can fix them.
+        let hint = "";
+        if (pre.failureCode === "protected_path" || pre.failureCode === "secret_in_file") {
+          let src = "";
+          try {
+            src = readFileSync(path.join(runDir, "skill.mjs"), "utf8");
+          } catch {
+            src = "";
+          }
+          const lits = offendingLiterals(src, pre.failureCode === "protected_path" ? PROTECTED : SECRET);
+          if (lits.length) hint = ` — offending string literals: ${lits.join(", ")}. A string may not start with "/" (use one absolute https template with {placeholders} + .replace(), no "/" separators, no backtick URLs)`;
+        } else if (pre.failureCode === "host_not_allowed") {
+          hint = ` — every URL host in skill.mjs must be in manifest.hosts and fetched with http_get (visited: ${visited.join(", ") || "none"})`;
+        } else if (pre.failureCode === "manifest_mismatch") {
+          hint = " — manifest.capabilities must be exactly [\"net:fetch\"] and the code may use nothing but fetch (no fs, no env)";
+        }
+        throw new Error(`warden: ${pre.failureCode} — ${pre.detail}${hint}`);
       }
       const inputs = coerceInputs(manifest.inputs, p.inputs);
       if (!inputs) {
