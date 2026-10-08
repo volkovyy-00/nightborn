@@ -59,8 +59,7 @@ const BLOCKED_BUILTINS = /^(node:)?(http|https|http2|net|tls|dgram|dns|dns\/prom
 const realGetBuiltinModule = typeof process.getBuiltinModule === "function" ? process.getBuiltinModule.bind(process) : null;
 Object.defineProperty(process, "getBuiltinModule", {
   value: function getBuiltinModule(id) {
-    if (BLOCKED_BUILTINS.test(String(id))) throw new Error("guard: builtin not allowed");
-    if (!realGetBuiltinModule) throw new Error("guard: builtin not allowed");
+    if (BLOCKED_BUILTINS.test(String(id)) || !realGetBuiltinModule) throw new Error("guard: builtin not allowed");
     return realGetBuiltinModule(id);
   },
   writable: false,

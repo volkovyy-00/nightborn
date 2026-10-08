@@ -10,7 +10,7 @@ import type { Job, Recipe } from "./types.ts";
 import { getCharter } from "./charter.ts";
 import { repoPath } from "./paths.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
-import type { ForgeResult } from "./forge.ts";
+import { hostOf, type ForgeResult } from "./forge.ts";
 
 const BRAVE_HOST = "api.search.brave.com";
 const HTTP_GET_TIMEOUT_MS = 6_000;
@@ -40,8 +40,14 @@ function privateV6(ip: string): boolean {
 }
 
 function privateAddress(ip: string): boolean {
-  const v = isIP(ip);
-  return v === 4 ? privateV4(ip) : v === 6 ? privateV6(ip) : true;
+  switch (isIP(ip)) {
+    case 4:
+      return privateV4(ip);
+    case 6:
+      return privateV6(ip);
+    default:
+      return true;
+  }
 }
 
 /** https only · host ∉ never-hosts · no private / loopback / link-local address (literal or DNS-resolved). */
@@ -78,15 +84,7 @@ async function readCapped(res: Response, cap: number): Promise<string> {
   } catch {
     /* ignore */
   }
-  const all = new Uint8Array(Math.min(total, cap));
-  let off = 0;
-  for (const c of chunks) {
-    const n = Math.min(c.length, all.length - off);
-    if (n <= 0) break;
-    all.set(c.subarray(0, n), off);
-    off += n;
-  }
-  return new TextDecoder("utf8", { fatal: false }).decode(all);
+  return new TextDecoder("utf8", { fatal: false }).decode(Buffer.concat(chunks).subarray(0, cap));
 }
 
 function stripHtml(html: string): string {
@@ -265,12 +263,13 @@ const RecipeSchema = Type.Object({
   example: Type.Record(Type.String(), Type.Union([Type.String(), Type.Number()])),
 });
 
-function hostOf(pattern: string): string | null {
+/** Short "host/path" label for a step log line; "?" when the URL does not parse. */
+function describeUrl(rawUrl: string): string {
   try {
-    const url = new URL(pattern.replace(/\{[^{}]+\}/g, "x"));
-    return url.protocol === "https:" ? url.hostname : null;
+    const u = new URL(rawUrl);
+    return `${u.hostname}${u.pathname.slice(0, 40)}`;
   } catch {
-    return null;
+    return "?";
   }
 }
 
@@ -311,14 +310,7 @@ export async function exploreRecipe(job: Job, step: StepLogger): Promise<ForgeRe
       if (done) return done;
       const s0 = Date.now();
       const r = await safeHttpGet(p.url, signal);
-      const where = (() => {
-        try {
-          const u = new URL(p.url);
-          return `${u.hostname}${u.pathname.slice(0, 40)}`;
-        } catch {
-          return "?";
-        }
-      })();
+      const where = describeUrl(p.url);
       if (!r.ok) {
         step(`explore: http_get ${where} → ${r.reason}`, Date.now() - s0);
         return text(`http_get failed: ${r.reason}`);
@@ -345,9 +337,9 @@ export async function exploreRecipe(job: Job, step: StepLogger): Promise<ForgeRe
         const host = hostOf(p.urlPattern);
         if (!host) throw new Error("urlPattern must be an absolute https URL");
         if (!visited.includes(host)) throw new Error(`host ${host} was not fetched in this session: call http_get on the filled urlPattern first, then emit_recipe`);
-        const mapHost = p.map ? hostOf(p.map.url) : null;
-        if (p.map && mapHost && !visited.includes(mapHost)) throw new Error(`map.url host ${mapHost} was not fetched: use a host you fetched or the item's own link field`);
         if (!p.map) throw new Error("json recipe needs map {title, url}");
+        const mapHost = hostOf(p.map.url);
+        if (mapHost && !visited.includes(mapHost)) throw new Error(`map.url host ${mapHost} was not fetched: use a host you fetched or the item's own link field`);
         for (const m of p.urlPattern.matchAll(/\{([^{}]+)\}/g)) if (!names.has(m[1])) throw new Error(`urlPattern placeholder {${m[1]}} is not an input name`);
       } else {
         if (!p.queryPattern) throw new Error("news/web recipe needs queryPattern");

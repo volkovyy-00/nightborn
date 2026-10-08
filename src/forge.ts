@@ -168,7 +168,8 @@ function placeholders(pattern: string | null): string[] {
   return [...pattern.matchAll(/\{([^{}]+)\}/g)].map((m) => m[1]);
 }
 
-function hostOf(u: string): string | null {
+/** Host of an absolute https URL pattern ({placeholders} filled with a dummy), else null. */
+export function hostOf(u: string): string | null {
   try {
     const url = new URL(u.replace(/\{[^{}]+\}/g, "x"));
     return url.protocol === "https:" ? url.hostname : null;
