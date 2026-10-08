@@ -1,0 +1,9 @@
+{
+  "match": "Email this news digest to my boss every morning.",
+  "useHand": {
+    "skill": null,
+    "intent": "email news digest",
+    "inputs": { "query": "news digest" },
+    "needs": ["notify:email"]
+  }
+}

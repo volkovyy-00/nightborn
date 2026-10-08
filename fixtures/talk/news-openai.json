@@ -1,0 +1,9 @@
+{
+  "match": "news on openai",
+  "useHand": {
+    "skill": "company_news",
+    "intent": "company news",
+    "inputs": { "query": "OpenAI" },
+    "needs": ["net:fetch"]
+  }
+}

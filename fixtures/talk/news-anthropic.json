@@ -1,0 +1,9 @@
+{
+  "match": "news on anthropic",
+  "useHand": {
+    "skill": null,
+    "intent": "company news",
+    "inputs": { "query": "Anthropic" },
+    "needs": ["net:fetch"]
+  }
+}
