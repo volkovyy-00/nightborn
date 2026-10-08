@@ -135,6 +135,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .nb-result .li::first-letter{color:var(--cyan)}
 .nb-voice{color:#FF8A8A}
 .nb-say{font:400 15.5px/1.5 'Geist',sans-serif;color:var(--ink);margin-bottom:10px;white-space:pre-line}
+.split{position:absolute;left:-13px;top:0;bottom:0;width:10px;cursor:col-resize;display:flex;align-items:center;justify-content:center;touch-action:none;z-index:2}
+.split::before{content:"";width:4px;height:44px;border-radius:3px;background:radial-gradient(circle,#4A5860 1.2px,transparent 1.6px) 0 0/4px 7px;opacity:.7;transition:opacity .15s}
+.split:hover::before,.split.drag::before{opacity:1;background-image:radial-gradient(circle,var(--cyan) 1.2px,transparent 1.6px)}
+body.resizing{cursor:col-resize;user-select:none}
+@media (max-width:1060px){.split{display:none}}
 .work{border:1px dashed #2B343B;border-radius:10px;padding:10px 12px;background:#0B0F12}
 .work-head{display:flex;align-items:center;gap:9px;font:600 12px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
 .work-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse .9s ease-in-out infinite}
@@ -160,6 +165,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .card a{color:var(--ink);text-decoration:none;font:500 14px/1.35 'Geist',sans-serif}
 .card a:hover{color:var(--cyan)}
 .card .pill{font:600 12.5px 'Geist Mono',monospace;color:var(--cyan);background:#0F1F1C;border:1px solid #1F5A50;border-radius:999px;padding:3px 9px;white-space:nowrap;align-self:center}
+.card .snip{grid-column:1/-1;font:400 13px/1.4 'Geist',sans-serif;color:var(--mute);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .meta{grid-column:1/-1;font:500 11px 'Geist Mono',monospace;color:var(--mute);letter-spacing:.04em}
 .card .meta span+span::before{content:" · ";color:#3A4A52}
 .nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
@@ -319,7 +325,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     </div>
   </section>
 
-  <aside style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:16px">
+  <aside id="side" style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:16px;position:relative">
+    <div class="split" id="split" title="Drag to resize the workbench · double-click to reset" role="separator" aria-orientation="vertical"></div>
     <section class="panel wb" style="padding:18px;display:flex;flex-direction:column;gap:14px;flex-grow:1">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
         <span class="kicker">WORKBENCH</span>
@@ -736,7 +743,15 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     return row;
   }
 
+  let msgsSig = "";
   function renderMsgs() {
+    const sig = state.msgs.length + "|" + (state.work ? state.work.t0 + ":" + workSteps().length : "idle");
+    if (sig === msgsSig) return; // nothing new: keep the DOM (scroll position, open trails)
+    const grew = msgsSig.split("|")[0] !== String(state.msgs.length) || !msgsSig.endsWith("idle") !== !!state.work;
+    msgsSig = sig;
+    const box = el.msgs;
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 48;
+    const keep = box.scrollTop;
     el.msgs.innerHTML = "";
     state.msgs.slice(-40).forEach((m) => {
       const row = document.createElement("div");
@@ -773,11 +788,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
             a.textContent = it.title || it.url;
             if (/^https?:\/\//.test(it.url || "")) { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
             c.appendChild(a);
-            if (it.snippet) {
+            const sn = it.snippet ? String(it.snippet).trim() : "";
+            if (sn && sn.length <= 18) {
               const pill = document.createElement("span");
               pill.className = "pill";
-              pill.textContent = fmtSnippet(it.snippet);
+              pill.textContent = fmtSnippet(sn);
               c.appendChild(pill);
+            } else if (sn) {
+              const p = document.createElement("div");
+              p.className = "snip";
+              p.textContent = sn;
+              c.appendChild(p);
             }
             const meta = document.createElement("div");
             meta.className = "meta";
@@ -803,6 +824,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         if (m.steps && m.steps.length) {
           const det = document.createElement("details");
           det.className = "trail";
+          det.open = !!m.open;
+          det.addEventListener("toggle", () => { m.open = det.open; });
           const sum = document.createElement("summary");
           sum.textContent = `how I got this · ${m.steps.length} step${m.steps.length === 1 ? "" : "s"} · ${m.secs}`;
           det.append(sum, stepList(m.steps, false));
@@ -813,7 +836,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       el.msgs.appendChild(row);
     });
     if (state.work) el.msgs.appendChild(renderWork());
-    el.msgs.scrollTop = el.msgs.scrollHeight;
+    box.scrollTop = atBottom || grew ? box.scrollHeight : keep;
   }
 
   function tagView(pos, num, slotState, name, extra) {
@@ -1134,6 +1157,46 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       render();
     }
   }
+
+  // Workbench width: drag the dotted grip on its left edge; double-click resets. Per-viewer, browser storage only.
+  (function splitter() {
+    const side = document.getElementById("side");
+    const grip = document.getElementById("split");
+    const KEY = "nb.wbWidth";
+    const MIN = 340;
+    const maxW = () => Math.max(MIN, side.parentElement.clientWidth - 600 - 16);
+    const apply = (w) => {
+      if (!w || window.innerWidth <= 1060) { side.style.flex = "1 1 380px"; return; }
+      side.style.flex = "0 0 " + Math.round(Math.min(maxW(), Math.max(MIN, w))) + "px";
+    };
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(KEY)) || 0; } catch (_) {}
+    apply(saved);
+    window.addEventListener("resize", () => apply(saved));
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      grip.classList.add("drag");
+      document.body.classList.add("resizing");
+      const x0 = e.clientX, w0 = side.getBoundingClientRect().width;
+      const move = (ev) => { saved = w0 + (x0 - ev.clientX); apply(saved); };
+      const up = () => {
+        grip.removeEventListener("pointermove", move);
+        grip.classList.remove("drag");
+        document.body.classList.remove("resizing");
+        saved = side.getBoundingClientRect().width;
+        try { localStorage.setItem(KEY, String(Math.round(saved))); } catch (_) {}
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", up, { once: true });
+      grip.addEventListener("pointercancel", up, { once: true });
+    });
+    grip.addEventListener("dblclick", () => {
+      saved = 0;
+      try { localStorage.removeItem(KEY); } catch (_) {}
+      apply(0);
+    });
+  })();
 
   // Keep the pending bubble's clock moving between polls.
   setInterval(() => {
