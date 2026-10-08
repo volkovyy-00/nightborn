@@ -10,7 +10,12 @@ This doc is the shared source of truth. Treat **Must** / **cut** lines as bindin
 
 ---
 
-## 0. Changelog (latest: v3.2.6)
+## 0. Changelog (latest: v3.3.0)
+
+### v3.2.6 → v3.3.0 (free-form Forge)
+
+1. Forge for Create emits `{ name, purpose, query, capabilities, skillSource }` — host writes `skill.mjs` from `skillSource`; `notes.md` + `manifest.json` still host-generated. Params-only template remains for `email_send` DENIED and as JUDGE/fallback (§2, §3, §9, §18 #24).
+2. Brave **web** search (`/res/v1/web/search`) allowed alongside news; skill chooses endpoint/query shape. I/O schema unchanged. No Forge retry. Charter/Warden/DENIED spine unchanged.
 
 ### v3.2.5 → v3.2.6 (explicit grow)
 
@@ -75,8 +80,7 @@ Nightborn is a dark junior analyst that **grows skill packages overnight** (Forg
 - Polished multi-tab dashboard
 - **Next.js / monorepo / SSE**
 - **Apify SDK; Apify as primary or only demo path**
-- **Forge writing free-form JS** (params-only; code renders templates)
-- **A third template** (only `http` and `email_send`; Apify is a provider variant of `http`, not a template)
+- **A third host template folder** (Create uses free-form `skillSource`; `email_send` stays the DENIED template; Apify remains a provider variant, not a template folder)
 - **Live TTS** (cut; pre-rendered WAVs are the only audio path)
 - **Showing a hand-written skill on the final video** as any beat
 - **Judge-facing word "Adopt"** (public term = Forge only)
@@ -96,7 +100,7 @@ Nightborn is a dark junior analyst that **grows skill packages overnight** (Forg
 | **Tripwire** | Runner code that runs on **raw user text before Talk**; on match, skips Talk and builds the fixed `email_send` Job |
 | Runner | Applies tripwire; chooses Reuse vs Create by deterministic rule (§9); orchestrates pipeline; appends log lines as each step happens |
 | Skill package | Folder: `skill.mjs` + `notes.md` + `manifest.json` (+ `decision.json` after Install) |
-| **Forge** | LLM fills **params** only; host code renders template files into staging (no free-form code). The one public mechanism for creating skills |
+| **Forge** | LLM emits skill **code** (`skillSource`) plus metadata for Create; host writes `skill.mjs` and generates `notes.md` / `manifest.json`. `email_send` stays template-only (DENIED). The one public mechanism for creating skills |
 | Reuse | Run an already-installed skill (query passed at runtime on stdin) |
 | Staging | `staging/<runId>/` inside repo (not `os.tmpdir`); wiped on DENIED or Broken |
 | Warden | Deterministic code checks; named failure codes; sole writer of `decision.json` (except the committed `hand_probe` seed, §7) and of `denied` lines |
@@ -123,7 +127,7 @@ YOU → Runner.tripwire(raw text)   /\b(e-?mail\w*|smtp|sms)\b/i
                                    ├─ REUSE → folder hash + charter hash vs decision.json
                                    │          Broker grants decision.env → run(query) → Talk
                                    │          log: matched → reuse
-                                   └─ CREATE → log: gap → Forge (params → render http template)
+                                   └─ CREATE → log: gap → Forge (skillSource → write skill.mjs)
                                               → Warden PRE (scan · caps · charter)
                                                   ├─ deny  → DENIED + voice · wipe staging
                                                   └─ allow → Broker (provisional grant) → Test
@@ -153,7 +157,7 @@ YOU → Runner.tripwire(raw text)   /\b(e-?mail\w*|smtp|sms)\b/i
 8. Warden FINAL re-hash vs PRE
 9. **Deterministic DENIED**: tripwire (before Talk) + `email_send` + Warden `capability_not_allowed`; exactly one voiced `denied` line, `actor: warden`
 10. **Pre-rendered WAVs primary**; play only lines arriving after page load; unlock audio on first user gesture
-11. **Params-only Forge**; LLM strings rendered only via `JSON.stringify`
+11. **Free-form Forge** for Create (`skillSource`); host-written notes/manifest; no Forge retry
 12. **Runner-owned fixed test schema** per template
 13. **Visible authority proof** — strip: "charter unchanged since boot · granted ⊆ charter", derived from log `charterHash` + `caps`
 14. **DENIED built before Forge**; take0 by +4.25h, uploaded by +4.5h
@@ -298,13 +302,16 @@ Overrun → Broken `timeout`. Templates use global `fetch`, no SDKs (exception: 
 ```
 `query` is **always a runtime input** — never rendered into `skill.mjs`. `baseUrl` is set by Runner only when `OFFLINE=1`, always absolute.
 
-### Forge (params → render)
-LLM returns `{ name, purpose, query, capabilities }`:
+### Forge (skillSource → write)
+LLM returns `{ name, purpose, query, capabilities, skillSource }` for Create:
 - `name` → slugified in code to `^[a-z0-9_]+$`; suffix `_2` if taken.
-- `purpose` → `notes.md` / `manifest.json` only, via `JSON.stringify`.
-- `query` → used **only as the Test input**; never rendered into code.
-- `capabilities` → **logged only**; manifest caps = template's fixed set (`http` → `["net:fetch"]`).
-No free-form JS. No Forge retry (fail → Broken `forge_invalid`).
+- `purpose` → `notes.md` via `JSON.stringify` (display); must match the skill's real behavior.
+- `query` → used **only as the Test input**; also acceptable as runtime default topic via stdin (never required inside source).
+- `capabilities` → claimed in manifest (usually `["net:fetch"]`); Warden scan ∪ claims ∪ Job `needs` must ⊆ charter.
+- `skillSource` → full ESM body of `skill.mjs` (host sanitizes fences; rejects empty). Must read stdin `{ query, baseUrl? }`, write stdout `{ items:[{title,url,date?}] }`, use global `fetch`, honor `baseUrl` when set (OFFLINE), use only Broker-granted env keys (`BRAVE_API_KEY` / `TAVILY_API_KEY`).
+- `email_send` DENIED path still copies the frozen template (no LLM code).
+- Legacy params-only forge fixtures (no `skillSource`) may render `templates/http` as fallback.
+No Forge retry (fail → Broken `forge_invalid`).
 
 ### Runner rule (deterministic, no LLM)
 1. Tripwire match → `email_send` Job (Talk skipped).
@@ -333,7 +340,7 @@ Exception: `skills/hand_probe/decision.json` is a committed seed generated from 
 
 ### Provider request shapes
 - **Tavily (fallback only):** `POST https://api.tavily.com/search` · header `Authorization: Bearer tvly-…` · body `{query:"<query> news", topic:"news", time_range:"week", max_results:5, include_published_date:true}` → map `results[].{title, url, published_date→date}`.
-- **Brave (frozen default):** `GET https://api.search.brave.com/res/v1/news/search?q=…&count=5&freshness=pw` · headers `X-Subscription-Token`, `Accept: application/json` → map `results[].{title, url, page_age→date}`. Use news endpoint, not `web/search`.
+- **Brave (frozen default):** news `GET …/res/v1/news/search?q=…&count=5&freshness=pw` and/or web `GET …/res/v1/web/search?q=…&count=5` · headers `X-Subscription-Token`, `Accept: application/json` → map `results[].{title, url, page_age→date}` (web may use `age` / omit date). Skill chooses news vs web for the job.
 - **Apify (optional; only after `c4-reuse-forged` + Yevhenii Go, §14):** REST `run-sync-get-dataset-items` via `fetch`, `maxItems: 3`, same output mapping.
 
 ### OFFLINE mode
@@ -370,7 +377,7 @@ Use `.nullable()`, never `.optional()` (zodTextFormat rejects it). Never writes 
 4. **Current user message**, last.
 
 ### JUDGE_MODE
-`JUDGE_MODE=1` swaps **only LLM text** (Talk + Forge params). Fixture file: `{ match: "<normalised prompt>", talk: {…}, forge?: {…} }`, indexed at boot. Normalise = trim + lowercase + collapse whitespace. Miss → live call, `source:"live"`. Warden / Broker / subprocess / hash / log / UI stay live. **Disclose if used.**
+`JUDGE_MODE=1` swaps **only LLM text** (Talk + Forge artifact). Fixture file: `{ match: "<normalised prompt>", talk: {…}, forge?: { name, purpose, query, capabilities, skillSource? } }`, indexed at boot. Normalise = trim + lowercase + collapse whitespace. Miss → live call, `source:"live"`. Warden / Broker / subprocess / hash / log / UI stay live. **Disclose if used.**
 
 ### Replies
 - `install` / `reuse`: Talk may phrase the result summary.
@@ -581,9 +588,9 @@ Company A/B = two **real** companies the chosen provider returns ≥3 recent ite
 
 | Works | Simulated | Incomplete |
 |---|---|---|
-| Charter pin + hash on every line | Anything logged `source:"fixture"` (OFFLINE HTTP, forge replay, Talk replay via chips / judge mode) — subtitled when shown | Forge = params into one http template; no new code shapes |
+| Charter pin + hash on every line | Anything logged `source:"fixture"` (OFFLINE HTTP, forge replay, Talk replay via chips / judge mode) — subtitled when shown | Free-form Forge still Warden-scanned; not a sandbox |
 | Warden code DENIED (`actor:warden`) | Forge latency jump-cut on video; `hand_probe`: hand-written probe, seeded `decision.json` (validate + take0 only) | Gap = registry lookup of Talk's proposed skill / capability |
-| Params-only Forge → Runner test → FINAL = PRE → Install | | Tripwire = keyword match; known miss listed |
+| Free-form Forge → Runner test → FINAL = PRE → Install | | Tripwire = keyword match; known miss listed |
 | Reuse after restart with folder + charter hash | | Static scan ≠ sandbox; no network jail (`--permission` cut) |
 | Broker: ungranted key = `undefined` | | `net:fetch` is coarse — can reach email APIs |
 | Results file above | | Hire / marketplace not in MVP; hosted FS may reset |
@@ -596,7 +603,7 @@ Company A/B = two **real** companies the chosen provider returns ≥3 recent ite
 | --- | --- | --- | --- |
 | 1 | Capability enum | Frozen | §6 |
 | 2 | DENIED prompt + code | Frozen | §11 (tripwire before Talk, new regex) |
-| 3 | Search provider | Frozen (Wed 7 Oct) | **Brave** (`SEARCH_PROVIDER=brave`, news endpoint); Tavily only if Brave fails ≥3 items in <5 s for both companies. None live → `OFFLINE` fixtures. Apify only per #11 / §14 |
+| 3 | Search provider | Frozen (Wed 7 Oct; web+news v3.3.0) | **Brave** (`SEARCH_PROVIDER=brave`, news and/or web endpoints); Tavily only if Brave fails ≥3 items in <5 s for both companies. None live → `OFFLINE` fixtures. Apify only per #11 / §14 |
 | 4 | `ELEVENLABS_VOICE_ID` | Frozen (Wed 7 Oct) | **`JgMBD2CZ0VSURf6BgyOt`**; DENIED line must be understood on **one play through laptop speakers**, <4 s; render all WAVs immediately |
 | 5 | Repo shape | Frozen | Single package Hono + tsx + `public/index.html` |
 | 6 | Talk model | Frozen | OpenAI structured outputs, flat schema; no second provider |
@@ -617,6 +624,7 @@ Company A/B = two **real** companies the chosen provider returns ≥3 recent ite
 | 21 | `/api/log` line shape | Frozen | Parsed log objects (§12 shape), never raw strings (§13) |
 | 22 | Chip B Reuse path | Frozen | `reuse-company-b.json`: `job.skill: null` → Reuse by capability (§9, §13) |
 | 23 | Explicit grow | Frozen (v3.2.6) | Non-null `job.skill` not installed → Create (`named skill missing → create`); skips capability Reuse (§9) |
+| 24 | Free-form Forge | Frozen (v3.3.0) | Create emits `skillSource`; Brave web+news; `email_send` template DENIED unchanged (§9) |
 
 Public term **"Forge" only**.
 
@@ -639,4 +647,4 @@ All ten by 07:10, or Go/No-Go ships take1.
 
 ---
 
-*Spec version: Nightborn v3.2.6 (explicit grow: named missing skill → Create; v3.2.5 re-sync — Brave + voice ID, ambiguous-match, role split; v3.2.4: hand_probe seed, take0, UI dev feed, BOARD.md)*
+*Spec version: Nightborn v3.3.0 (free-form Forge skillSource + Brave web; v3.2.6 explicit grow; v3.2.5 re-sync)*
