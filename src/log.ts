@@ -19,8 +19,12 @@ export function appendLog(line: Omit<LogLine, "ts" | "charterHash"> & { charterH
     ...(line.failureCode ? { failureCode: line.failureCode } : {}),
     ...(line.caps ? { caps: line.caps } : {}),
     ...(line.voice ? { voice: line.voice } : {}),
-    ...(line.source ? { source: line.source } : {}),
+    // Every line written while OFFLINE=1 is disclosed as fixture data (SPEC §9 "OFFLINE mode").
+    ...(process.env.OFFLINE === "1" ? { source: "fixture" as const } : line.source ? { source: line.source } : {}),
     ...(line.detail ? { detail: line.detail } : {}),
+    ...(line.tokens !== undefined ? { tokens: line.tokens } : {}),
+    ...(line.costUsd !== undefined ? { costUsd: Number(line.costUsd.toFixed(6)) } : {}),
+    ...(line.ms !== undefined ? { ms: Math.round(line.ms) } : {}),
   };
   appendFileSync(logPath(), `${JSON.stringify(full)}\n`, "utf8");
   return full;

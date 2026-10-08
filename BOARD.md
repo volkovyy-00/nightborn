@@ -12,7 +12,7 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [ ] GATE: human reads summary, says Go (also Go for the P1 charter re-pin)
 
 ## P1 T1 smart Talk · 21:45–00:45 · tag `t1-smart`
-- [ ] Charter v4 four blocks + parser + re-pin + `hand_probe` seed (§6)
+- [x] Charter v4 four blocks + parser + re-pin + `hand_probe` seed (§6)
 - [ ] Sandbox flags + output caps (§9 "Execution")
 - [ ] `hash_mismatch` on Reuse → Warden DENIED (§8)
 - [ ] Runner rule v4 (§9)
