@@ -1,27 +1,52 @@
 # Nightborn Charter
 
-Authority is sealed at boot. Skills may grow; the leash does not.
+Authority is sealed at boot. Hands may grow; the leash does not.
+Code reads only the four fenced blocks below, by their names. Prose is for humans.
 
-## Capability allow-list
+## Capabilities a hand may use
 
-Only capabilities listed in the fenced block below may be granted.
-
-```
+```caps-allow
 net:fetch
-llm:call
 fs:read_own
 ```
 
-## Denied
+## Capabilities no hand may ever use
 
-- `notify:email`
-- `budget:write`
-- `charter:write`
-- `secrets:read`
-- `fs:write_own`
+Hands are deterministic: they never call a language model.
 
-## Rules
+```caps-deny
+llm:call
+notify:email
+budget:write
+charter:write
+secrets:read
+fs:write_own
+```
 
-1. No `eval`, `new Function`, or dynamic `import()`.
-2. Skills may not escape their folder or touch `charter.md`, broker paths, or secrets on disk.
-3. Broker grants only what PRE or `decision.json` allows.
+## Hosts no hand may ever reach
+
+```never-hosts
+api.sendgrid.com
+api.mailgun.net
+api.postmarkapp.com
+api.resend.com
+api.twilio.com
+api.stripe.com
+hooks.slack.com
+openrouter.ai
+```
+
+## Forge limits
+
+Forge sessions have exactly these tools, write only into their staging folder, never read secrets,
+never install. The host enforces the limits.
+
+```forge
+recipe_tools: web_search http_get emit_recipe
+recipe_max_turns: 6
+recipe_max_seconds: 60
+code_tools: web_search http_get write_skill run_test submit_skill
+code_max_turns: 16
+code_max_seconds: 150
+code_max_test_runs: 3
+```

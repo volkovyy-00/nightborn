@@ -1,14 +1,28 @@
 {
   "skill": "hand_probe",
-  "template": "hand",
-  "provider": "brave",
-  "folderHash": "1f12507316e15fb967e664b0a1ff24b55221974b2531d2871089b18a2a4b24fd",
-  "charterHash": "f2e9ef12c2fa6cdfdd91ee35a2dedf21a00c509083795e2cfb67016475ad2200",
+  "kind": "hand",
+  "folderHash": "eedc44ec0f5512c09accf4500e0a4a7463a92344a9a1075dfc79ece5e9388fcc",
+  "charterHash": "3216d64c40c255e8ef1f22570249487a43421a6f23706525d6e9e327b40e3062",
   "capabilities": [
     "net:fetch"
+  ],
+  "hosts": [
+    "api.search.brave.com"
   ],
   "env": [
     "BRAVE_API_KEY"
   ],
-  "decidedAt": "2026-10-08T17:57:41.980Z"
+  "inputs": [
+    {
+      "name": "query",
+      "type": "string",
+      "format": "text",
+      "required": true,
+      "description": "Search words"
+    }
+  ],
+  "purpose": "Hand-written probe: Brave news headlines for a query. Validation only.",
+  "forgeTokens": 0,
+  "forgeMs": 0,
+  "decidedAt": "2026-10-08T19:51:30.802Z"
 }

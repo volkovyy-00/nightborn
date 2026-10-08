@@ -263,9 +263,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
       <span class="kicker" style="margin-right:4px">CHARTER GRANTS</span>
       <span class="cap">net:fetch</span>
-      <span class="cap">llm:call</span>
       <span class="cap">fs:read_own</span>
       <span class="kicker" style="margin:0 4px 0 12px">NEVER</span>
+      <span class="cap cap-no">llm:call</span>
       <span class="cap cap-no" id="emailCap">notify:email</span>
       <span class="cap cap-no">budget:write</span>
       <span class="cap cap-no">charter:write</span>
@@ -309,7 +309,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
 <script>
 (() => {
-  const ALLOW = new Set(["net:fetch", "llm:call", "fs:read_own"]);
+  const ALLOW = new Set(["net:fetch", "fs:read_own"]);
   const STAGE_DEFS = [
     ["gap", "01", "GAP", "need vs installed"],
     ["forge", "02", "FORGE", "fill a recipe"],

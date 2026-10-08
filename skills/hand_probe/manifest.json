@@ -1,5 +1,10 @@
 {
   "name": "hand_probe",
-  "template": "hand",
-  "capabilities": ["net:fetch"]
+  "kind": "hand",
+  "purpose": "Hand-written probe: Brave news headlines for a query. Validation only.",
+  "inputs": [
+    { "name": "query", "type": "string", "format": "text", "required": true, "description": "Search words" }
+  ],
+  "capabilities": ["net:fetch"],
+  "hosts": ["api.search.brave.com"]
 }

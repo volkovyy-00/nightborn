@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 export function toLF(bytes: Buffer): Buffer {
@@ -38,6 +38,32 @@ export function folderHash(skillDir: string): string {
     parts.push(`${rel}\0${sha256Hex(bytes)}\n`);
   }
   return sha256Hex(parts.join(""));
+}
+
+/**
+ * Committed seed for skills/hand_probe/decision.json (SPEC §9 "decision.json"): regenerated at every
+ * re-pin, disclosed as Simulated. Run: `npx tsx -e 'import("./src/hash.ts").then(m => m.writeProbeSeed())'`
+ */
+export function writeProbeSeed(skillsRoot = path.join(process.cwd(), "skills")): string {
+  const dir = path.join(skillsRoot, "hand_probe");
+  const charterHash = charterHashFromBytes(readFileSync(path.join(process.cwd(), "charter.md")));
+  const manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8"));
+  const decision = {
+    skill: "hand_probe",
+    kind: "hand",
+    folderHash: folderHash(dir),
+    charterHash,
+    capabilities: manifest.capabilities,
+    hosts: manifest.hosts,
+    env: ["BRAVE_API_KEY"],
+    inputs: manifest.inputs,
+    purpose: manifest.purpose,
+    forgeTokens: 0,
+    forgeMs: 0,
+    decidedAt: new Date().toISOString(),
+  };
+  writeFileSync(path.join(dir, "decision.json"), `${JSON.stringify(decision, null, 2)}\n`);
+  return charterHash;
 }
 
 export function listSkillDirs(skillsRoot: string): string[] {
