@@ -28,6 +28,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 4. Only the fetch-relevant recipe fields are rendered into `skill.mjs`; `itemsPath` `""` = root array; `http_get` cap 16 KB; OFFLINE forge mapping; reason codes in `detail` (§9, §12).
 5. Minimal fetch guard moves into P1; cut order updated; schedule risk stated (§5, §14).
 
+### v4.1 → v4.2 (human call, 2026-10-08 ~22:00)
+1. HN Algolia = official second source: gate-only P2 ask + jury backup if sauto is down; not a video chip. `map.url` = `{url}` so `hn.algolia.com` is the only manifest host (§9, §13, §14, §18).
+
 ---
 
 ## 1. Product
@@ -350,6 +353,7 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 - Brave headers: `X-Subscription-Token`, `Accept: application/json`. Every skill `fetch` uses `AbortSignal.timeout(6000)`.
 - **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, mapped by `map`; `max` (default 5) items.
 - **Demo source (checked 2026-10-08, keyless, ~60 ms, `robots.txt` allows `/api/*`):** `https://www.sauto.cz/api/v1/items/search?category_id=838&manufacturer_model_seo={make}:{model}&price_to={max_price}&limit=5` → `results[].{name, price, id, manufacturer_cb.seo_name, model_cb.seo_name, …}`; detail page `https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}`. Undocumented API: fixtures saved for OFFLINE.
+- **Second source (keyless, gate-only + jury backup):** `https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=5` → `hits[].{title, url, created_at}`; `map` `{title:"{title}", url:"{url}", date:"{created_at}"}` (no `news.ycombinator.com` link: that host would be unvisited → `host_not_allowed`). Hits without `url` (Ask HN) map to an empty `url`; the Test needs ≥1 non-empty.
 
 ### OFFLINE mode
 `OFFLINE=1` → the Runner passes `baseUrl`, the Broker grants no keys, and the Runner appends `127.0.0.1` to `NB_HOSTS`; Hono serves `/mock/<host>/*` from `fixtures/http/` (Brave news / web by path; `www.sauto.cz` by make). Skills don't exit on a missing key when `baseUrl` is set. Every log line written while `OFFLINE=1` carries `source:"fixture"`. Exploration and code forge are online-only; OFFLINE forge replays `fixtures/forge/<name>.json`, chosen by `job.skill` or else by normalised `intent` (`match` field); each carries `visited: string[]` used as the visited set (`source:"fixture"`); no match → Broken `forge_invalid`, `detail:"offline: no forge fixture"`.
@@ -473,7 +477,7 @@ Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted �
 2. `Find a used BMW i4 under 1 000 000 Kč on Sauto` (Reuse beat — standalone, survives the restart; same hand, new inputs)
 3. `Email this news digest to my boss every morning.` (DENIED, byte-exact)
 
-Gate-only third ask: `Find a used Škoda Enyaq under 900 000 Kč on Sauto`. Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
+Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč on Sauto` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
 
 ---
 
@@ -488,7 +492,7 @@ Gate-only third ask: `Find a used Škoda Enyaq under 900 000 Kč on Sauto`. Each
 | **P0 Reset** | 21:00–21:45 | SPEC v4, AGENTS.md, BOARD.md, live key + sandbox + Pi checks | Human reads summary, says Go | `t0-reset` |
 | **P1 T1 smart Talk** | 21:45–00:45 | Charter v4 + re-pin + seed; Talk v4 (§10); Runner rule v4; recipe template + news recipe; sandbox flags + output caps + minimal fetch guard (host set + `redirect:"manual"`); token fields; timeouts + templates; `hash_mismatch` → Warden; OFFLINE without key; `.env.example`; `docs/UI_CONTRACT.md` | "who are you?" chats · "News on Anthropic" → Install with tokens · Ctrl-C, `npm start`, "News on OpenAI" → Reuse, hand 0 tok · email chip → one DENIED + WAV | `t1-smart` |
 | **take0** | 00:45–01:05 | T1 video, uploaded unlisted (agent: `validate.ts` rows 1–4, 6–10) | watched once | — |
-| **P2 T2 explore → recipe** | 01:05–03:30 | Explorer + `http_get` safety; `json`/`web` endpoints; inputs (`format`, coercion, `matchInput`); full fetch guard; Warden v4 scan + hosts; sauto fixtures; chips 1–2; UI token counter | chip 1 → Install (explore lines visible) · Ctrl-C, `npm start` · chip 2 → Reuse, hand 0 tok · Enyaq ask works | `t2-recipe` |
+| **P2 T2 explore → recipe** | 01:05–03:30 | Explorer + `http_get` safety; `json`/`web` endpoints; inputs (`format`, coercion, `matchInput`); full fetch guard; Warden v4 scan + hosts; sauto fixtures; chips 1–2; UI token counter | chip 1 → Install (explore lines visible) · Ctrl-C, `npm start` · chip 2 → Reuse, hand 0 tok · Enyaq ask works · HN ask → Install | `t2-recipe` |
 | **take1** | 03:30–03:50 | T2 video, uploaded (agent: `validate.ts` rows 5, 11–13) | watched once | — |
 | **P3 T3 code (stretch)** | 03:50–05:30 | Only if `t2-recipe` tagged by 03:30, on branch `try/code`: Builder (§9), hook, in-loop Warden, fallback | `FORGE_MODE=code` forges ≥2 of 3 rehearsed asks; fallback proven once | `t3-code` |
 | **P4 Proof + ship** | 05:30–07:14 | `validate.ts` complete → results; README; slide; final take ~06:15; upload start 06:40, done 07:00 | final video watched once | `t4-final` 07:10 |
@@ -575,6 +579,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 9 | Demo asks | Chips in §13 |
 | 10 | Repo visibility | Public |
 | 11 | Charter | §6 blocks (`llm:call` denied for hands); re-pinned in P1 with human Go |
+| 12 | Second source | HN Algolia (§9): gate-only ask + jury backup, not a video chip |
 
 ---
 
