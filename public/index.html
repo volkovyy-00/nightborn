@@ -373,6 +373,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   const state = {
     lines: [],
     shown: 0, // board (pipeline, grafts, overlay) catches up to state.lines one stage at a time
+    termAt: 0, // when the latest outcome line reached the board (time-boxes the Reuse flow animation)
     lastPollAt: 0,
     since: 0,
     firstPoll: true,
@@ -385,12 +386,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   // Stage replay: lines that land in one poll are stepped through so each stage is visible.
   const DWELL = { gap: 450, matched: 450, forge: 800, precheck: 800, test: 800, final: 450 };
   let replayTimer = null;
+  const FLOW_MS = 1500;
 
   function advanceBoard() {
     replayTimer = null;
     while (state.shown < state.lines.length) {
       const l = state.lines[state.shown++];
       if (l.voice) enqueueVoice(l.voice); // voice plays when its line reaches the board
+      if (["install", "reuse", "denied", "broken"].includes(l.event)) state.termAt = Date.now();
       const wait = DWELL[l.event] || 0;
       if (wait && state.shown < state.lines.length) {
         render();
@@ -704,6 +707,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     } else if (t && t.event === "broken" && t.skill && t.skill !== "email_send") {
       aState = "broken";
     }
+    // Reuse: the card→orb flow plays briefly, then the hand settles back to alive.
+    if (aState === "flow" && Date.now() - state.termAt > FLOW_MS) aState = "alive";
     const xState = (t && t.event === "denied") ? "rejected"
       : (t && t.event === "broken" && t.skill === "email_send") ? "broken" : "vacant";
 
