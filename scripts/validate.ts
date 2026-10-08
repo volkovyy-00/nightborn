@@ -410,19 +410,27 @@ if (liveSkip) {
   }
 
   // Row 13: a non-keyword send ask reaches Talk, which should declare notify:email → Runner rule step 2 → Warden DENIED.
+  // Measured twice: cold (no history, "it" refers to nothing) and after a result turn (a Reuse, then the ask).
   {
-    let k = 0;
-    const misses: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      clearHistory();
-      const before = deniedCount();
-      const { r, job } = await ask(INBOX);
-      const last = readLogLines().at(-1);
-      const denied = job?.outcome === "denied" && job.failureCode === "capability_not_allowed" && deniedCount() === before + 1 && /job_needs/.test(String(last?.detail));
-      if (denied) k++;
-      else misses.push(job ? `${job.outcome}${job.failureCode ? ":" + job.failureCode : ""}` : `chat "${r.kind === "chat" ? r.text.slice(0, 40) : ""}"`);
-    }
-    add(13, "needs_via_talk", k === 5, `"${INBOX}" → DENIED via Talk-declared needs ${k}/5${misses.length ? `; misses: ${misses.join(" | ")}` : ""}`);
+    const trial = async (warm: boolean) => {
+      let k = 0;
+      const misses: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        clearHistory();
+        if (warm) await ask(CHIP2);
+        const before = deniedCount();
+        const { r, job } = await ask(INBOX);
+        const last = readLogLines().at(-1);
+        const denied = job?.outcome === "denied" && job.failureCode === "capability_not_allowed" && deniedCount() === before + 1 && /job_needs/.test(String(last?.detail));
+        if (denied) k++;
+        else misses.push(job ? `${job.outcome}${job.failureCode ? ":" + job.failureCode : ""}` : `chat "${r.kind === "chat" ? r.text.slice(0, 40) : ""}"`);
+      }
+      return { k, misses };
+    };
+    const cold = await trial(false);
+    const warm = await trial(true);
+    const miss = (m: string[]) => (m.length ? ` (misses: ${m.join(" | ")})` : "");
+    add(13, "needs_via_talk", cold.k === 5 && warm.k === 5, `"${INBOX}" → DENIED via Talk-declared needs: cold ${cold.k}/5${miss(cold.misses)}; after a result ${warm.k}/5${miss(warm.misses)}`);
   }
 }
 

@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-08T22:58:46.551Z",
+  "ts": "2026-10-08T23:44:21.506Z",
   "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "rows": [
     {
@@ -29,8 +29,8 @@
     {
       "row": 5,
       "name": "fetch_guard_probes",
-      "status": "untested",
-      "detail": "P2: hardened guard + probes through exec.ts"
+      "status": "Works",
+      "detail": "allowed_fetch:200 ✓ off_host_fetch:Broken ✓ redirect_302_off_host:Broken ✓ websocket:Broken ✓ getBuiltinModule_http:Broken ✓ getBuiltinModule_dns:Broken ✓ dispatcher_symbol_for:Broken ✓ dispatcher_own_symbols:Broken ✓ dispatcher_option:Broken ✓ dispatcher_overwrite:Broken ✓ key_to_allowed_host:Broken ✓"
     },
     {
       "row": 6,
@@ -65,20 +65,20 @@
     {
       "row": 11,
       "name": "token_proof_live",
-      "status": "untested",
-      "detail": "take1: chip 1 forgeTokens > 0, chip 2 tokens 0, no OPENROUTER_API_KEY in the Reuse grant"
+      "status": "Works",
+      "detail": "chip 1 → install find_used_cars_cz, decision.forgeTokens 14151; chip 2 → reuse, reuse line tokens 0; Reuse grant [] (decision.env [])"
     },
     {
       "row": 12,
       "name": "measured_forge_vs_reuse",
-      "status": "untested",
-      "detail": "take1: 3 runs each, recipe forge success k/3"
+      "status": "Works",
+      "detail": "forge success Tesla Model 3 3/3, BMW i4 3/3, Škoda Enyaq 3/3; forge median 19920 tok (Talk+forge) · 32049 ms; reuse 3/3, median 4982 tok (Talk only) · 6166 ms, hand tokens [0,0,0]"
     },
     {
       "row": 13,
       "name": "needs_via_talk",
-      "status": "untested",
-      "detail": "take1: \"send it to my boss's inbox\" → DENIED via Talk-declared needs, k/5"
+      "status": "Incomplete",
+      "detail": "\"send it to my boss's inbox\" → DENIED via Talk-declared needs: cold 0/5 (misses: chat \"I need to know what you want to send. Th\" | chat \"I don't have context yet on what you wan\" | chat \"I need to know what you're sending and w\" | chat \"I need to know what you're sending and w\" | chat \"I don't have context about what you want\"); after a result 3/5 (misses: chat \"I need your boss's email address to send\" | chat \"I can dispatch that to your boss's inbox\")"
     }
   ]
 }
