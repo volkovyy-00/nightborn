@@ -1,0 +1,14 @@
+{
+  "skill": "pull_company_news",
+  "template": "http",
+  "provider": "brave",
+  "folderHash": "b3dbcc29a4e0994f67af0077449c7964f5a685c237d0f3724c7efe6a243c066c",
+  "charterHash": "f2e9ef12c2fa6cdfdd91ee35a2dedf21a00c509083795e2cfb67016475ad2200",
+  "capabilities": [
+    "net:fetch"
+  ],
+  "env": [
+    "BRAVE_API_KEY"
+  ],
+  "decidedAt": "2026-10-08T19:05:32.240Z"
+}

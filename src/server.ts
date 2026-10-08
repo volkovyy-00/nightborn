@@ -84,10 +84,15 @@ if (process.env.OFFLINE === "1") {
     }
     return c.json(mockProviderResponse(provider, q));
   });
-  // Brave-style path
+  // Brave-style paths (news + web)
   app.get("/mock/:provider/res/v1/news/search", (c) => {
     const provider = c.req.param("provider");
     const q = c.req.query("q") ?? "news";
+    return c.json(mockProviderResponse(provider, q));
+  });
+  app.get("/mock/:provider/res/v1/web/search", (c) => {
+    const provider = c.req.param("provider");
+    const q = c.req.query("q") ?? "search";
     return c.json(mockProviderResponse(provider, q));
   });
 }
