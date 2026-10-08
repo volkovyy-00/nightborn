@@ -10,7 +10,11 @@ This doc is the shared source of truth. Treat **Must** / **cut** lines as bindin
 
 ---
 
-## 0. Changelog (latest: v3.2.5)
+## 0. Changelog (latest: v3.2.6)
+
+### v3.2.5 → v3.2.6 (explicit grow)
+
+1. §9 Runner rule: if `job.skill` is non-null and not installed → **Create** (`gap` detail `named skill missing → create`), skipping capability match; `skill: null` still Reuses by capability (chip B unchanged) (§9, §13, §18 #23).
 
 ### v3.2.4 → v3.2.5 (re-sync — no architecture change)
 
@@ -129,7 +133,7 @@ YOU → Runner.tripwire(raw text)   /\b(e-?mail\w*|smtp|sms)\b/i
                                                                          └─ allow → Install (+ install.wav)
 ```
 
-- **Gap event:** `gap` with `detail: "no installed skill covers <intent> → create"` (or `"ambiguous capability match → create"`, §9 "Runner rule" step 4); `matched` with `detail: "by name"` or `"by capability"`.
+- **Gap event:** `gap` with `detail: "no installed skill covers <intent> → create"` (or `"ambiguous capability match → create"`, or `"named skill missing → create"`, §9 "Runner rule"); `matched` with `detail: "by name"` or `"by capability"`.
 - **Broker** never owns policy: reads only the in-memory provisional PRE grant (Test time) or `decision.json`.
 - **Every log line** carries `charterHash`, `actor`, `skill`, `decision`, `failureCode?` (§12).
 - Runner **appends each line when the step happens** (not batched at end of the synchronous request) so the UI pipeline lights up live.
@@ -304,10 +308,11 @@ No free-form JS. No Forge retry (fail → Broken `forge_invalid`).
 
 ### Runner rule (deterministic, no LLM)
 1. Tripwire match → `email_send` Job (Talk skipped).
-2. `job.skill` names an installed skill → **Reuse** (`matched`, detail `by name`).
-3. Else if **exactly one** installed skill with `decision.template === "http"` and `needs ⊆ decision.capabilities` → **Reuse** (`matched`, detail `by capability`). Empty `needs` for a search intent ⇒ `["net:fetch"]`. `hand_probe` (`template:"hand"`) is never matched by capability.
-4. Else if **two or more** installed skills would match by capability → **no** capability Reuse; fall through to Create and log `gap` with `detail: "ambiguous capability match → create"` (cannot happen in the one-search-skill demo; written so the rule is complete).
-5. Else → **Create** (`gap`).
+2. `job.skill` names an **installed** skill → **Reuse** (`matched`, detail `by name`).
+3. Else if `job.skill` is non-null and **not** installed → **Create** (`gap`, detail `named skill missing → create`); skip capability match. Talk uses this for explicit grow / forge / "don't reuse X".
+4. Else if **exactly one** installed skill with `decision.template === "http"` and `needs ⊆ decision.capabilities` → **Reuse** (`matched`, detail `by capability`). Empty `needs` for a search intent ⇒ `["net:fetch"]`. `hand_probe` (`template:"hand"`) is never matched by capability. Chip B keeps `job.skill: null` so this step still fires.
+5. Else if **two or more** installed skills would match by capability → **no** capability Reuse; fall through to Create and log `gap` with `detail: "ambiguous capability match → create"`.
+6. Else → **Create** (`gap`).
 
 ### Test (Runner-owned)
 Input `{ query: forge.query }`. Fixed zod schema per template (`{items:[{title,url,date?}]}`) + content check **≥1 item with non-empty `url`**. Manifest JSON schema is display only.
@@ -473,7 +478,7 @@ Static: `/` → `public/index.html`, `/voice/*` → `public/voice/*`. Dev-only: 
 
 **Chips (final):**
 1. `News on <Company A>` (Forge beat)
-2. `News on <Company B>` (Reuse beat; fixture `reuse-company-b.json` has `job.skill: null` → Reuse by capability, §9 "Runner rule" step 3)
+2. `News on <Company B>` (Reuse beat; fixture `reuse-company-b.json` has `job.skill: null` → Reuse by capability, §9 "Runner rule" step 4)
 3. `Email this news digest to my boss every morning.` (byte-exact)
 
 Company A/B = two **real** companies the chosen provider returns ≥3 recent items for (decided tonight). Removed: "Kestrel Air — 2025 only, as a table", "Read northwind.example/careers".
@@ -611,6 +616,7 @@ Company A/B = two **real** companies the chosen provider returns ≥3 recent ite
 | 20 | `fresh.ts` / `mock.ts` owners | Frozen | Max: `fresh.ts` at C2 before take0; `mock.ts` at C1 if live provider fails, else before the jury (§14) |
 | 21 | `/api/log` line shape | Frozen | Parsed log objects (§12 shape), never raw strings (§13) |
 | 22 | Chip B Reuse path | Frozen | `reuse-company-b.json`: `job.skill: null` → Reuse by capability (§9, §13) |
+| 23 | Explicit grow | Frozen (v3.2.6) | Non-null `job.skill` not installed → Create (`named skill missing → create`); skips capability Reuse (§9) |
 
 Public term **"Forge" only**.
 
