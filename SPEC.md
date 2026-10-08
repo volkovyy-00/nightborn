@@ -38,6 +38,7 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 ### v4.3 → v4.4 (human call: real discovery, no hints, 2026-10-09 ~01:00)
 1. Explorer without hints: `sources.md` removed; `web_search` queries are in English and name the region; `http_get` on HTML returns a page digest (the page's own data endpoints + response shape, link shapes) so the Explorer can find a site's JSON API itself (§5, §7, §9, §14, §17).
 2. Chips and the reference use case no longer name the site ("… on Sauto" dropped): the Explorer has to find it (§1, §13).
+3. Recipe `maxFilter`: the hand itself drops items above a numeric input (e.g. `max_price`) when the site's API can't take it; a `map.url` with a missing placeholder value yields an empty `url` (§9, §17).
 
 ---
 
@@ -305,11 +306,14 @@ User values arrive **only** at runtime on stdin — never rendered into `skill.m
   urlPattern: string | null,       // json: absolute https URL with {input} placeholders (values URL-encoded at runtime)
   itemsPath: string | null,        // json: dot path to the array, e.g. "results"; "" = the response is the array; a leading "/" is stripped
   matchInput: string | null,       // optional input name whose (normalised) value must appear in an item title; other items are dropped
+  maxFilter?: { field: string, input: string } | null,
+                                   // json, optional: item-field dot path (raw item) whose number must be ≤ the number input; items without a number are dropped;
+                                   // no item with a number at all → the hand exits non-zero; a missing limit value skips the filter; applied before matchInput and max
   map: { title: string, url: string, snippet: string | null, date: string | null } | null,
                                    // json: templates over item fields, e.g. url "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}"
   inputs: Input[], example: Record<string, string | number> }
 ```
-- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · checks every string rendered into `skill.mjs` (`queryPattern`, `site`, `urlPattern`, `itemsPath`, `map.*`, `matchInput`, input names) against the Warden's `protected_path` / `secret_in_file` regexes (same frozen literals, imported from the Warden; fires before the scan, which remains the backstop) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
+- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (in a pattern, `matchInput` or `maxFilter.input`; `map` placeholders are item-field dot paths) · `maxFilter.input` is a `number` input · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · checks every string rendered into `skill.mjs` (`queryPattern`, `site`, `urlPattern`, `itemsPath`, `map.*`, `matchInput`, `maxFilter.*`, input names) against the Warden's `protected_path` / `secret_in_file` regexes (same frozen literals, imported from the Warden; fires before the scan, which remains the backstop) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput`, `maxFilter` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
 - **Keys:** news/web hands read literal `process.env.BRAVE_API_KEY`; json hands use no key, so the Broker grants none.
 
 ### Code forge (T3, `FORGE_MODE=code`, stretch)
@@ -358,7 +362,7 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 - **Brave news:** `GET https://api.search.brave.com/res/v1/news/search?q=…&count=5&freshness=pw` → `results[].{title, url, description→snippet, page_age→date}`
 - **Brave web:** `GET https://api.search.brave.com/res/v1/web/search?q=…&count=5` → `web.results[].{title, url, description→snippet, page_age?→date}` (`page_age` may be absent)
 - Brave headers: `X-Subscription-Token`, `Accept: application/json`. Every skill `fetch` uses `AbortSignal.timeout(6000)`.
-- **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, mapped by `map`; `max` (default 5) items.
+- **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, filtered by `maxFilter`, mapped by `map` (a `map.url` placeholder without a value → `url:""`); `max` (default 5) items.
 - **Demo source (checked 2026-10-08, keyless, ~60 ms, `robots.txt` allows `/api/*`):** `https://www.sauto.cz/api/v1/items/search?category_id=838&manufacturer_model_seo={make}:{model}&price_to={max_price}&limit=5` → `results[].{name, price, id, manufacturer_cb.seo_name, model_cb.seo_name, …}`; detail page `https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}`. Undocumented API: fixtures saved for OFFLINE.
 - **Second source (keyless, gate-only + jury backup):** `https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=5` → `hits[].{title, url, created_at}`; `map` `{title:"{title}", url:"{url}", date:"{created_at}"}` (no `news.ycombinator.com` link: that host would be unvisited → `host_not_allowed`). Hits without `url` (Ask HN) map to an empty `url`; the Test needs ≥1 non-empty.
 
@@ -567,7 +571,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | Warden code DENIED; fs/process sandbox (Node permission model) | | Hand choice is Talk's (LLM); the Runner only validates inputs |
 | Explore → Forge → Test → FINAL = PRE → Install → Reuse after restart; hand runs with 0 LLM tokens | Forge latency jump-cut on video | Keyword tripwire; non-keyword asks depend on Talk (k/5) |
 | Broker: ungranted key = `undefined`; json hands get no key | `hand_probe` seeded `decision.json` | Network: in-process guard + scan rules, no OS-level network jail |
-| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error |
+| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error; a `maxFilter` limit is applied by the hand over the first page of results (~20), not by the site |
 
 ---
 
