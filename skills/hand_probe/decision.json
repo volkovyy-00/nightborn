@@ -2,7 +2,7 @@
   "skill": "hand_probe",
   "kind": "hand",
   "folderHash": "eedc44ec0f5512c09accf4500e0a4a7463a92344a9a1075dfc79ece5e9388fcc",
-  "charterHash": "3216d64c40c255e8ef1f22570249487a43421a6f23706525d6e9e327b40e3062",
+  "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "capabilities": [
     "net:fetch"
   ],
@@ -24,5 +24,5 @@
   "purpose": "Hand-written probe: Brave news headlines for a query. Validation only.",
   "forgeTokens": 0,
   "forgeMs": 0,
-  "decidedAt": "2026-10-08T19:51:30.802Z"
+  "decidedAt": "2026-10-08T22:49:09.037Z"
 }

@@ -1,12 +1,12 @@
 {
-  "ts": "2026-10-08T22:43:21.995Z",
-  "charterHash": "3216d64c40c255e8ef1f22570249487a43421a6f23706525d6e9e327b40e3062",
+  "ts": "2026-10-08T22:49:20.009Z",
+  "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "rows": [
     {
       "row": 1,
       "name": "charter_byte_flip",
       "status": "Works",
-      "detail": "copy flipped → exit 1, boot charter_pin_mismatch; real hash 3216d64c vs ed803db4"
+      "detail": "copy flipped → exit 1, boot charter_pin_mismatch; real hash 6e4aa8f0 vs d0e1ca13"
     },
     {
       "row": 2,
