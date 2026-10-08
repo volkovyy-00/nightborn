@@ -33,6 +33,7 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 
 ### v4.2 → v4.3 (second-opinion review of the P2 plan, human call, 2026-10-08 ~23:30)
 1. Forge-time literal check: `prepareRecipe` rejects recipe strings that would trip the Warden's `protected_path` / `secret_in_file` regexes → Broken `forge_invalid`; the Warden scan remains the backstop (§9, §18 #13).
+2. `dns` (and `dns/promises`) join the Warden's forbidden modules and the fetch guard's `getBuiltinModule` stub: a hand could otherwise exfiltrate the Brave key through DNS lookups (§8, §9).
 
 ---
 
@@ -237,7 +238,7 @@ TypeScript compiler API over `skill.mjs`: `ts.createSourceFile('skill.mjs', src,
 | fs write calls (`writeFile*`, `appendFile*`, `createWriteStream`, `mkdir*`, `rm*`, `unlink*`, `rename*`) | cap `fs:write_own` |
 | fs read calls | cap `fs:read_own` |
 | `eval`, `new Function`, dynamic `import()` | **deny** `forbidden_construct` |
-| import/require of `child_process`, `vm`, `worker_threads`, `net`, `tls`, `http`, `https`, `http2`, `dgram`, `module`, `undici` (with or without `node:`) | **deny** `forbidden_construct` |
+| import/require of `child_process`, `vm`, `worker_threads`, `net`, `tls`, `http`, `https`, `http2`, `dgram`, `dns`, `dns/promises`, `module`, `undici` (with or without `node:`) | **deny** `forbidden_construct` |
 | identifiers `getBuiltinModule`, `createRequire`, `WebSocket`, `getOwnPropertySymbols`, `Symbol.for`, `Reflect`, `dlopen`, `binding` | **deny** `forbidden_construct` |
 | computed element access on `process`, `globalThis` or `global` (`x[expr]`) | **deny** `forbidden_construct` |
 | string literal matching `/charter\.md\|\.\.\/\|\.env\|broker\|^\//` | **deny** `protected_path` |
@@ -271,7 +272,7 @@ spawn(process.execPath, [
 child.stdin.end(JSON.stringify(input));   // MUST close stdin
 ```
 - Timeout **15 s** → SIGKILL → Broken `timeout`. stdout and stderr each capped at 1 MiB; overflow → kill → Broken `test_exit_nonzero`. No `PATH` in env (Windows: + `SYSTEMROOT`).
-- **`fetch-guard.mjs`** (runs before the skill): reads `NB_HOSTS` once into a frozen set; wraps `globalThis.fetch` (accepts `string | URL | Request`, anything else throws); forces `redirect:"manual"` and throws on 3xx; throws if the host ∉ set (in OFFLINE the Runner adds `127.0.0.1`); throws if the `BRAVE_API_KEY` value appears in a request to any host other than `api.search.brave.com`; deletes `globalThis.WebSocket`; replaces `process.getBuiltinModule` with a stub that throws for network/process/module builtins (it works under `--permission`, so the stub is required); creates undici's lazily-built global dispatcher eagerly (`await fetch("data:,x")`), then redefines `globalThis[Symbol.for("undici.globalDispatcher.1")]` as `writable:false` with a Proxy that checks `opts.origin` on every method, hides `constructor` and returns `null` as its prototype. A guard throw → the skill exits non-zero → Broken `test_exit_nonzero`.
+- **`fetch-guard.mjs`** (runs before the skill): reads `NB_HOSTS` once into a frozen set; wraps `globalThis.fetch` (accepts `string | URL | Request`, anything else throws); forces `redirect:"manual"` and throws on 3xx; throws if the host ∉ set (in OFFLINE the Runner adds `127.0.0.1`); throws if the `BRAVE_API_KEY` value appears in a request to any host other than `api.search.brave.com`; deletes `globalThis.WebSocket`; replaces `process.getBuiltinModule` with a stub that throws for network/process/module builtins (`http`, `https`, `http2`, `net`, `tls`, `dgram`, `dns`, `dns/promises`, `module`, `worker_threads`, `child_process`, `vm`, with or without `node:`; it works under `--permission`, so the stub is required); creates undici's lazily-built global dispatcher eagerly (`await fetch("data:,x")`), then redefines `globalThis[Symbol.for("undici.globalDispatcher.1")]` as `writable:false` with a Proxy that checks `opts.origin` on every method, hides `constructor` and returns `null` as its prototype. A guard throw → the skill exits non-zero → Broken `test_exit_nonzero`.
 - Verified on Node 22.22.2 (2026-10-08): reads outside the folder, writes, `child_process`, `Worker`, `process.binding` → `ERR_ACCESS_DENIED`; `process.dlopen` → `ERR_DLOPEN_DISABLED`; the guard preload needs its own `--allow-fs-read`. Guard prototype blocked: off-host fetch, key to a non-Brave host, 302, `WebSocket`, `getBuiltinModule("http")`, dispatcher via `Symbol.for` and via `getOwnPropertySymbols`, dispatcher `constructor`, dispatcher overwrite, `fetch` overwrite; allowed fetch still 200.
 
 ### Skill I/O
