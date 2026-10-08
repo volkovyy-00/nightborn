@@ -134,6 +134,23 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .nb-result .li{padding-left:1.1em;text-indent:-1.1em}
 .nb-result .li::first-letter{color:var(--cyan)}
 .nb-voice{color:#FF8A8A}
+.nb-say{font:400 15.5px/1.5 'Geist',sans-serif;color:var(--ink);margin-bottom:10px;white-space:pre-line}
+.work{border:1px dashed #2B343B;border-radius:10px;padding:10px 12px;background:#0B0F12}
+.work-head{display:flex;align-items:center;gap:9px;font:600 12px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+.work-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse .9s ease-in-out infinite}
+.work-secs{margin-left:auto;color:var(--mute);letter-spacing:.04em}
+.steps{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font:400 13px/1.4 'Geist',sans-serif;color:var(--mute)}
+.steps li{padding-left:1.3em;text-indent:-1.3em;animation:fade .25s ease-out}
+.steps li::before{content:"✓";display:inline-block;width:1.3em;text-indent:0;color:#1F5A50}
+.steps li.now{color:var(--ink)}
+.steps li.now::before{content:"›";color:var(--amber)}
+.steps li.bad::before{content:"✕";color:var(--red)}
+.trail{margin-top:10px}
+.trail summary{cursor:pointer;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--mute);list-style:none}
+.trail summary::-webkit-details-marker{display:none}
+.trail summary::before{content:"▸ ";color:#3A4A52}
+.trail[open] summary::before{content:"▾ "}
+.trail .steps{margin-top:6px}
 .res{display:flex;flex-direction:column;gap:8px}
 .res-head{display:flex;align-items:center;gap:8px;font:600 11.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
 .res-head .res-tag{padding:3px 8px;border-radius:999px;border:1px solid #1F5A50;color:var(--cyan)}
@@ -407,6 +424,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     bootHash: null,
     // Fuller counts from the last /api/talk job response (talk incl. summary); log-derived values are the fallback.
     talkTok: { first: null, firstMs: null, reuse: null },
+    work: null, // pending request: { t0, from } — `from` = index in state.lines where its log lines start
     msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
   };
 
@@ -629,6 +647,95 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; }
   }
 
+  /** One plain sentence per log line of the pending request (null = not worth saying). */
+  function annotate(l) {
+    const d = String(l.detail || "");
+    const sk = l.skill || "the hand";
+    let m;
+    switch (l.event) {
+      case "job":
+        if (l.decision === "fail") return null;
+        if (d.startsWith("tripwire")) return { text: "That asks to send something. Passing it straight to the Warden.", phase: "warden" };
+        m = d.match(/^use_hand: (.+)$/);
+        return { text: m ? `On it: ${m[1]}.` : "On it.", phase: "routing" };
+      case "matched":
+        return { text: `I already have a hand for this: ${sk}.`, phase: "running hand" };
+      case "gap":
+        if (d.startsWith("inputs don't fit")) return { text: `${sk} can't take these inputs, so I'll grow a new hand.`, phase: "forging" };
+        return { text: "No hand for this yet. Growing one.", phase: "exploring" };
+      case "forge":
+        if (l.decision === "fail") return { text: "The forge didn't produce a usable hand.", phase: "forging", bad: true };
+        if ((m = d.match(/^explore: web_search "(.*)" → (.+)$/))) return { text: `Searched the web for “${m[1]}” (${m[2]}).`, phase: "exploring" };
+        if ((m = d.match(/^explore: http_get (\S+) (\d{3})$/))) return { text: `Read ${m[1]}.`, phase: "exploring" };
+        if ((m = d.match(/^explore: http_get (\S+) → (.+)$/))) return { text: `Couldn't read ${m[1]} (${m[2]}).`, phase: "exploring", bad: true };
+        if ((m = d.match(/^explore: emit_recipe (\S+) (\S+)/))) return { text: `Wrote a ${m[1]} recipe: ${m[2]}.`, phase: "forging" };
+        if (d.startsWith("fixed template")) return { text: "Loaded the fixed email template (no LLM).", phase: "warden" };
+        return { text: `Recipe ready${l.tokens ? ` (${l.tokens.toLocaleString("en-US")} tokens)` : ""}. Building the hand.`, phase: "warden" };
+      case "precheck":
+        return { text: "Warden scanned the code: allowed.", phase: "testing" };
+      case "test":
+        return { text: `Test run passed: ${d || "ok"}.`, phase: "warden" };
+      case "final":
+        return { text: "Warden re-hashed the folder: unchanged.", phase: "installing" };
+      case "install":
+        return { text: `Installed ${sk}. Reading the results.`, phase: "writing reply" };
+      case "reuse":
+        return { text: `Ran ${sk}: ${d.replace(" · ", ", ") || "done"}.`, phase: "writing reply" };
+      case "denied":
+        return { text: `Warden denied it: ${l.failureCode || "policy"}.`, phase: "denied", bad: true };
+      case "broken":
+        return { text: `It broke: ${l.failureCode || "error"}.`, phase: "broken", bad: true };
+      default:
+        return null;
+    }
+  }
+
+  /** Annotations for the pending request, in step with the board (state.shown). */
+  function workSteps() {
+    if (!state.work) return [];
+    const from = Math.min(state.work.from, state.shown);
+    return state.lines.slice(from, state.shown).map(annotate).filter(Boolean);
+  }
+
+  function stepList(steps, live) {
+    const ul = document.createElement("ul");
+    ul.className = "steps";
+    steps.forEach((st, i) => {
+      const li = document.createElement("li");
+      li.textContent = st.text;
+      if (st.bad) li.className = "bad";
+      else if (live && i === steps.length - 1) li.className = "now";
+      ul.appendChild(li);
+    });
+    return ul;
+  }
+
+  function workSecs() {
+    return state.work ? Math.max(0, Math.round((Date.now() - state.work.t0) / 1000)) + " s" : "";
+  }
+
+  function renderWork() {
+    const steps = workSteps();
+    const row = document.createElement("div");
+    row.className = "row";
+    const b = document.createElement("div");
+    b.className = "bubble-n work";
+    const head = document.createElement("div");
+    head.className = "work-head";
+    const dot = document.createElement("span");
+    dot.className = "work-dot";
+    const label = document.createElement("span");
+    label.textContent = steps.length ? steps[steps.length - 1].phase : "thinking";
+    const secs = document.createElement("span");
+    secs.className = "work-secs";
+    secs.textContent = workSecs();
+    head.append(dot, label, secs);
+    b.appendChild(head);
+    if (steps.length) b.appendChild(stepList(steps, true));
+    row.appendChild(b);
+    return row;
+  }
+
   function renderMsgs() {
     el.msgs.innerHTML = "";
     state.msgs.slice(-40).forEach((m) => {
@@ -645,6 +752,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         const t = document.createElement("div");
         if (m.items && m.items.length) {
           t.className = "res";
+          if (m.text && m.text.trim()) {
+            const say = document.createElement("div");
+            say.className = "nb-say";
+            say.textContent = m.text.trim();
+            t.appendChild(say);
+          }
           const head = document.createElement("div");
           head.className = "res-head";
           const tag = document.createElement("span");
@@ -687,10 +800,19 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           t.textContent = m.text;
         }
         b.appendChild(t);
+        if (m.steps && m.steps.length) {
+          const det = document.createElement("details");
+          det.className = "trail";
+          const sum = document.createElement("summary");
+          sum.textContent = `how I got this · ${m.steps.length} step${m.steps.length === 1 ? "" : "s"} · ${m.secs}`;
+          det.append(sum, stepList(m.steps, false));
+          b.appendChild(det);
+        }
         row.appendChild(b);
       }
       el.msgs.appendChild(row);
     });
+    if (state.work) el.msgs.appendChild(renderWork());
     el.msgs.scrollTop = el.msgs.scrollHeight;
   }
 
@@ -959,6 +1081,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     unlockAudioOnce();
     setBusy(true);
     state.msgs.push({ who: "user", text: t });
+    state.work = { t0: Date.now(), from: state.lines.length };
     renderMsgs();
     el.input.value = "";
     try {
@@ -981,6 +1104,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         }
         await boardSettled(Date.now());
       }
+      const steps = workSteps();
+      const secs = workSecs();
+      state.work = null;
       if (data.kind === "chat") {
         state.msgs.push({ who: "nb", text: data.text || "", plain: true });
       } else if (data.kind === "job") {
@@ -994,6 +1120,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           items: !voiceish && Array.isArray(data.items) ? data.items.slice(0, 5) : null,
           outcome: data.outcome,
           skill: data.skill,
+          steps,
+          secs,
         });
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
@@ -1001,10 +1129,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     } catch (e) {
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {
+      state.work = null;
       setBusy(false);
       render();
     }
   }
+
+  // Keep the pending bubble's clock moving between polls.
+  setInterval(() => {
+    const s = state.work && el.msgs.querySelector(".work-secs");
+    if (s) s.textContent = workSecs();
+  }, 500);
 
   el.form.addEventListener("submit", (e) => {
     e.preventDefault();
