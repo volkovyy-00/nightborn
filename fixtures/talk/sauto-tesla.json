@@ -1,4 +1,4 @@
 {
-  "match": "Find a used Tesla Model 3 under 750 000 Kč on Sauto",
-  "useHand": { "skill": null, "intent": "used car listings on sauto", "inputs": { "make": "Tesla", "model": "Model 3", "max_price": "750 000 Kč" }, "needs": ["net:fetch"] }
+  "match": "Find a used Tesla Model 3 under 750 000 Kč",
+  "useHand": { "skill": null, "intent": "used car listings", "inputs": { "make": "Tesla", "model": "Model 3", "max_price": "750 000 Kč" }, "needs": ["net:fetch"] }
 }

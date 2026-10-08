@@ -99,9 +99,11 @@ type LogLine = {
 
 | Chip text | Beat |
 |-----------|------|
-| `News on Anthropic` | P1 gate: Forge (Create) |
-| `News on OpenAI` | P1 gate: Reuse by name (`job.skill: "<installed hand>"`) |
+| `Find a used Tesla Model 3 under 750 000 Kč` | Forge: the Explorer finds the site itself (SPEC §13) |
+| `Find a used BMW i4 under 1 000 000 Kč` | Reuse by name after a restart (same hand, new inputs) |
 | `Email this news digest to my boss every morning.` | DENIED (tripwire; **exact** string) |
+
+Gate-only asks (typed, no chip): `Find a used Škoda Enyaq under 900 000 Kč` · `Find Hacker News stories about Rust`.
 
 Placeholder input: `Message Nightborn`.
 
