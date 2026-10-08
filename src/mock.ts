@@ -8,21 +8,24 @@ export function mockProviderResponse(provider: string, query: string): unknown {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 40);
+  // Prefer exact slug, then a known company token inside the query, then default — never a wrong company.
+  const tokens = query.toLowerCase().match(/[a-z0-9]+/g) ?? [];
   const candidates = [
     repoPath("fixtures", "http", `news-${slug}.json`),
-    repoPath("fixtures", "http", "news-microsoft.json"),
+    ...tokens.map((t) => repoPath("fixtures", "http", `news-${t}.json`)),
     repoPath("fixtures", "http", "news-default.json"),
   ];
   for (const p of candidates) {
     if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
   }
+  const label = query.trim() || "query";
   if (provider === "tavily") {
     return {
       results: [
         {
-          title: `Stub news for ${query}`,
-          url: "https://example.com/news/1",
-          published_date: "2026-10-01",
+          title: `Stub result for ${label}`,
+          url: "https://example.com/stub/1",
+          published_date: "2026-10-01T00:00:00Z",
         },
       ],
     };
@@ -30,9 +33,9 @@ export function mockProviderResponse(provider: string, query: string): unknown {
   return {
     results: [
       {
-        title: `Stub news for ${query}`,
-        url: "https://example.com/news/1",
-        page_age: "2026-10-01",
+        title: `Stub result for ${label}`,
+        url: "https://example.com/stub/1",
+        page_age: "2026-10-01T00:00:00Z",
       },
     ],
   };

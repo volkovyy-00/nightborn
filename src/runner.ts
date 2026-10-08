@@ -26,17 +26,40 @@ function skillsRoot(): string {
   return dataPath("skills");
 }
 
+type NewsItem = { title?: string; url?: string; date?: string };
+
+/** Format skill stdout into a short analyst reply (install / reuse). */
+function formatNewsReply(prefix: string, stdout: string): string {
+  let items: NewsItem[] = [];
+  try {
+    const data = JSON.parse(stdout) as { items?: NewsItem[] };
+    items = Array.isArray(data.items) ? data.items : [];
+  } catch {
+    return prefix;
+  }
+  if (!items.length) return prefix;
+  const lines = items.slice(0, 5).map((it, i) => {
+    const title = (it.title || "(untitled)").trim();
+    const url = (it.url || "").trim();
+    const date = it.date ? ` (${it.date})` : "";
+    return `${i + 1}. ${title}${date}${url ? `\n   ${url}` : ""}`;
+  });
+  return `${prefix}\n\n${lines.join("\n")}`;
+}
+
 function loadDecision(skillName: string): DecisionJson | null {
   const p = path.join(skillsRoot(), skillName, "decision.json");
   if (!existsSync(p)) return null;
   return JSON.parse(readFileSync(p, "utf8")) as DecisionJson;
 }
 
-/** Runner rule §9 — returns reuse skill name or null for create. */
+/** Runner rule §9 — returns reuse skill name or create with gap detail. */
 function chooseReuse(job: Job): { mode: "reuse"; skill: string; detail: string } | { mode: "create"; detail: string } {
   if (job.skill) {
     const d = loadDecision(job.skill);
     if (d) return { mode: "reuse", skill: job.skill, detail: "by name" };
+    // Non-null skill not installed → Create (explicit grow); skip capability match
+    return { mode: "create", detail: "named skill missing → create" };
   }
   const needs = job.needs.length ? job.needs : ["net:fetch"];
   const matches: string[] = [];
@@ -168,15 +191,7 @@ async function runReuse(
     source,
   });
 
-  let summary = `Reused ${skillName}.`;
-  try {
-    const data = JSON.parse(result.stdout);
-    const n = data.items?.length ?? 0;
-    summary = `Reused ${skillName}: ${n} item(s).`;
-  } catch {
-    /* keep */
-  }
-
+  const summary = formatNewsReply(`Reused ${skillName}.`, result.stdout);
   return { kind: "job", job, outcome: "reuse", skill: skillName, reply: summary };
 }
 
@@ -210,6 +225,10 @@ async function runCreate(
       params = loadForgeFixture("pull_company_news.json") ?? (await forgeParamsViaPi(job.intent, job.query));
     } else {
       params = await forgeParamsViaPi(job.intent, job.query);
+    }
+    // Explicit grow: Talk's proposed skill name wins over Forge's name (fixture override unchanged above).
+    if (!forgeOverride && job.skill) {
+      params = { ...params, name: job.skill };
     }
   } catch {
     wipeStaging(runDir);
@@ -352,7 +371,10 @@ async function runCreate(
     job,
     outcome: "install",
     skill: skillName,
-    reply: `Installed ${skillName}. ${validated.data.items.length} item(s) in test.`,
+    reply: formatNewsReply(
+      `Grew ${skillName} and ran it.`,
+      result.stdout,
+    ),
   };
 }
 

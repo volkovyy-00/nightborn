@@ -5,13 +5,12 @@ import {
   createAgentSession,
   defineTool,
   SessionManager,
-  DefaultResourceLoader,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ForgeParams } from "./types.ts";
-import { repoPath } from "./paths.ts";
+import { repoPath, REPO_ROOT } from "./paths.ts";
 import { listSkillDirs } from "./hash.ts";
-import { createPiAuthAndRegistry, resolvePiModel } from "./pi.ts";
+import { createPiAuthAndRegistry, createPiResourceLoader, piAgentDir, resolvePiModel } from "./pi.ts";
 
 function slugify(name: string): string {
   let s = name
@@ -102,16 +101,15 @@ export async function forgeParamsViaPi(intent: string, query: string): Promise<F
 
   const { auth, registry } = createPiAuthAndRegistry();
   const model = resolvePiModel(registry);
-  const loader = new DefaultResourceLoader({
-    systemPromptOverride: () =>
+  const loader = createPiResourceLoader({
+    systemPrompt:
       "You fill params for a frozen HTTP news-search skill template. No code. Call emit_forge_params once.",
-    skillsOverride: () => ({ skills: [], diagnostics: [] }),
-    agentsFilesOverride: () => ({ agentsFiles: [] }),
-    promptsOverride: () => ({ prompts: [], diagnostics: [] }),
   });
   await loader.reload();
 
   const { session } = await createAgentSession({
+    cwd: REPO_ROOT,
+    agentDir: piAgentDir(),
     authStorage: auth,
     modelRegistry: registry,
     model,
@@ -119,7 +117,7 @@ export async function forgeParamsViaPi(intent: string, query: string): Promise<F
     noTools: "builtin",
     customTools: [emit],
     resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(),
+    sessionManager: SessionManager.inMemory(REPO_ROOT),
     settingsManager: SettingsManager.inMemory(),
   });
 

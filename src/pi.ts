@@ -1,13 +1,28 @@
+import { homedir } from "node:os";
+import path from "node:path";
 import {
   AuthStorage,
+  DefaultResourceLoader,
   ModelRegistry,
+  getAgentDir,
   type ModelRegistry as ModelRegistryType,
 } from "@earendil-works/pi-coding-agent";
+import { REPO_ROOT } from "./paths.ts";
 
 export type PiModel = NonNullable<ReturnType<ModelRegistryType["find"]>>;
 
 /** Cheap paid default — avoid :free OpenRouter models (rate limits). */
 export const DEFAULT_PI_MODEL = "openrouter/openai/gpt-4o-mini";
+
+export function piAgentDir(): string {
+  try {
+    const d = getAgentDir();
+    if (typeof d === "string" && d.length > 0) return d;
+  } catch {
+    /* fall through */
+  }
+  return path.join(homedir(), ".pi", "agent");
+}
 
 export function createPiAuthAndRegistry(): { auth: AuthStorage; registry: ModelRegistry } {
   const auth = AuthStorage.create();
@@ -30,4 +45,28 @@ export function resolvePiModel(registry: ModelRegistry): PiModel {
   const model = registry.find(provider, id);
   if (!model) throw new Error(`Model not found: ${spec}`);
   return model;
+}
+
+/** Pi 0.75 requires cwd + agentDir; undefined cwd throws in normalizePath. */
+export function createPiResourceLoader(opts: {
+  systemPrompt: string;
+}): DefaultResourceLoader {
+  const cwd = REPO_ROOT;
+  const agentDir = piAgentDir();
+  if (!cwd || !agentDir) {
+    throw new Error(`Pi paths missing cwd=${cwd} agentDir=${agentDir}`);
+  }
+  return new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    systemPromptOverride: () => opts.systemPrompt,
+    skillsOverride: () => ({ skills: [], diagnostics: [] }),
+    agentsFilesOverride: () => ({ agentsFiles: [] }),
+    promptsOverride: () => ({ prompts: [], diagnostics: [] }),
+  });
 }

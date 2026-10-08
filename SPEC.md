@@ -639,4 +639,4 @@ All ten by 07:10, or Go/No-Go ships take1.
 
 ---
 
-*Spec version: Nightborn v3.2.5 (re-sync on v3.2.4 — Brave + voice ID frozen, Apify gate wording, ambiguous-match rule, role split matches BOARD.md; v3.2.4: hand_probe seed, take0 probe fixture, UI dev feed, live Talk owner, fresh/mock owners, BOARD.md)*
+*Spec version: Nightborn v3.2.6 (explicit grow: named missing skill → Create; v3.2.5 re-sync — Brave + voice ID, ambiguous-match, role split; v3.2.4: hand_probe seed, take0, UI dev feed, BOARD.md)*

@@ -57,8 +57,14 @@ app.get("/api/log", (c) => {
 app.post("/api/talk", async (c) => {
   const body = (await c.req.json()) as { text?: string; fixture?: string };
   const text = String(body.text ?? "");
-  const result = await handleTalk(text, body.fixture);
-  return c.json(result);
+  try {
+    const result = await handleTalk(text, body.fixture);
+    return c.json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/talk failed:", e);
+    return c.json({ kind: "chat", text: `Talk failed: ${msg}` }, 500);
+  }
 });
 
 if (process.env.OFFLINE === "1") {

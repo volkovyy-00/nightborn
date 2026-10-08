@@ -37,8 +37,9 @@ quote the § line, ask. Don't loosen, don't route around.
 - Tripwire on raw text before Talk; exactly one voiced `denied` line, `actor: warden` (§11).
 - Forge = params only; LLM strings reach files only via `JSON.stringify`; `query` arrives on
   stdin, never in `skill.mjs`; no Forge retry (§9 "Forge").
-- Reuse/Create = the 5-step §9 "Runner rule" (tripwire → by name → exactly one http skill by
-  capability → ≥2 matches = ambiguous `gap` → else Create). Implement verbatim, no LLM.
+- Reuse/Create = the §9 "Runner rule" (tripwire → by name → named missing skill = Create →
+  exactly one http skill by capability → ≥2 matches = ambiguous `gap` → else Create).
+  Implement verbatim, no LLM.
 - Templates: `http` + `email_send` only (`hand_probe` = `template:"hand"`, no template folder; §3, §9).
   `email_send` imports nodemailer on purpose; never install `nodemailer` or `@types/nodemailer` (§7, §11).
 - Search: `SEARCH_PROVIDER` is frozen per §18 #3; global `fetch`, no SDKs (§9 "Broker",

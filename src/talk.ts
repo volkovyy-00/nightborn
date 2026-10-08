@@ -4,14 +4,13 @@ import {
   createAgentSession,
   defineTool,
   SessionManager,
-  DefaultResourceLoader,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { Job } from "./types.ts";
-import { repoPath, dataPath } from "./paths.ts";
+import { repoPath, dataPath, REPO_ROOT } from "./paths.ts";
 import { listSkillDirs } from "./hash.ts";
 import { ALLOWED_CAPS } from "./charter.ts";
-import { createPiAuthAndRegistry, resolvePiModel } from "./pi.ts";
+import { createPiAuthAndRegistry, createPiResourceLoader, piAgentDir, resolvePiModel } from "./pi.ts";
 
 export type TalkEmit =
   | { kind: "chat"; text: string }
@@ -27,10 +26,14 @@ export function pushHistory(role: "user" | "assistant", text: string): void {
 }
 
 function snapshot(): string {
-  const names = listSkillDirs(dataPath("skills"));
-  return [`Capabilities: ${ALLOWED_CAPS.join(", ")}`, `Installed skills: ${names.length ? names.join(", ") : "(none)"}`].join(
-    "\n",
-  );
+  const names = listSkillDirs(dataPath("skills")).filter((n) => n !== "hand_probe");
+  return [
+    `Capabilities (needs may only use these): ${ALLOWED_CAPS.join(", ")}`,
+    `Installed skills: ${names.length ? names.join(", ") : "(none)"}`,
+    "Ordinary news/search: skill=null (Runner may Reuse by capability) or an installed name.",
+    "Grow / forge / make an arm / don't reuse X: skill=new_snake_case name NOT in the installed list (forces Create).",
+    "Never set skill to hand_probe.",
+  ].join("\n");
 }
 
 export async function talkViaPi(userText: string): Promise<TalkEmit> {
@@ -57,10 +60,14 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
   const emitJob = defineTool({
     name: "emit_job",
     label: "Emit Job",
-    description: "Request skill work (news/search). Final action.",
+    description:
+      "Request skill work or growth (news/search/deals). Final action. Use for grow/forge/make-an-arm requests too.",
     promptGuidelines: [
       "Call emit_chat OR emit_job, exactly one, as your last action.",
-      "For news/search: needs must include net:fetch; skill null unless reusing a named skill.",
+      "Grow / forge / make an arm / extend / don't use <skill> → emit_job with skill=new_snake_case name not already installed.",
+      "Ordinary news/search (no grow ask) → skill=null or an installed skill name.",
+      "needs = charter capabilities only (usually [\"net:fetch\"]). Never hand_probe.",
+      "query = the search string (topic), not the whole user sentence.",
     ],
     parameters: Type.Object({
       text: Type.String(),
@@ -70,14 +77,26 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
       needs: Type.Array(Type.String()),
     }),
     async execute(_id, params) {
+      let skill: string | null = params.skill;
+      // Reject probes / cap-as-name / string "null" — but keep proposed names that are not installed yet (explicit grow).
+      if (
+        !skill ||
+        skill === "hand_probe" ||
+        skill === "null" ||
+        skill === "undefined" ||
+        (ALLOWED_CAPS as readonly string[]).includes(skill)
+      ) {
+        skill = null;
+      }
+      const needs = params.needs.filter((n) => (ALLOWED_CAPS as readonly string[]).includes(n));
       captured = {
         kind: "job",
         text: params.text,
         job: {
-          skill: params.skill,
+          skill,
           intent: params.intent,
           query: params.query,
-          needs: params.needs.length ? params.needs : ["net:fetch"],
+          needs: needs.length ? needs : ["net:fetch"],
         },
       };
       return {
@@ -94,7 +113,9 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
 
   const system = [
     "You are Nightborn's Talk layer.",
-    "Never install. Never write files. Only emit_chat or emit_job.",
+    "You never write skills yourself — emit_job requests work; the host Create/Reuse.",
+    "Do not refuse growth in chat. Ordinary search: skill=null. Explicit grow: propose a new snake_case skill name.",
+    "Only emit_chat or emit_job. needs ⊆ charter caps (net:fetch for web).",
     soul,
     "",
     "Snapshot:",
@@ -103,15 +124,12 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
 
   const { auth, registry } = createPiAuthAndRegistry();
   const model = resolvePiModel(registry);
-  const loader = new DefaultResourceLoader({
-    systemPromptOverride: () => system,
-    skillsOverride: () => ({ skills: [], diagnostics: [] }),
-    agentsFilesOverride: () => ({ agentsFiles: [] }),
-    promptsOverride: () => ({ prompts: [], diagnostics: [] }),
-  });
+  const loader = createPiResourceLoader({ systemPrompt: system });
   await loader.reload();
 
   const { session } = await createAgentSession({
+    cwd: REPO_ROOT,
+    agentDir: piAgentDir(),
     authStorage: auth,
     modelRegistry: registry,
     model,
@@ -119,7 +137,7 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
     noTools: "builtin",
     customTools: [emitChat, emitJob],
     resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(),
+    sessionManager: SessionManager.inMemory(REPO_ROOT),
     settingsManager: SettingsManager.inMemory(),
   });
 
