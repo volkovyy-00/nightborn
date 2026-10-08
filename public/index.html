@@ -372,6 +372,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[]}} */
   const state = {
     lines: [],
+    shown: 0, // board (pipeline, grafts, overlay) catches up to state.lines one stage at a time
+    lastPollAt: 0,
     since: 0,
     firstPoll: true,
     busy: false,
@@ -379,6 +381,34 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     bootHash: null,
     msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
   };
+
+  // Stage replay: lines that land in one poll are stepped through so each stage is visible.
+  const DWELL = { gap: 450, matched: 450, forge: 800, precheck: 800, test: 800, final: 450 };
+  let replayTimer = null;
+
+  function advanceBoard() {
+    replayTimer = null;
+    while (state.shown < state.lines.length) {
+      const l = state.lines[state.shown++];
+      if (l.voice) enqueueVoice(l.voice); // voice plays when its line reaches the board
+      const wait = DWELL[l.event] || 0;
+      if (wait && state.shown < state.lines.length) {
+        render();
+        replayTimer = setTimeout(advanceBoard, wait);
+        return;
+      }
+    }
+    render();
+  }
+
+  /** Resolves once the board has caught up with every line logged up to `since` (ms timestamp). */
+  async function boardSettled(since) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 8000) {
+      if (state.lastPollAt > since && !replayTimer && state.shown >= state.lines.length) return;
+      await new Promise((r) => setTimeout(r, 120));
+    }
+  }
 
   /** @type {HTMLAudioElement[]} */
   const voiceQueue = [];
@@ -449,6 +479,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     out.job = log[jobIdx];
     out.skill = out.job.skill;
     log.slice(jobIdx + 1).forEach((l) => {
+      if (l.skill && !out.job.skill) out.skill = l.skill; // a new hand gets its name at the forge line
       const stage = EVENT_STAGE[l.event];
       if (!stage) return;
       st[stage] = "done";
@@ -461,6 +492,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       if (["install", "reuse", "denied", "broken"].includes(l.event)) out.term = l;
     });
     const t = out.term;
+    const lastGap = [...log.slice(jobIdx + 1)].reverse().find((l) => l.event === "gap");
+    if (!t && out.lastStage === "gap" && lastGap && /→ create/.test(String(lastGap.detail || ""))) {
+      st.gap = "done";
+      out.lastStage = "forge";
+      det.forge = "forging a recipe…";
+      out.forgingNew = true;
+    }
     if (!t) {
       out.pending = true;
       if (out.lastStage) st[out.lastStage] = "active";
@@ -577,19 +615,20 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   }
 
   function render() {
-    const log = state.lines;
+    const all = state.lines;
+    const log = all.slice(0, state.shown);
     const d = derive(log);
     const t = d.term;
-    const boot = log.find((l) => l.event === "boot");
+    const boot = all.find((l) => l.event === "boot");
     if (boot && boot.charterHash) state.bootHash = boot.charterHash;
 
-    const hash = state.bootHash || (log[0] && log[0].charterHash) || "";
+    const hash = state.bootHash || (all[0] && all[0].charterHash) || "";
     const short = shortHash(hash);
     el.hashDisp.textContent = short;
     el.ringPath.textContent = "CHARTER LOCKED · " + short + " · CHARTER LOCKED · " + short + " · ";
 
     let drift = false;
-    for (const l of log) {
+    for (const l of all) {
       if (state.bootHash && l.charterHash && l.charterHash !== state.bootHash) { drift = true; break; }
     }
     el.hashDisp.classList.toggle("hash-bad", drift);
@@ -600,7 +639,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
     const installs = log.filter((l) => l.event === "install");
     el.forged.textContent = "+" + installs.length + " FORGED";
-    el.lineCount.textContent = "log · " + log.length + " lines";
+    el.lineCount.textContent = "log · " + all.length + " lines";
 
     const granted = new Set();
     log.forEach((l) => {
@@ -656,12 +695,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       }
     });
     const building = d.pending && ["forge", "warden", "test"].includes(d.lastStage);
-    const aName = graftSkills[0] || (d.skill && d.skill !== "email_send" ? d.skill : null);
+    const aName = graftSkills[0] || (d.skill && d.skill !== "email_send" ? d.skill : (d.forgingNew ? "new hand" : null));
     let aState = "vacant";
     if (graftSkills[0]) {
       aState = (t && t.event === "reuse" && t.skill === graftSkills[0]) ? "flow" : "alive";
-    } else if (d.skill && d.skill !== "email_send" && d.pending) {
-      aState = ({ forge: "forging", warden: "scan", test: "testing" })[d.lastStage] || "vacant";
+    } else if (aName && aName !== "email_send" && d.pending) {
+      aState = ({ forge: "forging", warden: "scan", test: "testing", install: "testing" })[d.lastStage] || "vacant";
     } else if (t && t.event === "broken" && t.skill && t.skill !== "email_send") {
       aState = "broken";
     }
@@ -705,9 +744,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       el.slots.appendChild(div);
     });
 
-    el.sutA.className = "sut sut-" + aState;
-    el.stA.className = "st8 st8-" + aState;
-    el.sutX.className = "sut sut-" + xState;
+    // SVG elements: className is a read-only SVGAnimatedString, so classes go through setAttribute.
+    el.sutA.setAttribute("class", "sut sut-" + aState);
+    el.stA.setAttribute("class", "st8 st8-" + aState);
+    el.sutX.setAttribute("class", "sut sut-" + xState);
 
     const isDeny = !!(t && t.event === "denied");
     el.denyOverlay.classList.toggle("on", isDeny);
@@ -716,18 +756,18 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         (t.caps && t.caps.length ? " · " + t.caps.join(",") + " ∉ charter" : " · notify:email ∉ charter");
     }
     el.emailCap.className = isDeny ? "cap cap-no cap-pulse" : "cap cap-no";
-    el.arc1.className = isDeny ? "arc arc-deny" : (building ? "arc arc-on" : "arc");
-    el.arc2.className = isDeny ? "arc arc-deny" : (building ? "arc arc-on2" : "arc");
-    el.ring.className = isDeny ? "ring-line ring-cinch" : "ring-line";
-    el.ringTxt.className = isDeny ? "ring-txt ring-deny" : "ring-txt";
-    el.orb.className = isDeny ? "orb orb-frozen" : "orb";
-    el.orbEdge.className = isDeny ? "orb-edge orb-edge-dead" : "orb-edge";
-    el.halo.className = isDeny ? "halo halo-dead" : "halo";
-    el.life.className = isDeny ? "life life-dead" : "life";
+    el.arc1.setAttribute("class", isDeny ? "arc arc-deny" : (building ? "arc arc-on" : "arc"));
+    el.arc2.setAttribute("class", isDeny ? "arc arc-deny" : (building ? "arc arc-on2" : "arc"));
+    el.ring.setAttribute("class", isDeny ? "ring-line ring-cinch" : "ring-line");
+    el.ringTxt.setAttribute("class", isDeny ? "ring-txt ring-deny" : "ring-txt");
+    el.orb.setAttribute("class", isDeny ? "orb orb-frozen" : "orb");
+    el.orbEdge.setAttribute("class", isDeny ? "orb-edge orb-edge-dead" : "orb-edge");
+    el.halo.setAttribute("class", isDeny ? "halo halo-dead" : "halo");
+    el.life.setAttribute("class", isDeny ? "life life-dead" : "life");
 
     // log tail
     el.logTail.innerHTML = "";
-    const tail = log.slice(-12);
+    const tail = all.slice(-12);
     tail.forEach((l, i) => {
       const bad = l.decision === "deny" || l.decision === "fail" || l.event === "denied" || l.event === "broken";
       const div = document.createElement("div");
@@ -757,7 +797,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       const lines = Array.isArray(data.lines) ? data.lines : [];
 
       if (next < state.since) {
+        clearTimeout(replayTimer);
+        replayTimer = null;
         state.lines = [];
+        state.shown = 0;
         state.since = 0;
         state.firstPoll = true;
         state.bootHash = null;
@@ -765,22 +808,23 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
       if (state.firstPoll) {
         state.lines = state.lines.concat(lines);
+        state.shown = state.lines.length;
         state.since = next;
         state.firstPoll = false;
+        state.lastPollAt = Date.now();
         el.conn.textContent = "live · /api/log";
         el.conn.classList.remove("err");
         render();
         return;
       }
 
-      for (const l of lines) {
-        state.lines.push(l);
-        if (l.voice) enqueueVoice(l.voice);
-      }
+      for (const l of lines) state.lines.push(l);
       state.since = next;
+      state.lastPollAt = Date.now();
       el.conn.textContent = "live · /api/log";
       el.conn.classList.remove("err");
-      render();
+      if (!replayTimer) advanceBoard();
+      else render();
     } catch (e) {
       el.conn.textContent = "offline · waiting for host :8787";
       el.conn.classList.add("err");
@@ -803,6 +847,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
+      if (data.kind === "job") await boardSettled(Date.now());
       if (data.kind === "chat") {
         state.msgs.push({ who: "nb", text: data.text || "", plain: true });
       } else if (data.kind === "job") {
