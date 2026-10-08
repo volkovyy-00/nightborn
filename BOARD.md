@@ -25,8 +25,8 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [ ] take0 recorded, watched, uploaded (agent meanwhile: validate rows 1–4, 6–10)
 
 ## P2 T2 explore → recipe · 01:05–03:30 · tag `t2-recipe`
-- [ ] Explorer (`web_search`, safe `http_get`, `emit_recipe`) + `sources.md` (§9)
-- [ ] `json` + `web` endpoints, inputs, visited-host rule (§9)
+- [x] Explorer (`web_search`, safe `http_get`, `emit_recipe`) + `sources.md` (§9)
+- [x] `json` + `web` endpoints, inputs, visited-host rule (§9)
 - [x] Hardened fetch guard + Warden v4 scan rows + host checks (§8, §9)
 - [x] sauto fixtures + chips 1–2 + chip backups (§13)
 - [x] UI token counter (§13)
