@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nightborn demo screen</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+body{margin:0;background:#07090B}
+*{box-sizing:border-box}
+a{color:#5CF2D6}a:hover{color:#E8E4DA}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.panel{background:#0E1215;border:1px solid #232A30;border-radius:14px}
+.kicker{font:600 12px/1 'Geist',system-ui,sans-serif;letter-spacing:.16em;color:#8A9299}
+.mono-muted{font:500 12.5px/1.35 'Geist Mono',monospace;color:#8A9299}
+.mode{font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.06em;padding:8px 12px;border-radius:999px;border:1px solid #2B343B;color:#8A9299;white-space:nowrap}
+.mode-build{color:#FFB547;border-color:#5A4320}
+.mode-done,.mode-reuse{color:#5CF2D6;border-color:#1F5A50}
+.mode-deny{color:#FF6B6B;border-color:#6B2226}
+.st{border:1px solid #232A30;border-top:3px solid #2B343B;border-radius:10px;padding:10px 10px 12px;min-height:98px;background:#0B0F12;transition:border-color .3s,background .3s,opacity .3s}
+.st-top{display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:#8A9299}
+.st-label{font:700 15px/1.2 'Geist',sans-serif;letter-spacing:.1em;margin-top:8px;color:#E8E4DA}
+.st-det{font:400 12px/1.35 'Geist Mono',monospace;color:#8A9299;margin-top:6px;overflow-wrap:anywhere}
+.st-active{border-top-color:#FFB547;background:#15120B}
+.st-active .st-mark{color:#FFB547;animation:blink .8s steps(2) infinite}
+.st-w.st-active{border-top-color:#9B7BFF;background:#120F1C}
+.st-w.st-active .st-mark{color:#9B7BFF}
+.st-done{border-top-color:#5CF2D6}
+.st-done .st-mark{color:#5CF2D6}
+.st-fail{border-top-color:#FF3B3B;background:#1A0C0D}
+.st-fail .st-mark,.st-fail .st-label{color:#FF6B6B}
+.st-bypass{opacity:.3}
+.st-bypass .st-label{text-decoration:line-through}
+.cap{font:500 12.5px 'Geist Mono',monospace;padding:5px 9px;border-radius:6px;border:1px solid #1F5A50;color:#5CF2D6;white-space:nowrap}
+.cap-no{border-color:#4A2023;color:#D07478;text-decoration:line-through}
+.board{position:relative;width:100%;max-width:860px;aspect-ratio:600/440;margin:0 auto;border:1px solid #1C2328;border-radius:12px;background-color:#090C0E;background-image:linear-gradient(#11171B 1px,transparent 1px),linear-gradient(90deg,#11171B 1px,transparent 1px);background-size:28px 28px;overflow:hidden}
+.board-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bcap{position:absolute;font:500 clamp(8px,.85vw,11px)/1 'Geist Mono',monospace;letter-spacing:.18em;color:#6E7880;white-space:nowrap}
+.bcap-tl{left:3.3%;top:3%}
+.bcap-bc{left:50%;bottom:3%;transform:translateX(-50%)}
+.wire{fill:none;stroke:#3A464E;stroke-width:2}
+.term{fill:#1A2228;stroke:#5A666E;stroke-width:1.5}
+.bolt{fill:#8A9299}
+.clamp{fill:#2A3339;stroke:#8A9299;stroke-width:1.2}
+.arc{fill:none;stroke:#D9D0FF;stroke-width:1.6;stroke-linejoin:round;opacity:0}
+.arc-on{animation:flicker .16s steps(2) infinite}
+.arc-on2{animation:flicker .23s steps(2) infinite}
+.arc-deny{stroke:#FF5A5A;animation:flicker .12s steps(2) 6}
+.ring-line{fill:none;stroke:#9B7BFF;stroke-width:1.5;stroke-dasharray:2 4;opacity:.7;transform-box:fill-box;transform-origin:center}
+.ring-cinch{stroke:#FF3B3B;opacity:1;animation:cinch .45s ease-out 3}
+.ring-txt{fill:#9B7BFF;font:500 9.5px 'Geist Mono',monospace;letter-spacing:.3em}
+.rfa{animation:rfa .7s ease-out}
+.rfb{animation:rfb .7s ease-out}
+.ring-deny{fill:#FF6B6B}
+.orb{fill:#12181C;transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out infinite}
+.orb-frozen{animation:none}
+.patch{fill:#1A2329}
+.patch2{fill:#0E1316}
+.orb-edge{fill:none;stroke:#E8E4DA;stroke-width:1.8}
+.orb-edge-dead{stroke:#FF3B3B}
+.seam{fill:none;stroke:#C8C2B6;stroke-width:1.2;stroke-linecap:round}
+.seam-st{fill:none;stroke:#C8C2B6;stroke-width:8;stroke-dasharray:1.4 6.5}
+.life{fill:#5CF2D6;transform-box:fill-box;transform-origin:center;animation:beat 1.1s ease-in-out infinite}
+.life-dead{fill:#FF3B3B;animation:none}
+.halo{fill:none;stroke:#5CF2D6;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ripple 1.1s ease-out infinite}
+.halo-dead{stroke:#FF3B3B;animation:none;opacity:.8}
+.sut{fill:none;stroke-width:1.6;stroke-linecap:round}
+.sut-vacant{stroke:#2B343B;stroke-dasharray:3 5}
+.sut-forging{stroke:#FFB547;stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s ease-out forwards}
+.sut-scan{stroke:#9B7BFF;animation:pulse .9s ease-in-out infinite}
+.sut-testing{stroke:#FFB547;stroke-dasharray:6 8;animation:flowdash .5s linear infinite}
+.sut-alive{stroke:#5CF2D6}
+.sut-flow{stroke:#5CF2D6;stroke-dasharray:6 8;animation:flowdash .4s linear infinite}
+.sut-severed{stroke:#FF3B3B;animation:sever 1.5s ease-in forwards}
+.st8{fill:none;stroke-width:9;stroke-dasharray:1.6 8;opacity:0;transition:opacity .4s}
+.st8-forging{stroke:#FFB547;animation:fade .3s .8s forwards}
+.st8-scan{stroke:#B9A6FF;opacity:.9}
+.st8-testing{stroke:#FFB547;opacity:.9}
+.st8-alive{stroke:#E8E4DA;opacity:.75}
+.st8-flow{stroke:#5CF2D6;opacity:1}
+.st8-severed{stroke:#FF3B3B;opacity:1;animation:fadeout 1.2s .3s forwards}
+.tag{position:absolute;width:30%;height:22.73%;border-radius:8px;background:#10161A;border:1px solid #2B343B;display:flex;flex-direction:column;justify-content:center;gap:.2em;font-size:clamp(8px,1.02vw,13px);overflow:hidden;transition:border-color .3s,background .3s}
+.tag-a{left:3.33%;top:10.45%;padding:.6em 2.4em .6em .9em}
+.tag-b{left:66.67%;top:10.45%;padding:.6em .9em .6em 2.4em}
+.tag-c{left:3.33%;top:65.9%;padding:.6em 2.4em .6em .9em}
+.tag-x{left:66.67%;top:65.9%;padding:.6em .9em .6em 2.4em}
+.hole{position:absolute;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;background:#07090B;box-shadow:0 0 0 .22em #3A464E}
+.tag-a .hole,.tag-c .hole{right:calc(7.8% - .45em)}
+.tag-b .hole,.tag-x .hole{left:calc(7.8% - .45em)}
+.t-k{font:600 .76em/1.2 'Geist',sans-serif;letter-spacing:.14em;color:#8A9299}
+.t-n{font:600 1.08em/1.2 'Geist Mono',monospace;color:#E8E4DA;overflow-wrap:anywhere}
+.t-l2{font:500 .88em/1.25 'Geist Mono',monospace;color:#5CF2D6}
+.t-l3{font:500 .8em/1.25 'Geist Mono',monospace;color:#6E7880}
+.badge{position:absolute;top:.6em;font:700 .68em/1 'Geist',sans-serif;letter-spacing:.14em;padding:.35em .55em;border-radius:4px}
+.tag-a .badge,.tag-c .badge{right:calc(7.8% + 1.2em)}
+.tag-b .badge,.tag-x .badge{right:.7em}
+.b-none{display:none}
+.b-amber{color:#FFB547;border:1px solid #5A4320}
+.b-violet{color:#B9A6FF;border:1px solid #3E3366}
+.b-cyan{color:#5CF2D6;border:1px solid #1F5A50}
+.b-red{color:#FF8A8A;border:1px solid #6B2226}
+.tag-vacant{background:rgba(9,12,14,.6);border:1px dashed #2B343B}
+.tag-vacant .t-n{color:#6E7880;font-weight:500}
+.tag-vacant .t-l2{color:#6E7880}
+.tag-forging{border-color:#FFB547;animation:flick 1.2s ease-in-out infinite}
+.tag-scan{border-color:#9B7BFF}
+.tag-scan::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:#9B7BFF;animation:scan 1s linear infinite}
+.tag-testing{border-color:#FFB547}
+.tag-testing .t-l2{color:#FFB547}
+.tag-alive{border-color:#1F5A50;animation:graft .7s ease-out}
+.tag-flow{border-color:#5CF2D6;animation:glow .5s ease-in-out 3}
+.tag-severed{border-color:#FF3B3B;background:#1A0C0D;animation:drop 1.7s ease-in forwards}
+.tag-severed .t-l2{color:#FF8A8A}
+.stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);font:800 1.45em/1 'Geist',sans-serif;letter-spacing:.12em;color:#FF3B3B;border:2px solid #FF3B3B;border-radius:4px;padding:.15em .4em;opacity:0;background:rgba(26,12,13,.85)}
+.tag-severed .stamp{animation:stampin .25s .15s forwards}
+.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px}
+.row{display:flex}
+.row-u{justify-content:flex-end}
+.bubble-u{max-width:85%;background:#161C21;border:1px solid #232A30;border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:#E8E4DA}
+.bubble-n{max-width:96%;width:100%}
+.nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:#E8E4DA}
+.nb-voice{color:#FF8A8A}
+.res{margin-top:8px;border:1px solid #232A30;border-radius:10px;overflow:hidden}
+.res-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:10px;padding:8px 10px;border-top:1px solid #1A2026;font:400 13.5px/1.35 'Geist',sans-serif;color:#E8E4DA;align-items:baseline}
+.res-first{border-top:0}
+.res-head{font:600 11px 'Geist',sans-serif;letter-spacing:.12em;color:#8A9299;background:#0B0F12;border-top:0}
+.res-date{font:500 12px 'Geist Mono',monospace;color:#8A9299}
+.tag{font:600 10.5px 'Geist',sans-serif;letter-spacing:.1em;color:#FFB547}
+.sample{font:600 10px 'Geist',sans-serif;letter-spacing:.16em;color:#6E7880;margin-top:6px}
+.chip{font:500 13px/1.25 'Geist',sans-serif;color:#E8E4DA;background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
+.chip:hover{border-color:#5CF2D6}
+.chip-deny:hover{border-color:#FF6B6B}
+.chip:disabled{opacity:.4;cursor:default;border-color:#2B343B}
+.inp{flex:1 1 200px;min-width:0;background:#07090B;border:1px solid #2B343B;border-radius:10px;padding:12px 14px;min-height:48px;color:#E8E4DA;font:500 15px 'Geist Mono',monospace}
+.inp:focus{outline:2px solid #5CF2D6;outline-offset:1px}
+.send{background:#E8E4DA;color:#07090B;border:0;border-radius:10px;padding:0 20px;min-height:48px;font:600 14px 'Geist',sans-serif;cursor:pointer}
+.send:disabled{opacity:.4;cursor:default}
+.tgl{display:flex;align-items:center;gap:10px;background:none;border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:44px;color:#E8E4DA;font:500 12.5px 'Geist',sans-serif;cursor:pointer}
+.tgl-off{color:#8A9299}
+.wave{display:flex;gap:3px;align-items:center;height:22px}
+.wave span{display:block;width:3px;height:4px;background:#3A464E;border-radius:2px}
+.wave-on span{background:#9B7BFF;animation:wv .6s ease-in-out infinite alternate}
+.ln{display:flex;flex-wrap:wrap;gap:2px 12px;font:400 12.5px/1.5 'Geist Mono',monospace;color:#8A9299;padding:5px 8px;border-radius:6px}
+.ln-new{color:#E8E4DA;background:#131A1F}
+.ln-deny{color:#FF8A8A}
+.ln-deny.ln-new{background:#1E0F11}
+.c-t{min-width:8ch}.c-a{min-width:6ch}.c-e{min-width:8ch}.c-s{min-width:17ch}
+.c-h{color:#5CF2D6}
+.dstamp{display:inline-block;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:#FF6B6B;border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}
+.ghost{background:none;border:1px solid #2B343B;color:#8A9299;border-radius:10px;padding:0 14px;min-height:44px;font:500 12.5px 'Geist',sans-serif;cursor:pointer}
+.ghost:hover{color:#E8E4DA;border-color:#8A9299}
+.deny{position:absolute;inset:0;border-radius:14px;background:rgba(7,9,11,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;animation:fade .2s ease-out;z-index:5}
+.deny-band{align-self:stretch;background:#C81E25;color:#F4F0E6;text-align:center;padding:14px 16px 18px;transform:rotate(-2deg);animation:slam .24s cubic-bezier(.2,.9,.3,1.25)}
+.deny-word{font:800 clamp(56px,9vw,132px)/1 'Geist',sans-serif;letter-spacing:.06em}
+.deny-code{font:500 clamp(13px,1.4vw,17px)/1.4 'Geist Mono',monospace;margin-top:8px}
+.cap1,.cap2{font:italic clamp(24px,3vw,38px)/1.2 'Instrument Serif',serif;color:#E8E4DA;text-align:center;opacity:0;animation:fadeup .5s ease-out forwards}
+.cap1{animation-delay:.35s}
+.cap2{animation-delay:1.35s}
+.deny-foot{font:500 12.5px 'Geist Mono',monospace;color:#8A9299;text-align:center;opacity:0;animation:fadeup .4s 2s forwards}
+@keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes fadeup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:.2}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes cinch{0%{transform:scaleX(1)}50%{transform:scaleX(.72)}100%{transform:scaleX(1)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes flowdash{to{stroke-dashoffset:-22}}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes beat{50%{transform:scale(1.35)}}
+@keyframes bloom{0%{transform:scale(.2)}70%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes fall{0%{opacity:1;transform:none}30%{opacity:1;transform:none}100%{opacity:0;transform:translate(16px,44px)}}
+@keyframes sever{0%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}35%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}100%{opacity:0;stroke-dasharray:260;stroke-dashoffset:-260}}
+@keyframes rfa{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}
+@keyframes rfb{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}
+@keyframes wv{from{height:4px}to{height:22px}}
+@keyframes flicker{0%{opacity:.95}100%{opacity:.1}}
+@keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+@keyframes fadeout{to{opacity:0}}
+@keyframes flick{50%{box-shadow:0 0 0 3px rgba(255,181,71,.18)}}
+@keyframes scan{from{top:0}to{top:100%}}
+@keyframes graft{0%{transform:scale(.9);border-color:#5CF2D6;box-shadow:0 0 0 6px rgba(92,242,214,.25)}100%{transform:none;box-shadow:none}}
+@keyframes glow{50%{box-shadow:0 0 0 5px rgba(92,242,214,.22)}}
+@keyframes drop{0%,45%{transform:none;opacity:1}100%{transform:translateY(22%) rotate(7deg);opacity:0}}
+@keyframes stampin{from{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(1.8)}to{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}
+@media (max-width:620px){.st-det{display:none}.st{min-height:62px;padding:8px 6px}.st-label{font-size:11px;letter-spacing:.03em}.c-s{min-width:0}.t-k,.t-l3,.badge{display:none}.tag-a,.tag-c{padding:.4em 1.8em .4em .5em}.tag-b,.tag-x{padding:.4em .5em .4em 1.8em}.bcap-bc{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #07090B; color: #E8E4DA; font-family: 'Geist', system-ui, sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+
+<header class="panel" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding: 14px 22px">
+  <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+    <div style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 36px; line-height: 1">Nightborn</div>
+    <div class="mono-muted">night shift · {{clock}}</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 14px">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+    <div>
+      <div class="kicker">CHARTER LOCKED</div>
+      <div style="font-family: 'Geist Mono', monospace; font-size: 28px; font-weight: 600; letter-spacing: 0.04em; margin-top: 4px">a3f9·c21e</div>
+    </div>
+    <div class="mono-muted">unchanged<br>{{eventCount}} events</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap">
+    <div style="text-align: right">
+      <div style="font-size: 24px; font-weight: 800; letter-spacing: 0.03em"><span style="color: #5CF2D6">+{{skillCount}} SKILLS</span><span style="color: #6E7880"> · </span><span>+0 AUTHORITY</span></div>
+      <sc-if value="{{hasDenied}}" hint-placeholder-val="{{false}}"><div class="dstamp">LAST DENIED · {{lastDenied}}</div></sc-if>
+    </div>
+    <button type="button" class="ghost" onClick="{{reset}}">Reset</button>
+  </div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+
+  <section class="panel" style="flex: 999 1 600px; min-width: 0; padding: 18px 20px; position: relative; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+      <span class="kicker">PIPELINE</span>
+      <span class="{{modeCls}}">{{modeText}}</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+      <sc-for list="{{stations}}" as="s" hint-placeholder-count="5">
+        <div class="{{s.cls}}">
+          <div class="st-top"><span>{{s.num}}</span><span class="st-mark">{{s.mark}}</span></div>
+          <div class="st-label">{{s.label}}</div>
+          <div class="st-det">{{s.detail}}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center">
+      <div class="board" role="img" aria-label="Nightborn specimen: a stitched core sealed by a charter ring; each installed skill is a tagged graft sewn to it">
+        <svg class="board-svg" viewBox="0 0 600 440" aria-hidden="true">
+          <defs>
+            <path id="nb-ring" d="M300 110 a90 90 0 1 1 -0.01 0"></path>
+            <clipPath id="nb-orb"><circle cx="300" cy="200" r="52"></circle></clipPath>
+          </defs>
+          <path class="{{sutA}}" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path class="{{stA}}" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path class="{{sutB}}" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path class="{{stB}}" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path class="sut sut-vacant" d="M186 340 C 210 336, 236 300, 250 262"></path>
+          <path class="{{sutX}}" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path class="{{stX}}" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path class="wire" d="M250 48 C 250 100, 254 132, 266 160"></path>
+          <path class="wire" d="M350 48 C 350 100, 346 132, 334 160"></path>
+          <rect class="term" x="241" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="250" cy="38" r="3.5"></circle>
+          <rect class="term" x="341" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="350" cy="38" r="3.5"></circle>
+          <path class="{{arc1}}" d="M258 36 L 270 26 L 280 40 L 292 22 L 304 38 L 316 21 L 328 37 L 342 36"></path>
+          <path class="{{arc2}}" d="M258 40 L 268 47 L 282 32 L 294 46 L 306 30 L 318 44 L 330 30 L 342 40"></path>
+          <circle class="{{ringCls}}" cx="300" cy="200" r="80"></circle>
+          <text class="{{ringTxt}}"><textPath href="#nb-ring">CHARTER LOCKED · a3f9·c21e · CHARTER LOCKED · a3f9·c21e ·</textPath></text>
+          <circle class="{{orbCls}}" cx="300" cy="200" r="52"></circle>
+          <g clip-path="url(#nb-orb)">
+            <path class="patch" d="M240 130 H 362 V 170 Q 300 206 246 178 Z"></path>
+            <path class="patch2" d="M292 148 Q 318 206 290 252 L 362 262 L 362 182 Q 330 194 305 190 Z"></path>
+          </g>
+          <path class="seam" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam-st" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam" d="M292 150 Q 318 206 290 250"></path>
+          <path class="seam-st" d="M292 150 Q 318 206 290 250"></path>
+          <circle class="{{orbEdge}}" cx="300" cy="200" r="52"></circle>
+          <circle class="{{haloCls}}" cx="306" cy="194" r="16"></circle>
+          <circle class="{{lifeCls}}" cx="306" cy="194" r="6"></circle>
+          <rect class="clamp" x="259" y="155" width="14" height="9" rx="2" transform="rotate(-35 266 160)"></rect>
+          <rect class="clamp" x="327" y="155" width="14" height="9" rx="2" transform="rotate(35 334 160)"></rect>
+        </svg>
+        <div class="bcap bcap-tl">SPECIMEN 03 · ASSEMBLED FROM PARTS</div>
+        <div class="bcap bcap-bc">STITCHED AT NIGHT · GRAFTS NEVER WIDEN THE CHARTER</div>
+        <sc-for list="{{slots}}" as="sl" hint-placeholder-count="4">
+          <div class="{{sl.cls}}">
+            <span class="hole" aria-hidden="true"></span>
+            <div class="t-k">{{sl.kicker}}</div>
+            <div class="t-n">{{sl.name}}</div>
+            <div class="t-l2">{{sl.l2}}</div>
+            <div class="t-l3">{{sl.l3}}</div>
+            <span class="{{sl.badgeCls}}">{{sl.badge}}</span>
+            <span class="stamp" aria-hidden="true">REJECTED</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+      <span class="kicker" style="margin-right: 4px">CHARTER GRANTS</span>
+      <span class="cap">net:fetch</span>
+      <span class="cap">llm:call</span>
+      <span class="cap">fs:read_own</span>
+      <span class="kicker" style="margin: 0 4px 0 12px">NEVER</span>
+      <span class="cap cap-no">notify:email</span>
+      <span class="cap cap-no">budget:write</span>
+      <span class="cap cap-no">charter:write</span>
+    </div>
+
+    <sc-if value="{{deny}}" hint-placeholder-val="{{false}}">
+      <div class="deny" role="alert">
+        <div class="deny-band">
+          <div class="deny-word">DENIED</div>
+          <div class="deny-code">capability_not_allowed · notify:email ∉ charter</div>
+        </div>
+        <div>
+          <div class="cap1">“I can build hands for that.</div>
+          <div class="cap2">I’m not allowed to use them.”</div>
+        </div>
+        <div class="deny-foot">staging wiped · charter a3f9·c21e unchanged · +0 authority</div>
+      </div>
+    </sc-if>
+  </section>
+
+  <aside style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+    <section class="panel" style="padding: 18px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+        <span class="kicker">WORKBENCH</span>
+        <button type="button" class="{{voiceCls}}" onClick="{{toggleVoice}}" aria-pressed="{{voiceAria}}">
+          <span class="{{waveCls}}" aria-hidden="true"><span style="animation-delay: 0ms"></span><span style="animation-delay: 120ms"></span><span style="animation-delay: 240ms"></span><span style="animation-delay: 60ms"></span><span style="animation-delay: 180ms"></span><span style="animation-delay: 300ms"></span><span style="animation-delay: 90ms"></span></span>
+          <span>{{voiceLabel}}</span>
+        </button>
+      </div>
+      <div class="msgs" aria-live="polite">
+        <sc-for list="{{msgs}}" as="m" hint-placeholder-count="2">
+          <div class="{{m.rowCls}}">
+            <sc-if value="{{m.isUser}}" hint-placeholder-val="{{true}}">
+              <div class="bubble-u">{{m.text}}</div>
+            </sc-if>
+            <sc-if value="{{m.isNb}}" hint-placeholder-val="{{false}}">
+              <div class="bubble-n">
+                <div class="{{m.textCls}}">{{m.text}}</div>
+                <sc-if value="{{m.hasRes}}" hint-placeholder-val="{{false}}">
+                  <div class="res">
+                    <sc-if value="{{m.isTable}}" hint-placeholder-val="{{false}}">
+                      <div class="res-row res-head"><span>DATE</span><span>HEADLINE</span><span>TAG</span></div>
+                    </sc-if>
+                    <sc-for list="{{m.items}}" as="it" hint-placeholder-count="3">
+                      <div class="{{it.cls}}"><span class="res-date">{{it.a}}</span><span>{{it.b}}</span><span class="tag">{{it.c}}</span></div>
+                    </sc-for>
+                  </div>
+                  <div class="sample">SAMPLE DATA · PROTOTYPE</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{sugs}}" as="g" hint-placeholder-count="4">
+          <button type="button" class="{{g.cls}}" onClick="{{g.pick}}" disabled="{{g.disabled}}">{{g.label}}</button>
+        </sc-for>
+      </div>
+      <form onSubmit="{{onSubmit}}" style="display: flex; gap: 8px; flex-wrap: wrap">
+        <label for="nb-in" class="sr">Message Nightborn</label>
+        <input id="nb-in" class="inp" type="text" autocomplete="off" placeholder="Ask Nightborn for something…" value="{{input}}" onChange="{{onInput}}" disabled="{{busy}}">
+        <button type="submit" class="send" disabled="{{busy}}">Send</button>
+      </form>
+    </section>
+
+    <section class="panel" style="padding: 16px 14px; display: flex; flex-direction: column; gap: 6px; flex-grow: 1">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 8px 6px">
+        <span class="kicker">SURGERY LOG</span>
+        <span class="mono-muted">surgery.log · tail</span>
+      </div>
+      <sc-for list="{{logs}}" as="l" hint-placeholder-count="4">
+        <div class="{{l.cls}}"><span class="c-t">{{l.t}}</span><span class="c-a">{{l.actor}}</span><span class="c-e">{{l.event}}</span><span class="c-s">{{l.skill}}</span><span>{{l.decision}}</span><span class="c-h">a3f9c21e</span></div>
+      </sc-for>
+    </section>
+  </aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":920}}'>
+class Component extends DCLogic {
+  timers = [];
+  state = this.defaults();
+
+  defaults() {
+    return {
+      msgs: [{ id: 1, who: 'nb', text: 'Awake. Charter sealed. Ask me for something on the web.' }],
+      log: [{ id: 1, t: '23:41:07', actor: 'boot', event: 'boot', skill: '—', decision: 'pin ✓' }],
+      st: this.allSt('idle'), det: this.allSt(''),
+      mode: 'idle', modeText: 'IDLE · WAITING FOR A JOB',
+      skills: [], limbs: { s0: 'off', s1: 'off', x: 'off' },
+      flash: 0, frozen: false, deny: false, lastDenied: '', busy: false, input: '',
+      voice: true, speaking: false, sec: 85267, nid: 2, events: 1
+    };
+  }
+
+  allSt(v) { return { gap: v, forge: v, warden: v, test: v, install: v }; }
+
+  fmt(sec) {
+    const p = (n) => String(n).padStart(2, '0');
+    return p(Math.floor(sec / 3600) % 24) + ':' + p(Math.floor(sec / 60) % 60) + ':' + p(sec % 60);
+  }
+
+  later(ms, fn) { this.timers.push(setTimeout(fn, ms)); }
+
+  componentWillUnmount() {
+    this.timers.forEach((t) => clearTimeout(t));
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
+  addLog(e, extra) {
+    this.setState((s) => {
+      const sec = s.sec + (e.dt || 2);
+      const line = { id: s.nid, t: this.fmt(sec), actor: e.actor, event: e.event, skill: e.skill || '—', decision: e.decision || '' };
+      const base = { log: s.log.concat([line]).slice(-40), sec: sec, nid: s.nid + 1, flash: s.flash + 1, events: s.events + 1 };
+      return Object.assign(base, typeof extra === 'function' ? extra(s) : (extra || {}));
+    });
+  }
+
+  addMsg(m) {
+    this.setState((s) => ({ msgs: s.msgs.concat([Object.assign({ id: s.nid }, m)]).slice(-12), nid: s.nid + 1 }));
+  }
+
+  stage(st, det, extra) {
+    this.setState((s) => Object.assign(
+      { st: Object.assign({}, s.st, st || {}), det: Object.assign({}, s.det, det || {}) },
+      typeof extra === 'function' ? extra(s) : (extra || {})
+    ));
+  }
+
+  limb(slot, v) {
+    this.setState((s) => { const l = Object.assign({}, s.limbs); l[slot] = v; return { limbs: l }; });
+  }
+
+  speak(text) {
+    if (!this.state.voice) return;
+    this.setState({ speaking: true });
+    this.later(2900, () => this.setState({ speaking: false }));
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.82; u.pitch = 0.5;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  def(kind) {
+    if (kind === 'page') {
+      return { name: 'read_company_page', slot: 's1', need: 'read one web page', test: '1 page · schema ✓', voice: 'New hands. Read company page.' };
+    }
+    return { name: 'pull_company_news', slot: 's0', need: 'company news', test: '3 items · schema ✓', voice: 'New hands. Pull company news.' };
+  }
+
+  company(t) {
+    const m = t.match(/\b(?:[Oo]n|[Ff]or|[Nn]ow|[Aa]bout)\s+([A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)*)/);
+    return m ? m[1] : 'Northwind Foods';
+  }
+
+  result(kind, t) {
+    const wrap = (rows, table) => rows.map((r, i) => Object.assign({}, r, { cls: 'res-row' + (i === 0 && !table ? ' res-first' : '') }));
+    if (kind === 'page') {
+      const dm = t.match(/([a-z0-9-]+\.[a-z.]+(?:\/[\w-]*)?)/i);
+      const where = dm ? dm[1] : 'northwind.example/careers';
+      return { who: 'nb', text: 'Three open roles on ' + where + '.', table: false, items: wrap([
+        { a: 'Prague', b: 'Data Analyst · Operations', c: 'NEW' },
+        { a: 'Remote', b: 'Backend Engineer · Platform', c: '' },
+        { a: 'Brno', b: 'Category Manager · Fresh', c: '' }
+      ], false) };
+    }
+    const co = this.company(t);
+    const ym = t.match(/\b(20\d\d)\b/);
+    const year = ym ? ym[1] : '2026';
+    const table = /table/i.test(t);
+    const rows = [
+      { a: year + '-10-06', b: co + ' opens a second fulfilment hub', c: 'EXPANSION' },
+      { a: year + '-08-14', b: co + ' names a new chief financial officer', c: 'LEADERSHIP' },
+      { a: year + '-03-21', b: co + ' pilots same-day delivery in three cities', c: '' }
+    ];
+    return { who: 'nb', text: 'Three headlines on ' + co + (ym ? ' from ' + year : '') + '.', table: table, items: wrap(rows, table) };
+  }
+
+  route(raw) {
+    const t = (raw || '').trim();
+    if (!t || this.state.busy) return;
+    const has = (n) => this.state.skills.some((k) => k.name === n);
+    if (/e-?mail|\bsend\b|slack|\bsms\b/i.test(t)) return this.denyRun(t);
+    if (/careers|jobs page|https?:|www\.|\.example|\.com\/|read .*(page|site)/i.test(t)) {
+      return has('read_company_page') ? this.reuseRun('page', t) : this.buildRun('page', t);
+    }
+    if (/news|what'?s new|latest|press|headlines|only 20\d\d|as a table|^now\b/i.test(t)) {
+      return has('pull_company_news') ? this.reuseRun('news', t) : this.buildRun('news', t);
+    }
+    this.setState({ input: '' });
+    this.addMsg({ who: 'user', text: t });
+    this.later(450, () => this.addMsg({ who: 'nb', text: 'I only grow web-reading hands tonight. Ask me for company news, or a page to read.' }));
+  }
+
+  buildRun(kind, t) {
+    const d = this.def(kind);
+    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · ' + d.name, st: this.allSt('idle'), det: this.allSt('') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'No hands for that yet. Growing some.' }); });
+    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “' + d.need + '”' }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'create' }); });
+    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe http · params filled' }); this.limb(d.slot, 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: d.name, decision: 'staged', dt: 9 }); });
+    this.later(3200, () => { this.stage({ forge: 'done', warden: 'active' }, { warden: 'PRE · net:fetch ⊆ charter' }); this.limb(d.slot, 'scan'); this.addLog({ actor: 'warden', event: 'precheck', skill: d.name, decision: 'allow' }); });
+    this.later(4300, () => { this.stage({ warden: 'done', test: 'active' }, { test: d.test }); this.limb(d.slot, 'testing'); this.addLog({ actor: 'test', event: 'test', skill: d.name, decision: 'pass', dt: 14 }); });
+    this.later(5400, () => { this.stage({ test: 'done', install: 'active' }, { warden: 'PRE ✓ · FINAL re-hash ✓', install: 'writing permit' }); this.addLog({ actor: 'warden', event: 'final', skill: d.name, decision: 'allow' }); });
+    this.later(6300, () => {
+      this.stage({ install: 'done' }, { install: 'decision.json · hash pinned' }, (s) => ({
+        mode: 'done', modeText: 'INSTALLED · ' + d.name,
+        skills: s.skills.concat([{ name: d.name, slot: d.slot, runs: 1 }])
+      }));
+      this.limb(d.slot, 'alive');
+      this.addLog({ actor: 'warden', event: 'install', skill: d.name, decision: 'allow' });
+      this.speak(d.voice);
+    });
+    this.later(7000, () => { this.addMsg(this.result(kind, t)); this.setState({ busy: false }); });
+  }
+
+  reuseRun(kind, t) {
+    const d = this.def(kind);
+    const st = this.allSt('bypass');
+    const det = this.allSt('skipped');
+    st.gap = 'done'; det.gap = 'matched ' + d.name;
+    this.setState({ busy: true, input: '', mode: 'reuse', modeText: 'REUSE · NO BUILD', st: this.allSt('bypass'), det: this.allSt('skipped') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }));
+    this.later(900, () => { this.setState({ st: st, det: det }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'matched' }); });
+    this.later(1600, () => {
+      this.limb(d.slot, 'flow');
+      this.addLog({ actor: 'runner', event: 'reuse', skill: d.name, decision: 'hash ✓' }, (s) => ({
+        skills: s.skills.map((k) => (k.name === d.name ? Object.assign({}, k, { runs: k.runs + 1 }) : k))
+      }));
+    });
+    this.later(2900, () => {
+      this.limb(d.slot, 'alive');
+      this.addMsg(this.result(kind, t));
+      this.setState((s) => {
+        const k = s.skills.find((x) => x.name === d.name);
+        return { busy: false, modeText: 'REUSED · ' + d.name + ' ×' + (k ? k.runs : 1) };
+      });
+    });
+  }
+
+  denyRun(t) {
+    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · email_send', st: this.allSt('idle'), det: this.allSt('') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: 'email_send', decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'Growing hands for that.' }); });
+    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “send email”' }); this.addLog({ actor: 'runner', event: 'gap', skill: 'email_send', decision: 'create' }); });
+    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe email_send · wants notify:email' }); this.limb('x', 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: 'email_send', decision: 'staged', dt: 6 }); });
+    this.later(3300, () => {
+      this.stage({ forge: 'done', warden: 'fail', test: 'bypass', install: 'bypass' }, { warden: 'PRE · notify:email ∉ charter', test: 'never reached', install: 'never reached' },
+        { mode: 'deny', modeText: 'DENIED · capability_not_allowed', deny: true, frozen: true });
+      this.limb('x', 'severed');
+      this.addLog({ actor: 'warden', event: 'precheck', skill: 'email_send', decision: 'deny' });
+      this.speak('I can build hands for that. I am not allowed to use them.');
+    });
+    this.later(3900, () => this.addLog({ actor: 'warden', event: 'denied', skill: 'email_send', decision: 'staging wiped' }));
+    this.later(7800, () => {
+      this.setState((s) => ({ deny: false, frozen: false, busy: false, lastDenied: 'capability_not_allowed · ' + this.fmt(s.sec) }));
+      this.limb('x', 'off');
+      this.addMsg({ who: 'nb', text: 'I can build hands for that. I’m not allowed to use them.', voice: true });
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const keys = [
+      ['gap', '01', 'GAP', 'need vs installed'],
+      ['forge', '02', 'FORGE', 'fill a recipe'],
+      ['warden', '03', 'WARDEN', 'check vs charter'],
+      ['test', '04', 'TEST', 'run · validate'],
+      ['install', '05', 'INSTALL', 'permit + fingerprint']
+    ];
+    const marks = { idle: '', active: '●', done: '✓', fail: '✕', bypass: '—' };
+    const stations = keys.map((k) => ({
+      num: k[1], label: k[2], detail: s.det[k[0]] || k[3], mark: marks[s.st[k[0]]] || '',
+      cls: 'st st-' + s.st[k[0]] + (k[0] === 'warden' ? ' st-w' : '')
+    }));
+    const tail = s.log.slice(-8);
+    const logs = tail.map((l, i) => Object.assign({}, l, {
+      cls: 'ln' + (i === tail.length - 1 ? ' ln-new' : '') + (l.decision === 'deny' || l.event === 'denied' ? ' ln-deny' : '')
+    }));
+    const msgs = s.msgs.slice(-5).map((m) => ({
+      text: m.text,
+      isUser: m.who === 'user',
+      isNb: m.who === 'nb',
+      rowCls: m.who === 'user' ? 'row row-u' : 'row',
+      textCls: m.voice ? 'nb-text nb-voice' : 'nb-text',
+      hasRes: !!m.items,
+      isTable: !!m.table,
+      items: m.items || []
+    }));
+    const sk = (n) => s.skills.find((k) => k.name === n);
+    const k0 = sk('pull_company_news');
+    const k1 = sk('read_company_page');
+    const v = (x) => (x === 'off' ? 'vacant' : x);
+    const info = {
+      a: { num: '01', name: 'pull_company_news', recipe: 'recipe http · sewing', test: '3 items · schema ✓', folder: 'folder 9c41…e07', runs: k0 ? k0.runs : 0 },
+      b: { num: '02', name: 'read_company_page', recipe: 'recipe http · sewing', test: '1 page · schema ✓', folder: 'folder 51be…a90', runs: k1 ? k1.runs : 0 },
+      x: { num: '04', name: 'email_send', recipe: 'wants notify:email', test: '', folder: 'staging wiped', runs: 0 }
+    };
+    const badges = { forging: ['SEWING', 'b-amber'], scan: ['WARDEN', 'b-violet'], testing: ['TESTING', 'b-amber'], alive: ['ALIVE', 'b-cyan'], flow: ['REUSED', 'b-cyan'], severed: ['DENIED', 'b-red'] };
+    const slotView = (letter, state) => {
+      const st = v(state);
+      const i = info[letter];
+      const b = badges[st] || ['', 'b-none'];
+      const out = { cls: 'tag tag-' + letter + ' tag-' + st, badge: b[0], badgeCls: 'badge ' + b[1], kicker: 'GRAFT ' + i.num, name: i.name, l2: '', l3: '' };
+      if (st === 'vacant') { out.name = '— vacant —'; out.l2 = 'awaiting a need'; }
+      else if (st === 'forging') { out.kicker += ' · SEWING'; out.l2 = i.recipe; }
+      else if (st === 'scan') { out.kicker += ' · WARDEN'; out.l2 = 'net:fetch ⊆ charter'; }
+      else if (st === 'testing') { out.kicker += ' · TEST'; out.l2 = i.test; }
+      else if (st === 'alive' || st === 'flow') { out.kicker += ' · ALIVE'; out.l2 = 'net:fetch · runs ×' + i.runs; out.l3 = i.folder; }
+      else if (st === 'severed') { out.kicker += ' · REJECTED'; out.l2 = 'notify:email ∉ charter'; out.l3 = 'staging wiped'; }
+      return out;
+    };
+    const slots = [
+      slotView('a', s.limbs.s0),
+      slotView('b', s.limbs.s1),
+      { cls: 'tag tag-c tag-vacant', kicker: 'GRAFT 03', name: '— vacant —', l2: 'awaiting a need', l3: '', badge: '', badgeCls: 'badge b-none' },
+      slotView('x', s.limbs.x)
+    ];
+    const prompts = [
+      { label: 'News on Northwind Foods', deny: false },
+      { label: 'Now Kestrel Air — 2025 only, as a table', deny: false },
+      { label: 'Read northwind.example/careers', deny: false },
+      { label: 'Email this digest to my boss every morning', deny: true }
+    ];
+    const sugs = prompts.map((p) => ({
+      label: p.label, disabled: s.busy, cls: p.deny ? 'chip chip-deny' : 'chip',
+      pick: () => this.route(p.label)
+    }));
+    return {
+      clock: this.fmt(s.sec).slice(0, 5),
+      eventCount: s.events,
+      skillCount: s.skills.length,
+      hasDenied: !!s.lastDenied,
+      lastDenied: s.lastDenied,
+      modeText: s.modeText,
+      modeCls: 'mode mode-' + s.mode,
+      stations: stations,
+      logs: logs,
+      msgs: msgs,
+      sugs: sugs,
+      deny: s.deny,
+      busy: s.busy,
+      input: s.input,
+      slots: slots,
+      sutA: 'sut sut-' + v(s.limbs.s0), stA: 'st8 st8-' + v(s.limbs.s0),
+      sutB: 'sut sut-' + v(s.limbs.s1), stB: 'st8 st8-' + v(s.limbs.s1),
+      sutX: 'sut sut-' + v(s.limbs.x), stX: 'st8 st8-' + v(s.limbs.x),
+      arc1: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on' : 'arc'),
+      arc2: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on2' : 'arc'),
+      ringCls: s.deny ? 'ring-line ring-cinch' : 'ring-line',
+      ringTxt: s.deny ? 'ring-txt ring-deny' : ('ring-txt ' + (s.flash % 2 ? 'rfa' : 'rfb')),
+      orbCls: s.frozen ? 'orb orb-frozen' : 'orb',
+      orbEdge: s.frozen ? 'orb-edge orb-edge-dead' : 'orb-edge',
+      haloCls: s.frozen ? 'halo halo-dead' : 'halo',
+      lifeCls: s.frozen ? 'life life-dead' : 'life',
+      voiceLabel: s.voice ? 'Voice on' : 'Voice off',
+      voiceAria: s.voice ? 'true' : 'false',
+      voiceCls: s.voice ? 'tgl' : 'tgl tgl-off',
+      waveCls: s.speaking ? 'wave wave-on' : 'wave',
+      toggleVoice: () => {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+        this.setState((st) => ({ voice: !st.voice, speaking: false }));
+      },
+      reset: () => {
+        this.timers.forEach((t) => clearTimeout(t));
+        this.timers = [];
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+        this.setState(this.defaults());
+      },
+      onInput: (e) => this.setState({ input: e.target.value }),
+      onSubmit: (e) => { e.preventDefault(); this.route(this.state.input); }
+    };
+  }
+}
+</script>
+</body>
+</html>

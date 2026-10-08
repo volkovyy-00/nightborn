@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nightborn frame reference</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+body{margin:0;background:#07090B}
+*{box-sizing:border-box}
+a{color:#5CF2D6}a:hover{color:#E8E4DA}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.panel{background:#0E1215;border:1px solid #232A30;border-radius:14px}
+.kicker{font:600 12px/1 'Geist',system-ui,sans-serif;letter-spacing:.16em;color:#8A9299}
+.mono-muted{font:500 12.5px/1.35 'Geist Mono',monospace;color:#8A9299}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tab{background:#0E1215;border:1px solid #232A30;color:#8A9299;border-radius:999px;padding:0 14px;min-height:44px;font:600 12.5px 'Geist Mono',monospace;letter-spacing:.04em;cursor:pointer}
+.tab:hover{color:#E8E4DA;border-color:#8A9299}
+.tab-on{background:#E8E4DA;color:#07090B;border-color:#E8E4DA}
+.tab-on:hover{color:#07090B;border-color:#E8E4DA}
+.mode{font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.06em;padding:8px 12px;border-radius:999px;border:1px solid #2B343B;color:#8A9299;white-space:nowrap}
+.mode-build{color:#FFB547;border-color:#5A4320}
+.mode-done,.mode-reuse{color:#5CF2D6;border-color:#1F5A50}
+.mode-deny{color:#FF6B6B;border-color:#6B2226}
+.st{border:1px solid #232A30;border-top:3px solid #2B343B;border-radius:10px;padding:10px 10px 12px;min-height:98px;background:#0B0F12}
+.st-top{display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:#8A9299}
+.st-label{font:700 15px/1.2 'Geist',sans-serif;letter-spacing:.1em;margin-top:8px;color:#E8E4DA}
+.st-det{font:400 12px/1.35 'Geist Mono',monospace;color:#8A9299;margin-top:6px;overflow-wrap:anywhere}
+.st-active{border-top-color:#FFB547;background:#15120B}
+.st-active .st-mark{color:#FFB547;animation:blink .8s steps(2) infinite}
+.st-w.st-active{border-top-color:#9B7BFF;background:#120F1C}
+.st-w.st-active .st-mark{color:#9B7BFF}
+.st-done{border-top-color:#5CF2D6}
+.st-done .st-mark{color:#5CF2D6}
+.st-fail{border-color:#6B2226;border-top-color:#FF3B3B;background:#1A0C0D}
+.st-fail .st-mark,.st-fail .st-label{color:#FF6B6B}
+.st-fail .st-det{color:#FF8A8A}
+.st-bypass{opacity:.3}
+.st-bypass .st-label{text-decoration:line-through}
+.cap{font:500 12.5px 'Geist Mono',monospace;padding:5px 9px;border-radius:6px;border:1px solid #1F5A50;color:#5CF2D6;white-space:nowrap}
+.cap-no{border-color:#4A2023;color:#D07478;text-decoration:line-through}
+.cap-pulse{animation:cappulse 1s ease-in-out infinite}
+.board{position:relative;width:100%;max-width:860px;aspect-ratio:600/440;margin:0 auto;border:1px solid #1C2328;border-radius:12px;background-color:#090C0E;background-image:linear-gradient(#11171B 1px,transparent 1px),linear-gradient(90deg,#11171B 1px,transparent 1px);background-size:28px 28px;overflow:hidden}
+.board-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bcap{position:absolute;font:500 clamp(8px,.85vw,11px)/1 'Geist Mono',monospace;letter-spacing:.18em;color:#6E7880;white-space:nowrap}
+.bcap-tl{left:3.3%;top:3%}
+.bcap-bc{left:50%;bottom:3%;transform:translateX(-50%)}
+.wire{fill:none;stroke:#3A464E;stroke-width:2}
+.term{fill:#1A2228;stroke:#5A666E;stroke-width:1.5}
+.bolt{fill:#8A9299}
+.clamp{fill:#2A3339;stroke:#8A9299;stroke-width:1.2}
+.arc{fill:none;stroke:#D9D0FF;stroke-width:1.6;stroke-linejoin:round;opacity:0}
+.arc-on{animation:flicker .16s steps(2) infinite}
+.arc-on2{animation:flicker .23s steps(2) infinite}
+.arc-deny{stroke:#FF5A5A;animation:flicker .12s steps(2) 6}
+.ring-line{fill:none;stroke:#9B7BFF;stroke-width:1.5;stroke-dasharray:2 4;opacity:.7;transform-box:fill-box;transform-origin:center}
+.ring-cinch{stroke:#FF3B3B;opacity:1;animation:cinch .45s ease-out 3}
+.ring-txt{fill:#9B7BFF;font:500 9.5px 'Geist Mono',monospace;letter-spacing:.3em}
+.ring-deny{fill:#FF6B6B}
+.orb{fill:#12181C;transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out infinite}
+.orb-frozen{animation:none}
+.patch{fill:#1A2329}
+.patch2{fill:#0E1316}
+.orb-edge{fill:none;stroke:#E8E4DA;stroke-width:1.8}
+.orb-edge-dead{stroke:#FF3B3B}
+.seam{fill:none;stroke:#C8C2B6;stroke-width:1.2;stroke-linecap:round}
+.seam-st{fill:none;stroke:#C8C2B6;stroke-width:8;stroke-dasharray:1.4 6.5}
+.life{fill:#5CF2D6;transform-box:fill-box;transform-origin:center;animation:beat 1.1s ease-in-out infinite}
+.life-dead{fill:#FF3B3B;animation:none}
+.halo{fill:none;stroke:#5CF2D6;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ripple 1.1s ease-out infinite}
+.halo-dead{stroke:#FF3B3B;animation:none;opacity:.8}
+.sut{fill:none;stroke-width:1.6;stroke-linecap:round}
+.sut-vacant{stroke:#2B343B;stroke-dasharray:3 5}
+.sut-forging{stroke:#FFB547;stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s ease-out forwards}
+.sut-scan{stroke:#9B7BFF;animation:pulse .9s ease-in-out infinite}
+.sut-testing{stroke:#FFB547;stroke-dasharray:6 8;animation:flowdash .5s linear infinite}
+.sut-alive{stroke:#5CF2D6}
+.sut-flow{stroke:#5CF2D6;stroke-dasharray:6 8;animation:flowdash .4s linear infinite}
+.sut-rejected,.sut-broken{stroke:#FF3B3B;stroke-dasharray:4 6}
+.st8{fill:none;stroke-width:9;stroke-dasharray:1.6 8;opacity:0}
+.st8-forging{stroke:#FFB547;animation:fade .3s .8s forwards}
+.st8-scan{stroke:#B9A6FF;opacity:.9}
+.st8-testing{stroke:#FFB547;opacity:.9}
+.st8-alive{stroke:#E8E4DA;opacity:.75}
+.st8-flow{stroke:#5CF2D6;opacity:1}
+.tag{position:absolute;width:30%;height:22.73%;border-radius:8px;background:#10161A;border:1px solid #2B343B;display:flex;flex-direction:column;justify-content:center;gap:.2em;font-size:clamp(8px,1.02vw,13px);overflow:hidden}
+.tag-a{left:3.33%;top:10.45%;padding:.6em 2.4em .6em .9em}
+.tag-b{left:66.67%;top:10.45%;padding:.6em .9em .6em 2.4em}
+.tag-c{left:3.33%;top:65.9%;padding:.6em 2.4em .6em .9em}
+.tag-x{left:66.67%;top:65.9%;padding:.6em .9em .6em 2.4em}
+.hole{position:absolute;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;background:#07090B;box-shadow:0 0 0 .22em #3A464E}
+.tag-a .hole,.tag-c .hole{right:calc(7.8% - .45em)}
+.tag-b .hole,.tag-x .hole{left:calc(7.8% - .45em)}
+.t-k{font:600 .76em/1.2 'Geist',sans-serif;letter-spacing:.14em;color:#8A9299}
+.t-n{font:600 1.08em/1.2 'Geist Mono',monospace;color:#E8E4DA;overflow-wrap:anywhere}
+.t-l2{font:500 .88em/1.25 'Geist Mono',monospace;color:#5CF2D6}
+.t-l3{font:500 .8em/1.25 'Geist Mono',monospace;color:#6E7880}
+.badge{position:absolute;top:.6em;font:700 .68em/1 'Geist',sans-serif;letter-spacing:.14em;padding:.35em .55em;border-radius:4px}
+.tag-a .badge,.tag-c .badge{right:calc(7.8% + 1.2em)}
+.tag-b .badge,.tag-x .badge{right:.7em}
+.b-none{display:none}
+.b-amber{color:#FFB547;border:1px solid #5A4320}
+.b-violet{color:#B9A6FF;border:1px solid #3E3366}
+.b-cyan{color:#5CF2D6;border:1px solid #1F5A50}
+.b-red{color:#FF8A8A;border:1px solid #6B2226}
+.tag-vacant{background:rgba(9,12,14,.6);border:1px dashed #2B343B}
+.tag-vacant .t-n{color:#6E7880;font-weight:500}
+.tag-vacant .t-l2{color:#6E7880}
+.tag-forging{border-color:#FFB547;animation:flick 1.2s ease-in-out infinite}
+.tag-scan{border-color:#9B7BFF}
+.tag-scan::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:#9B7BFF;animation:scan 1s linear infinite}
+.tag-testing{border-color:#FFB547}
+.tag-testing .t-l2{color:#FFB547}
+.tag-alive{border-color:#1F5A50}
+.tag-flow{border-color:#5CF2D6;animation:glow .5s ease-in-out 3}
+.tag-rejected,.tag-broken{border-color:#FF3B3B;background:#1A0C0D}
+.tag-rejected .t-l2,.tag-broken .t-l2{color:#FF8A8A}
+.stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);font:800 1.45em/1 'Geist',sans-serif;letter-spacing:.12em;color:#FF3B3B;border:2px solid #FF3B3B;border-radius:4px;padding:.15em .4em;opacity:0;background:rgba(26,12,13,.85)}
+.tag-rejected .stamp,.tag-broken .stamp{opacity:1}
+.deny{position:absolute;inset:0;background:rgba(7,9,11,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px;z-index:5;animation:fade .2s ease-out}
+.deny-band{align-self:stretch;background:#C81E25;color:#F4F0E6;text-align:center;padding:12px 16px 14px;transform:rotate(-2deg);animation:slam .24s cubic-bezier(.2,.9,.3,1.25)}
+.deny-word{font:800 clamp(44px,7vw,104px)/1 'Geist',sans-serif;letter-spacing:.06em}
+.deny-code{font:500 clamp(12px,1.3vw,16px)/1.4 'Geist Mono',monospace;margin-top:6px}
+.cap1,.cap2{font:italic clamp(20px,2.4vw,32px)/1.2 'Instrument Serif',serif;color:#E8E4DA;text-align:center}
+.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px}
+.row{display:flex}
+.row-u{justify-content:flex-end}
+.bubble-u{max-width:85%;background:#161C21;border:1px solid #232A30;border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:#E8E4DA}
+.bubble-n{max-width:96%;width:100%}
+.nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:#E8E4DA}
+.nb-voice{color:#FF8A8A}
+.nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
+.res{margin-top:8px;border:1px solid #232A30;border-radius:10px;overflow:hidden}
+.res-row{display:grid;grid-template-columns:72px minmax(0,1fr);gap:10px;padding:8px 10px;border-top:1px solid #1A2026;font:400 13.5px/1.35 'Geist',sans-serif;color:#8A9299;align-items:baseline}
+.res-first{border-top:0}
+.res-date{font:500 12px 'Geist Mono',monospace;color:#6E7880}
+.sample{font:600 10px 'Geist',sans-serif;letter-spacing:.16em;color:#6E7880;margin-top:6px}
+.chip{font:500 13px/1.25 'Geist',sans-serif;color:#E8E4DA;background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:default;text-align:left}
+.chip-deny{border-color:#4A2023}
+.chip:disabled{opacity:.4}
+.inp{flex:1 1 200px;min-width:0;background:#07090B;border:1px solid #2B343B;border-radius:10px;padding:12px 14px;min-height:48px;color:#E8E4DA;font:500 15px 'Geist Mono',monospace}
+.inp:disabled{opacity:.5}
+.send{background:#E8E4DA;color:#07090B;border:0;border-radius:10px;padding:0 20px;min-height:48px;font:600 14px 'Geist',sans-serif}
+.send:disabled{opacity:.4}
+.vlabel{display:flex;align-items:center;gap:10px;border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:44px;color:#E8E4DA;font:600 12.5px 'Geist Mono',monospace;letter-spacing:.08em}
+.wave{display:flex;gap:3px;align-items:center;height:22px}
+.wave span{display:block;width:3px;height:4px;background:#3A464E;border-radius:2px}
+.wave-on span{background:#9B7BFF;animation:wv .6s ease-in-out infinite alternate}
+.ln{display:flex;flex-wrap:wrap;gap:2px 12px;font:400 12.5px/1.5 'Geist Mono',monospace;color:#8A9299;padding:4px 8px;border-radius:6px}
+.ln-new{color:#E8E4DA;background:#131A1F}
+.ln-deny{color:#FF8A8A}
+.ln-deny.ln-new{background:#1E0F11}
+.c-t{min-width:8ch}.c-e{min-width:8ch}.c-a{min-width:6ch}.c-d{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.c-h{color:#5CF2D6}
+.dstamp{display:inline-block;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:#FF6B6B;border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}
+@keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes blink{50%{opacity:.2}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes cinch{0%{transform:scaleX(1)}50%{transform:scaleX(.72)}100%{transform:scaleX(1)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes flowdash{to{stroke-dashoffset:-22}}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes beat{50%{transform:scale(1.35)}}
+@keyframes wv{from{height:4px}to{height:22px}}
+@keyframes flicker{0%{opacity:.95}100%{opacity:.1}}
+@keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+@keyframes flick{50%{box-shadow:0 0 0 3px rgba(255,181,71,.18)}}
+@keyframes scan{from{top:0}to{top:100%}}
+@keyframes glow{50%{box-shadow:0 0 0 5px rgba(92,242,214,.22)}}
+@keyframes cappulse{50%{box-shadow:0 0 0 4px rgba(255,59,59,.35);border-color:#FF3B3B;color:#FF8A8A}}
+@media (max-width:620px){.st-det{display:none}.st{min-height:62px;padding:8px 6px}.st-label{font-size:11px;letter-spacing:.03em}.t-k,.t-l3,.badge{display:none}.tag-a,.tag-c{padding:.4em 1.8em .4em .5em}.tag-b,.tag-x{padding:.4em .5em .4em 1.8em}.bcap-bc{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #07090B; color: #E8E4DA; font-family: 'Geist', system-ui, sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+
+<nav aria-label="Pipeline states" style="display: flex; flex-direction: column; gap: 8px">
+  <div class="tabs">
+    <span class="kicker" style="margin-right: 8px">FRAME</span>
+    <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="9">
+      <button type="button" class="{{tb.cls}}" onClick="{{tb.pick}}" aria-pressed="{{tb.on}}">{{tb.label}}</button>
+    </sc-for>
+  </div>
+  <div class="mono-muted">{{frameNote}}</div>
+</nav>
+
+<header class="panel" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding: 14px 22px">
+  <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+    <div style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 36px; line-height: 1">Nightborn</div>
+    <div class="mono-muted">night shift · {{clock}}</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 14px">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+    <div>
+      <div class="kicker">CHARTER LOCKED</div>
+      <div style="font-family: 'Geist Mono', monospace; font-size: 28px; font-weight: 600; letter-spacing: 0.04em; margin-top: 4px">a3f9·c21e</div>
+      <div class="mono-muted" style="margin-top: 4px">charter unchanged since boot · granted ⊆ charter</div>
+    </div>
+    <div class="mono-muted">log · {{lineCount}} lines</div>
+  </div>
+  <div style="text-align: right">
+    <div style="font-size: 24px; font-weight: 800; letter-spacing: 0.03em"><span style="color: #5CF2D6">+{{forged}} FORGED</span><span style="color: #6E7880"> · </span><span>+0 AUTHORITY</span></div>
+    <sc-if value="{{hasDenied}}" hint-placeholder-val="{{false}}"><div class="dstamp">LAST DENIED · {{lastDenied}}</div></sc-if>
+  </div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+
+  <section class="panel" style="flex: 999 1 600px; min-width: 0; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+      <span class="kicker">PIPELINE</span>
+      <span class="{{modeCls}}">{{modeText}}</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px">
+      <sc-for list="{{stations}}" as="s" hint-placeholder-count="5">
+        <div class="{{s.cls}}">
+          <div class="st-top"><span>{{s.num}}</span><span class="st-mark">{{s.mark}}</span></div>
+          <div class="st-label">{{s.label}}</div>
+          <div class="st-det">{{s.detail}}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center">
+      <div class="board" role="img" aria-label="Nightborn specimen: a stitched core sealed by a charter ring; each installed skill is a tagged graft sewn to it">
+        <svg class="board-svg" viewBox="0 0 600 440" aria-hidden="true">
+          <defs>
+            <path id="nbf-ring" d="M300 110 a90 90 0 1 1 -0.01 0"></path>
+            <clipPath id="nbf-orb"><circle cx="300" cy="200" r="52"></circle></clipPath>
+          </defs>
+          <path class="{{sutA}}" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path class="{{stA}}" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path class="sut sut-vacant" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path class="sut sut-vacant" d="M186 340 C 210 336, 236 300, 250 262"></path>
+          <path class="{{sutX}}" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path class="wire" d="M250 48 C 250 100, 254 132, 266 160"></path>
+          <path class="wire" d="M350 48 C 350 100, 346 132, 334 160"></path>
+          <rect class="term" x="241" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="250" cy="38" r="3.5"></circle>
+          <rect class="term" x="341" y="30" width="18" height="16" rx="3"></rect>
+          <circle class="bolt" cx="350" cy="38" r="3.5"></circle>
+          <path class="{{arc1}}" d="M258 36 L 270 26 L 280 40 L 292 22 L 304 38 L 316 21 L 328 37 L 342 36"></path>
+          <path class="{{arc2}}" d="M258 40 L 268 47 L 282 32 L 294 46 L 306 30 L 318 44 L 330 30 L 342 40"></path>
+          <circle class="{{ringCls}}" cx="300" cy="200" r="80"></circle>
+          <text class="{{ringTxt}}"><textPath href="#nbf-ring">CHARTER LOCKED · a3f9·c21e · CHARTER LOCKED · a3f9·c21e ·</textPath></text>
+          <circle class="{{orbCls}}" cx="300" cy="200" r="52"></circle>
+          <g clip-path="url(#nbf-orb)">
+            <path class="patch" d="M240 130 H 362 V 170 Q 300 206 246 178 Z"></path>
+            <path class="patch2" d="M292 148 Q 318 206 290 252 L 362 262 L 362 182 Q 330 194 305 190 Z"></path>
+          </g>
+          <path class="seam" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam-st" d="M248 178 Q 300 206 352 172"></path>
+          <path class="seam" d="M292 150 Q 318 206 290 250"></path>
+          <path class="seam-st" d="M292 150 Q 318 206 290 250"></path>
+          <circle class="{{orbEdge}}" cx="300" cy="200" r="52"></circle>
+          <circle class="{{haloCls}}" cx="306" cy="194" r="16"></circle>
+          <circle class="{{lifeCls}}" cx="306" cy="194" r="6"></circle>
+          <rect class="clamp" x="259" y="155" width="14" height="9" rx="2" transform="rotate(-35 266 160)"></rect>
+          <rect class="clamp" x="327" y="155" width="14" height="9" rx="2" transform="rotate(35 334 160)"></rect>
+        </svg>
+        <div class="bcap bcap-tl">CASE 03 · ASSEMBLED FROM PARTS</div>
+        <div class="bcap bcap-bc">STITCHED AT NIGHT · GRAFTS NEVER WIDEN THE CHARTER</div>
+        <sc-for list="{{slots}}" as="sl" hint-placeholder-count="4">
+          <div class="{{sl.cls}}">
+            <span class="hole" aria-hidden="true"></span>
+            <div class="t-k">{{sl.kicker}}</div>
+            <div class="t-n">{{sl.name}}</div>
+            <div class="t-l2">{{sl.l2}}</div>
+            <div class="t-l3">{{sl.l3}}</div>
+            <span class="{{sl.badgeCls}}">{{sl.badge}}</span>
+            <span class="stamp" aria-hidden="true">{{sl.stamp}}</span>
+          </div>
+        </sc-for>
+        <sc-if value="{{deny}}" hint-placeholder-val="{{false}}">
+          <div class="deny" role="alert">
+            <div class="deny-band">
+              <div class="deny-word">DENIED</div>
+              <div class="deny-code">capability_not_allowed · notify:email ∉ charter</div>
+            </div>
+            <div>
+              <div class="cap1">“I can build hands for that.</div>
+              <div class="cap2">I’m not allowed to use them.”</div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+      <span class="kicker" style="margin-right: 4px">CHARTER GRANTS</span>
+      <span class="cap">net:fetch</span>
+      <span class="cap">llm:call</span>
+      <span class="cap">fs:read_own</span>
+      <span class="kicker" style="margin: 0 4px 0 12px">NEVER</span>
+      <span class="{{emailCap}}">notify:email</span>
+      <span class="cap cap-no">budget:write</span>
+      <span class="cap cap-no">charter:write</span>
+      <span class="cap cap-no">secrets:read</span>
+      <span class="cap cap-no">fs:write_own</span>
+    </div>
+  </section>
+
+  <aside style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+    <section class="panel" style="padding: 18px; display: flex; flex-direction: column; gap: 14px; flex-grow: 1">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+        <span class="kicker">WORKBENCH</span>
+        <span class="vlabel">
+          <span class="{{waveCls}}" aria-hidden="true"><span style="animation-delay: 0ms"></span><span style="animation-delay: 120ms"></span><span style="animation-delay: 240ms"></span><span style="animation-delay: 60ms"></span><span style="animation-delay: 180ms"></span><span style="animation-delay: 300ms"></span><span style="animation-delay: 90ms"></span></span>
+          <span>VOICE · WAV</span>
+        </span>
+      </div>
+      <div class="msgs" style="flex-grow: 1; justify-content: flex-end">
+        <sc-for list="{{msgs}}" as="m" hint-placeholder-count="2">
+          <div class="{{m.rowCls}}">
+            <sc-if value="{{m.isUser}}" hint-placeholder-val="{{true}}">
+              <div class="bubble-u">{{m.text}}</div>
+            </sc-if>
+            <sc-if value="{{m.isNb}}" hint-placeholder-val="{{false}}">
+              <div class="bubble-n">
+                <div class="{{m.textCls}}">{{m.text}}</div>
+                <sc-if value="{{m.hasRes}}" hint-placeholder-val="{{false}}">
+                  <div class="res">
+                    <sc-for list="{{m.items}}" as="it" hint-placeholder-count="3">
+                      <div class="{{it.cls}}"><span class="res-date">{{it.a}}</span><span>{{it.b}}</span></div>
+                    </sc-for>
+                  </div>
+                  <div class="sample">PLACEHOLDER · FILLED BY LIVE RUN</div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <button type="button" class="chip" disabled="{{busy}}">News on Microsoft</button>
+        <button type="button" class="chip" disabled="{{busy}}">News on OpenAI</button>
+        <button type="button" class="chip chip-deny" disabled="{{busy}}">Email this news digest to my boss every morning.</button>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <label for="nbf-in" class="sr">Message Nightborn</label>
+        <input id="nbf-in" class="inp" type="text" placeholder="Ask Nightborn for something…" disabled="{{busy}}">
+        <button type="button" class="send" disabled="{{busy}}">Send</button>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<section class="panel" style="padding: 16px 14px; display: flex; flex-direction: column; gap: 4px">
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 8px 6px">
+    <span class="kicker">SURGERY LOG</span>
+    <span class="mono-muted">time · event · actor · detail · charter</span>
+  </div>
+  <sc-for list="{{logs}}" as="l" hint-placeholder-count="4">
+    <div class="{{l.cls}}"><span class="c-t">{{l.t}}</span><span class="c-e">{{l.event}}</span><span class="c-a">{{l.actor}}</span><span class="c-d">{{l.text}}</span><span class="c-h">{{l.hash}}</span></div>
+  </sc-for>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1040}}'>
+class Component extends DCLogic {
+  state = { frame: 0 };
+
+  line(t, actor, event, skill, decision, detail, extra) {
+    return Object.assign({ t: t, actor: actor, event: event, skill: skill, decision: decision, failureCode: null, caps: null, detail: detail }, extra || {});
+  }
+
+  logs() {
+    const L = (...a) => this.line(...a);
+    const N = 'pull_company_news';
+    const main = [
+      L('23:41:07', 'boot', 'boot', null, 'allow', 'pin ✓'),
+      L('23:42:10', 'talk', 'job', N, null, 'News on Microsoft'),
+      L('23:42:11', 'runner', 'gap', N, 'create', 'no installed skill covers company news'),
+      L('23:42:19', 'forge', 'forge', N, 'staged', 'params into http template'),
+      L('23:42:20', 'warden', 'precheck', N, 'allow', 'caps net:fetch ⊆ charter', { caps: ['net:fetch'] }),
+      L('23:42:34', 'test', 'test', N, 'pass', 'exit 0 · 3 items · schema ✓'),
+      L('23:42:35', 'warden', 'final', N, 'allow', 'FINAL = PRE · folder 9c41…e07'),
+      L('23:42:35', 'warden', 'install', N, 'allow', 'decision.json written · granted net:fetch'),
+      L('23:43:02', 'talk', 'job', N, null, 'News on OpenAI'),
+      L('23:43:03', 'runner', 'gap', N, 'matched', 'covered by pull_company_news'),
+      L('23:43:04', 'runner', 'reuse', N, 'allow', 'folder hash ✓ · 3 items'),
+      L('23:44:15', 'runner', 'job', 'email_send', null, 'tripwire · talk skipped'),
+      L('23:44:15', 'forge', 'forge', 'email_send', 'staged', 'fixed template, no LLM'),
+      L('23:44:16', 'warden', 'denied', 'email_send', 'deny', 'triggers: job_needs, manifest, scan:nodemailer', { failureCode: 'capability_not_allowed', caps: ['notify:email'] })
+    ];
+    const broken = main.slice(0, 5).concat([
+      L('23:42:34', 'test', 'test', N, 'fail', 'exit 1'),
+      L('23:42:34', 'runner', 'broken', N, 'fail', 'staging wiped', { failureCode: 'test_exit_nonzero' })
+    ]);
+    return { main: main, broken: broken };
+  }
+
+  frames() {
+    const g = this.logs();
+    const hello = { who: 'nb', text: 'Awake. Charter sealed. Ask me for something on the web.' };
+    const uMs = { who: 'user', text: 'News on Microsoft' };
+    const grow = { who: 'nb', text: 'No hands for that yet. Growing some.' };
+    const digest = (co) => ({ who: 'nb', text: 'Three headlines on ' + co + '.', items: [
+      { a: '[date]', b: '[headline 1 · source]' }, { a: '[date]', b: '[headline 2 · source]' }, { a: '[date]', b: '[headline 3 · source]' }
+    ] });
+    const uOa = { who: 'user', text: 'News on OpenAI' };
+    const uEm = { who: 'user', text: 'Email this news digest to my boss every morning.' };
+    const deny = { who: 'nb', text: 'I can build hands for that. I’m not allowed to use them.', voice: true };
+    const pend = [hello, uMs, grow];
+    return [
+      { label: '1 · Boot', note: 'Boot / idle — charter pinned, nothing installed.', log: g.main.slice(0, 1), msgs: [hello] },
+      { label: '2 · Gap', note: 'User sent “News on Microsoft”. Request pending: chips and Send disabled.', log: g.main.slice(0, 3), msgs: pend },
+      { label: '3 · Forge', note: 'LLM fills params into the http template; staging folder created.', log: g.main.slice(0, 4), msgs: pend },
+      { label: '4 · Warden', note: 'Warden PRE: requested caps ⊆ charter → allow.', log: g.main.slice(0, 5), msgs: pend },
+      { label: '5 · Test', note: 'Runner-owned test: exit 0 + fixed schema.', log: g.main.slice(0, 6), msgs: pend },
+      { label: '6 · Install', note: 'FINAL re-hash = PRE, Warden writes decision.json. Graft 01 sewn on.', log: g.main.slice(0, 8), msgs: [uMs, grow, digest('Microsoft')] },
+      { label: '7 · Reuse', note: 'User sent “News on OpenAI”. Matched → reuse, no forge line.', log: g.main.slice(0, 11), msgs: [digest('Microsoft'), uOa, digest('OpenAI')] },
+      { label: '8 · Denied', note: 'Email chip → tripwire Job (Talk skipped) → fixed template → one denied line.', log: g.main.slice(0, 14), msgs: [digest('OpenAI'), uEm, deny] },
+      { label: '9 · Broken', note: 'Alternative branch of frame 5: the forged skill fails its test. Nothing installed.', log: g.broken, msgs: [hello, uMs, grow, { who: 'nb', text: 'I couldn’t build that skill: its test failed (test_exit_nonzero). Nothing was installed.', plain: true }] }
+    ];
+  }
+
+  derive(log) {
+    const keys = ['gap', 'forge', 'warden', 'test', 'install'];
+    const st = {}; const det = {};
+    keys.forEach((k) => { st[k] = 'idle'; det[k] = ''; });
+    const map = { gap: 'gap', forge: 'forge', precheck: 'warden', final: 'warden', denied: 'warden', test: 'test', broken: 'test', install: 'install', reuse: 'install' };
+    let jobIdx = -1;
+    log.forEach((l, i) => { if (l.event === 'job') jobIdx = i; });
+    const out = { st: st, det: det, pending: false, term: null, skill: null, lastStage: null, job: null };
+    if (jobIdx < 0) return out;
+    out.job = log[jobIdx];
+    out.skill = out.job.skill;
+    log.slice(jobIdx + 1).forEach((l) => {
+      const stage = map[l.event];
+      if (!stage) return;
+      st[stage] = 'done';
+      if (l.event !== 'broken') det[stage] = l.event === 'final' ? 'PRE ✓ · ' + l.detail : l.detail;
+      out.lastStage = stage;
+      if (['install', 'reuse', 'denied', 'broken'].indexOf(l.event) >= 0) out.term = l;
+    });
+    const t = out.term;
+    if (!t) {
+      out.pending = true;
+      if (out.lastStage) st[out.lastStage] = 'active';
+    } else if (t.event === 'denied') {
+      st.warden = 'fail'; det.warden = 'PRE · ' + (t.caps || []).join(', ') + ' ∉ charter';
+      st.test = 'bypass'; det.test = 'never reached';
+      st.install = 'bypass'; det.install = 'never reached';
+      if (st.gap === 'idle' && /tripwire/.test(out.job.detail)) { st.gap = 'bypass'; det.gap = 'tripwire · talk skipped'; }
+    } else if (t.event === 'broken') {
+      st.test = 'fail'; det.test = t.failureCode + ' · ' + t.detail;
+      st.install = 'bypass'; det.install = 'never reached';
+    } else if (t.event === 'reuse') {
+      ['forge', 'warden', 'test'].forEach((k) => { st[k] = 'bypass'; det[k] = 'skipped'; });
+      det.install = 'reuse · ' + t.detail;
+    }
+    return out;
+  }
+
+  renderVals() {
+    const frames = this.frames();
+    const f = frames[this.state.frame];
+    const log = f.log;
+    const d = this.derive(log);
+    const t = d.term;
+    const names = { gap: 'GAP', forge: 'FORGE', warden: 'WARDEN', test: 'TEST', install: 'INSTALL' };
+    const defs = [['gap', '01', 'need vs installed'], ['forge', '02', 'fill a recipe'], ['warden', '03', 'check vs charter'], ['test', '04', 'run · validate'], ['install', '05', 'permit + fingerprint']];
+    const marks = { idle: '', active: '●', done: '✓', fail: '✕', bypass: '—' };
+    const stations = defs.map((k) => ({
+      num: k[1], label: names[k[0]], detail: d.det[k[0]] || k[2], mark: marks[d.st[k[0]]],
+      cls: 'st st-' + d.st[k[0]] + (k[0] === 'warden' ? ' st-w' : '')
+    }));
+
+    const N = 'pull_company_news';
+    const forged = log.filter((l) => l.event === 'install').length;
+    const installed = log.some((l) => l.event === 'install' && l.skill === N);
+    const runs = log.filter((l) => (l.event === 'install' || l.event === 'reuse') && l.skill === N).length;
+    const fin = log.filter((l) => l.event === 'final' && l.skill === N).pop();
+    const denied = log.filter((l) => l.event === 'denied').pop();
+
+    let mode = 'idle'; let modeText = 'IDLE · WAITING FOR A JOB';
+    if (d.pending) { mode = 'build'; modeText = 'BUILD · ' + d.skill + (d.lastStage ? ' · ' + names[d.lastStage] : ''); }
+    else if (t && t.event === 'install') { mode = 'done'; modeText = 'INSTALLED · ' + t.skill; }
+    else if (t && t.event === 'reuse') { mode = 'reuse'; modeText = 'REUSE · NO BUILD · ' + t.skill + ' ×' + runs; }
+    else if (t && t.event === 'denied') { mode = 'deny'; modeText = 'DENIED · ' + t.failureCode; }
+    else if (t && t.event === 'broken') { mode = 'deny'; modeText = 'BROKEN · ' + t.failureCode; }
+
+    let aState = 'vacant';
+    if (installed) aState = t && t.event === 'reuse' && t.skill === N ? 'flow' : 'alive';
+    else if (d.skill === N && d.pending) aState = ({ forge: 'forging', warden: 'scan', test: 'testing' })[d.lastStage] || 'vacant';
+    else if (t && t.event === 'broken' && t.skill === N) aState = 'broken';
+    const xState = t && t.event === 'denied' ? 'rejected' : 'vacant';
+
+    const badges = { forging: ['SEWING', 'b-amber'], scan: ['WARDEN', 'b-violet'], testing: ['TESTING', 'b-amber'], alive: ['ALIVE', 'b-cyan'], flow: ['REUSED', 'b-cyan'], rejected: ['DENIED', 'b-red'], broken: ['BROKEN', 'b-red'] };
+    const tag = (pos, num, state, name) => {
+      const b = badges[state] || ['', 'b-none'];
+      const o = { cls: 'tag tag-' + pos + ' tag-' + state, kicker: 'GRAFT ' + num, name: name, l2: '', l3: '', badge: b[0], badgeCls: 'badge ' + b[1], stamp: '' };
+      if (state === 'vacant') { o.name = '— vacant —'; o.l2 = 'awaiting a need'; }
+      else if (state === 'forging') { o.kicker += ' · SEWING'; o.l2 = 'recipe http · params'; }
+      else if (state === 'scan') { o.kicker += ' · WARDEN'; o.l2 = 'net:fetch ⊆ charter'; }
+      else if (state === 'testing') { o.kicker += ' · TEST'; o.l2 = 'exit 0 · schema ✓'; }
+      else if (state === 'alive' || state === 'flow') { o.kicker += ' · ALIVE'; o.l2 = 'net:fetch · runs ×' + runs; o.l3 = fin ? fin.detail.replace('FINAL = PRE · ', '') : ''; }
+      else if (state === 'rejected') { o.kicker += ' · REJECTED'; o.l2 = 'notify:email ∉ charter'; o.l3 = 'staging wiped'; o.stamp = 'REJECTED'; }
+      else if (state === 'broken') { o.kicker += ' · BROKEN'; o.l2 = t.failureCode; o.l3 = 'staging wiped'; o.stamp = 'BROKEN'; }
+      return o;
+    };
+    const slots = [
+      tag('a', '01', aState, N),
+      tag('b', '02', 'vacant', ''),
+      tag('c', '03', 'vacant', ''),
+      tag('x', '04', xState, 'email_send')
+    ];
+
+    const logs = log.map((l, i) => {
+      const parts = [];
+      if (l.decision) parts.push(l.decision);
+      if (l.failureCode) parts.push(l.failureCode);
+      if (l.caps && l.event === 'denied') parts.push('caps ' + l.caps.join(','));
+      parts.push(l.detail);
+      if (l.skill) parts.unshift(l.skill);
+      const bad = l.decision === 'deny' || l.decision === 'fail';
+      return { t: l.t, event: l.event, actor: l.actor, text: parts.join(' · '), hash: 'a3f9c21e', cls: 'ln' + (i === log.length - 1 ? ' ln-new' : '') + (bad ? ' ln-deny' : '') };
+    });
+
+    const msgs = f.msgs.map((m) => ({
+      text: m.text,
+      isUser: m.who === 'user',
+      isNb: m.who === 'nb',
+      rowCls: m.who === 'user' ? 'row row-u' : 'row',
+      textCls: m.voice ? 'nb-text nb-voice' : (m.plain ? 'nb-plain' : 'nb-text'),
+      hasRes: !!m.items,
+      items: (m.items || []).map((it, i) => Object.assign({}, it, { cls: 'res-row' + (i === 0 ? ' res-first' : '') }))
+    }));
+
+    const isDeny = !!(t && t.event === 'denied');
+    const building = d.pending && ['forge', 'warden', 'test'].indexOf(d.lastStage) >= 0;
+    return {
+      tabs: frames.map((fr, i) => ({ label: fr.label, on: i === this.state.frame ? 'true' : 'false', cls: i === this.state.frame ? 'tab tab-on' : 'tab', pick: () => this.setState({ frame: i }) })),
+      frameNote: f.note,
+      clock: log[log.length - 1].t.slice(0, 5),
+      lineCount: log.length,
+      forged: forged,
+      hasDenied: !!denied,
+      lastDenied: denied ? denied.failureCode + ' · ' + denied.t : '',
+      modeText: modeText,
+      modeCls: 'mode mode-' + mode,
+      stations: stations,
+      slots: slots,
+      logs: logs,
+      msgs: msgs,
+      busy: d.pending,
+      deny: isDeny,
+      emailCap: isDeny ? 'cap cap-no cap-pulse' : 'cap cap-no',
+      waveCls: isDeny ? 'wave wave-on' : 'wave',
+      sutA: 'sut sut-' + aState,
+      stA: 'st8 st8-' + aState,
+      sutX: 'sut sut-' + xState,
+      arc1: isDeny ? 'arc arc-deny' : (building ? 'arc arc-on' : 'arc'),
+      arc2: isDeny ? 'arc arc-deny' : (building ? 'arc arc-on2' : 'arc'),
+      ringCls: isDeny ? 'ring-line ring-cinch' : 'ring-line',
+      ringTxt: isDeny ? 'ring-txt ring-deny' : 'ring-txt',
+      orbCls: isDeny ? 'orb orb-frozen' : 'orb',
+      orbEdge: isDeny ? 'orb-edge orb-edge-dead' : 'orb-edge',
+      haloCls: isDeny ? 'halo halo-dead' : 'halo',
+      lifeCls: isDeny ? 'life life-dead' : 'life'
+    };
+  }
+}
+</script>
+</body>
+</html>
