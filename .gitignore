@@ -20,3 +20,5 @@ schedules/*.json
 skills/smoke_*
 surgery.log
 surgery.*.log
+tickets/.orchestrator/inbox.jsonl
+tickets/.orchestrator/replies/
