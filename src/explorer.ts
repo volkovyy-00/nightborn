@@ -34,8 +34,14 @@ function privateV6(ip: string): boolean {
   if (low === "::" || low === "::1") return true;
   if (low.startsWith("fe8") || low.startsWith("fe9") || low.startsWith("fea") || low.startsWith("feb")) return true; // link-local
   if (low.startsWith("fc") || low.startsWith("fd")) return true; // unique local
-  const mapped = low.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return privateV4(mapped[1]);
+  if (low.startsWith("::ffff:")) {
+    // IPv4-mapped: dotted (from dns) or hex (WHATWG URL serialises [::ffff:127.0.0.1] as ::ffff:7f00:1)
+    const rest = low.slice(7);
+    if (rest.includes(".")) return privateV4(rest);
+    const [hi, lo] = rest.split(":").map((h) => parseInt(h || "0", 16));
+    if (!Number.isFinite(hi) || !Number.isFinite(lo)) return true;
+    return privateV4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
   return false;
 }
 

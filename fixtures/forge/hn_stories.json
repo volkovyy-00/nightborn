@@ -1,5 +1,5 @@
 {
-  "match": ["hacker news", "hn stories", "hn "],
+  "match": ["hacker news", "hn stories", "hacker-news"],
   "visited": ["hn.algolia.com"],
   "recipe": {
     "name": "hn_stories",

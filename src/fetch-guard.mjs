@@ -72,11 +72,13 @@ const DISPATCHER_SYM = Symbol.for("undici.globalDispatcher.1");
 await realFetch("data:,x").catch(() => {});
 const realDispatcher = globalThis[DISPATCHER_SYM];
 if (realDispatcher) {
+  // Every dispatcher method takes either an options object with `origin` or a bare origin (string | URL).
   const originOk = (opts) => {
-    if (!opts || opts.origin === undefined) return;
+    const origin = opts && typeof opts === "object" && !(opts instanceof URL) ? opts.origin : opts;
+    if (origin === undefined) return;
     let host;
     try {
-      host = new URL(String(opts.origin)).hostname;
+      host = new URL(String(origin)).hostname;
     } catch {
       throw new Error("guard: dispatcher origin");
     }
@@ -84,7 +86,8 @@ if (realDispatcher) {
   };
   const proxy = new Proxy(realDispatcher, {
     get(target, key) {
-      if (key === "constructor") return undefined;
+      // Only public string-keyed members: symbol keys (kFactory, kClients, …) hand out unguarded dispatchers.
+      if (typeof key !== "string" || key === "constructor") return undefined;
       const v = Reflect.get(target, key, target);
       if (typeof v !== "function") return v;
       return function guardedMethod(opts, ...rest) {
