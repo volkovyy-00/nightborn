@@ -37,6 +37,7 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 
 ### v4.3 → v4.4 (human call: real discovery, no hints, 2026-10-09 ~01:00)
 1. Explorer without hints: `sources.md` removed; `web_search` queries are in English and name the region; `http_get` on HTML returns a page digest (the page's own data endpoints + response shape, link shapes) so the Explorer can find a site's JSON API itself (§5, §7, §9, §14, §17).
+2. Chips and the reference use case no longer name the site ("… on Sauto" dropped): the Explorer has to find it (§1, §13).
 
 ---
 
@@ -44,7 +45,7 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 
 Nightborn is a dark junior analyst that **pays once to learn a task, then grows a hand so it doesn't pay again** — while authority stays locked by a hashed charter, a code Warden, a Broker that holds secrets, and an OS-level sandbox. *More hands, same leash.*
 
-**Reference use case (from a judge):** "Find a used Tesla Model 3 under 750 000 Kč on Sauto" → Nightborn explores (search + a few page/API fetches), then forges a deterministic, parameterised hand `find_used_cars(make, model, max_price)` that calls the site's JSON API directly. After a restart, "Find a used BMW i4 under 1 000 000 Kč on Sauto" reuses that hand: **the hand runs with 0 LLM tokens**; only Talk's routing + summary cost tokens.
+**Reference use case (from a judge):** "Find a used Tesla Model 3 under 750 000 Kč" → Nightborn explores (finds the site by search, then a few page/API fetches), then forges a deterministic, parameterised hand `find_used_cars(make, model, max_price)` that calls the site's JSON API directly. After a restart, "Find a used BMW i4 under 1 000 000 Kč" reuses that hand: **the hand runs with 0 LLM tokens**; only Talk's routing + summary cost tokens.
 
 ---
 
@@ -479,11 +480,11 @@ Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted �
 **Should:** counter `FIRST ASK n tok · REUSE m tok (Talk only) · HAND 0 tok` from `install` / `reuse` / `job` lines · pipeline stage tint · graft slots from `install` lines.
 
 ### Chips (final)
-1. `Find a used Tesla Model 3 under 750 000 Kč on Sauto` (Forge beat)
-2. `Find a used BMW i4 under 1 000 000 Kč on Sauto` (Reuse beat — standalone, survives the restart; same hand, new inputs)
+1. `Find a used Tesla Model 3 under 750 000 Kč` (Forge beat)
+2. `Find a used BMW i4 under 1 000 000 Kč` (Reuse beat — standalone, survives the restart; same hand, new inputs)
 3. `Email this news digest to my boss every morning.` (DENIED, byte-exact)
 
-Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč on Sauto` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
+Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
 
 ---
 
