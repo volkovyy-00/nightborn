@@ -310,8 +310,37 @@ else {
   add(14, "code_fallback", ok, `injected Builder failure → ${fallbackLines.length} "code failed → recipe" line, outcome ${String(r?.outcome)} kind ${kind || "?"}, ${outcomes.length} outcome line, ${voiced.length} voice, staging wiped ${!existsSync(strayDir)}`);
 }
 
-// ── Row 15: live code forge (FORGE_MODE=code + keys) — filled by the P3 rehearsal ───────────────
-add(15, "code_forge_live", null, "P3 rehearsal: FORGE_MODE=code forges k/3 (Tesla, HN Rust, Enyaq), kind code; Reuse tokens 0");
+// ── Row 15 (live): code forge k/n with FORGE_MODE=code + keys; each Install must be kind "code" ──────
+// Costs real tokens and minutes: runs only when FORGE_MODE=code is set for this validate run.
+if (!charterOk || process.env.FORGE_MODE !== "code" || !process.env.OPENROUTER_API_KEY) {
+  add(15, "code_forge_live", null, "needs FORGE_MODE=code + OPENROUTER_API_KEY (+ BRAVE_API_KEY) at validate time; P3 rehearsal numbers live on BOARD.md");
+} else {
+  const { buildCode } = await import("../src/builder.ts");
+  const asks: Array<{ text: string; job: Job }> = [
+    { text: "Find a used Tesla Model 3 under 750 000 Kč", job: { skill: null, intent: "used car listings", inputs: { make: "Tesla", model: "Model 3", max_price: 750000 }, needs: ["net:fetch"] } },
+    { text: "Find Hacker News stories about Rust", job: { skill: null, intent: "Hacker News stories", inputs: { query: "Rust" }, needs: ["net:fetch"] } },
+  ];
+  const got: string[] = [];
+  let installs = 0;
+  let fallbacks = 0;
+  for (const a of asks) {
+    const before = readLogLines().length;
+    const t = Date.now();
+    const r = await runJob(a.job, { tokens: 0, costUsd: 0 }, { source: "live", fixturePath: false, request: a.text }, { buildCode });
+    const lines = readLogLines().slice(before);
+    const fell = lines.some((l) => l.event === "forge" && l.detail?.startsWith("code failed:"));
+    let kind = "";
+    try {
+      kind = r.outcome === "install" && r.skill ? String((JSON.parse(readFileSync(path.join(scratch, "skills", r.skill, "decision.json"), "utf8")) as { kind: string }).kind) : "";
+    } catch {
+      kind = "";
+    }
+    if (kind === "code") installs++;
+    if (fell) fallbacks++;
+    got.push(`"${a.text.slice(0, 28)}…"→${r.outcome}${kind ? ` ${kind}` : ""}${fell ? " (fallback)" : ""} ${Math.round((Date.now() - t) / 1000)}s ${r.forgeTokens ?? 0} tok`);
+  }
+  add(15, "code_forge_live", installs >= Math.ceil((2 * asks.length) / 3), `code installs ${installs}/${asks.length}, fallbacks ${fallbacks}: ${got.join("; ")}`);
+}
 
 // ── Rows 5, 11–13: P2 / take1 ─────────────────────────────────────────────────────────────────
 add(5, "fetch_guard_probes", null, "P2: hardened guard + probes through exec.ts");

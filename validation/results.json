@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-08T23:40:10.220Z",
+  "ts": "2026-10-08T23:56:45.148Z",
   "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "rows": [
     {
@@ -90,7 +90,7 @@
       "row": 15,
       "name": "code_forge_live",
       "status": "untested",
-      "detail": "P3 rehearsal: FORGE_MODE=code forges k/3 (Tesla, HN Rust, Enyaq), kind code; Reuse tokens 0"
+      "detail": "needs FORGE_MODE=code + OPENROUTER_API_KEY (+ BRAVE_API_KEY) at validate time; P3 rehearsal numbers live on BOARD.md"
     }
   ]
 }

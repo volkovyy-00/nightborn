@@ -34,7 +34,7 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [ ] take1 recorded, watched, uploaded (agent meanwhile: validate rows 5, 11–13)
 
 ## P3 T3 code (stretch) · 03:50–05:30 · tag `t3-code` (branch `try/code`, only if `t2-recipe` by 03:30)
-- [ ] Builder tools + `tool_call` hook + in-loop Warden + fallback (§9 "Code forge")
+- [x] Builder tools + `tool_call` hook + in-loop Warden + fallback (§9 "Code forge") — validate row 14 green; live (Sonnet 4.6 forge): Tesla code Install 47 s · HN Rust code Install 51 s (in-loop host_not_allowed deny → fixed) · restart → BMW i4 Reuse hand 0 tok · fallback seen live 2× (3 tests burned → `code failed: builder: limit → recipe` → recipe Install, one outcome)
 - [ ] GATE: ≥2/3 rehearsed asks forge in code mode; fallback proven once
 
 ## P4 Proof + ship · 05:30–07:14 · tag `t4-final`
