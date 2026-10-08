@@ -80,9 +80,11 @@ export function scanSkill(src: string): ScanResult {
       const callee = node.expression;
       if (callee.kind === ts.SyntaxKind.ImportKeyword) forbidden.push("dynamic import()");
       if (ts.isIdentifier(callee) && callee.text === "eval") forbidden.push("eval");
-      if (ts.isIdentifier(callee) && callee.text === "require" && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) {
-        onModule(node.arguments[0].text);
+      if (ts.isIdentifier(callee) && callee.text === "require") {
+        if (node.arguments[0] && ts.isStringLiteral(node.arguments[0])) onModule(node.arguments[0].text);
+        else forbidden.push("require(<computed>)");
       }
+      if (ts.isIdentifier(callee) && callee.text === "Function") forbidden.push("Function()");
       if (ts.isIdentifier(callee) && callee.text === "fetch") r.caps.add("net:fetch");
       const fname = ts.isIdentifier(callee)
         ? callee.text
