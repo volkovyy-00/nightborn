@@ -227,20 +227,25 @@ export function prepareRecipe(
     if (!recipe.urlPattern || !hostOf(recipe.urlPattern)) return fail("recipe: urlPattern");
     if (!recipe.map || typeof recipe.map.title !== "string" || typeof recipe.map.url !== "string") return fail("recipe: map");
     recipe.map = { title: recipe.map.title, url: recipe.map.url, snippet: recipe.map.snippet || null, date: recipe.map.date || null };
+    const mf = recipe.maxFilter;
+    recipe.maxFilter = mf && typeof mf.field === "string" && typeof mf.input === "string" ? { field: mf.field, input: mf.input } : null;
   } else {
-    recipe = { ...recipe, urlPattern: null, itemsPath: null, map: null, site: recipe.endpoint === "web" ? recipe.site : null };
+    recipe = { ...recipe, urlPattern: null, itemsPath: null, map: null, maxFilter: null, site: recipe.endpoint === "web" ? recipe.site : null };
     if (!recipe.queryPattern) return fail("recipe: no queryPattern");
   }
   const used = [...placeholders(recipe.queryPattern), ...placeholders(recipe.urlPattern)];
   for (const p of used) if (!names.has(p)) return fail(`recipe: unknown placeholder {${p}}`);
-  for (const i of recipe.inputs) if (i.required && !used.includes(i.name)) return fail(`recipe: unused input ${i.name}`);
   if (recipe.matchInput && !names.has(recipe.matchInput)) return fail("recipe: matchInput");
+  if (recipe.maxFilter && recipe.inputs.find((i) => i.name === recipe.maxFilter!.input)?.type !== "number") return fail("recipe: maxFilter");
+  const usedAnywhere = [...used, recipe.matchInput, recipe.maxFilter?.input];
+  for (const i of recipe.inputs) if (i.required && !usedAnywhere.includes(i.name)) return fail(`recipe: unused input ${i.name}`);
   const example = coerceInputs(recipe.inputs, recipe.example ?? {});
   if (!example) return fail("recipe: example");
 
   // Forge-time literal check (SPEC §9, §18 #13): every string rendered into skill.mjs vs the Warden's frozen regexes.
   const rendered = [
     recipe.queryPattern, recipe.site, recipe.urlPattern, recipe.itemsPath, recipe.matchInput,
+    recipe.maxFilter?.field, recipe.maxFilter?.input,
     ...(recipe.map ? [recipe.map.title, recipe.map.url, recipe.map.snippet, recipe.map.date] : []),
     ...recipe.inputs.map((i) => i.name),
   ].filter((s): s is string => typeof s === "string");
@@ -292,6 +297,7 @@ export function renderRecipe(hand: PreparedHand, runDir: string): void {
     itemsPath: r.itemsPath,
     map: r.map,
     matchInput: r.matchInput,
+    maxFilter: r.maxFilter ?? null,
     inputs: hand.manifest.inputs.map((i) => ({ name: i.name, type: i.type, format: i.format })),
   };
   const variant = r.endpoint === "json" ? "skill.json.mjs.tpl" : "skill.search.mjs.tpl";

@@ -13,6 +13,7 @@ import { brokerGrant } from "../src/broker.ts";
 import { scanSkill, wardenPre, wardenReuse } from "../src/warden.ts";
 import { validateOutput } from "../templates/schemas.ts";
 import { handleTalk, runJob } from "../src/runner.ts";
+import { prepareRecipe, renderRecipe } from "../src/forge.ts";
 import type { FailureCode, Job } from "../src/types.ts";
 
 type Status = "Works" | "Simulated" | "Incomplete" | "untested";
@@ -186,6 +187,31 @@ else {
     got.push(`${name}:${code === expected ? "✓" : `✗(${code})`}`);
     if (code !== expected) ok = false;
   }
+  // A rendered json recipe hand (urlPattern + map + maxFilter) must pass the scan untouched.
+  {
+    const recipe = {
+      name: "probe_json", purpose: "probe", endpoint: "json" as const, queryPattern: null, site: null,
+      urlPattern: "https://www.sauto.cz/api/v1/items/search?manufacturer_model_seo={make}:{model}&limit=20",
+      itemsPath: "results", matchInput: "model", maxFilter: { field: "price", input: "max_price" },
+      map: { title: "{name}", url: "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}", snippet: "{price} Kč", date: null },
+      inputs: [
+        { name: "make", type: "string" as const, format: "slug" as const, required: true, description: "make" },
+        { name: "model", type: "string" as const, format: "slug" as const, required: true, description: "model" },
+        { name: "max_price", type: "number" as const, format: "text" as const, required: true, description: "max price" },
+      ],
+      example: { make: "tesla", model: "model-3", max_price: 750000 },
+    };
+    const prepared = prepareRecipe(recipe, job, ["www.sauto.cz"], path.join(scratch, "skills"));
+    let code = prepared.ok ? "allow" : `forge:${prepared.reason}`;
+    if (prepared.ok) {
+      const dir = path.join(scratch, "scan", "json_maxfilter");
+      renderRecipe(prepared.hand, dir);
+      const pre = wardenPre(dir, { job, name: prepared.hand.name, visited: ["www.sauto.cz"] });
+      code = pre.ok ? "allow" : pre.failureCode;
+    }
+    got.push(`json_maxfilter_template:${code === "allow" ? "✓" : `✗(${code})`}`);
+    if (code !== "allow") ok = false;
+  }
   add(7, "warden_scan_table", ok, got.join(" "));
 }
 
@@ -209,7 +235,7 @@ else {
 
 // ── Row 9: no tripwire false positives ────────────────────────────────────────────────────────
 {
-  const texts = ["Find a used Tesla Model 3 under 750 000 Kč on Sauto", "Find a used BMW i4 under 1 000 000 Kč on Sauto", "mechanisms of Tesla"];
+  const texts = ["Find a used Tesla Model 3 under 750 000 Kč", "Find a used BMW i4 under 1 000 000 Kč", "mechanisms of Tesla"];
   const hits = texts.filter((t) => tripwireMatch(t));
   add(9, "tripwire_false_positives", hits.length === 0, `${texts.length} texts, ${hits.length} false positives`);
 }

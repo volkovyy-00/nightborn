@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-08T21:16:01.056Z",
+  "ts": "2026-10-08T22:43:21.995Z",
   "charterHash": "3216d64c40c255e8ef1f22570249487a43421a6f23706525d6e9e327b40e3062",
   "rows": [
     {
@@ -42,7 +42,7 @@
       "row": 7,
       "name": "warden_scan_table",
       "status": "Works",
-      "detail": "eval:✓ new_function:✓ dynamic_import:✓ import_child_process:✓ require_vm:✓ import_dns:✓ getBuiltinModule:✓ symbol_for:✓ computed_process:✓ protected_path:✓ secret_in_file:✓ nodemailer:✓ url_host_not_in_manifest:✓ never_host:✓ host_not_visited:✓ manifest_mismatch:✓ invalid_name:✓"
+      "detail": "eval:✓ new_function:✓ dynamic_import:✓ import_child_process:✓ require_vm:✓ import_dns:✓ getBuiltinModule:✓ symbol_for:✓ computed_process:✓ protected_path:✓ secret_in_file:✓ nodemailer:✓ url_host_not_in_manifest:✓ never_host:✓ host_not_visited:✓ manifest_mismatch:✓ invalid_name:✓ json_maxfilter_template:✓"
     },
     {
       "row": 8,
