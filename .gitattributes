@@ -1,0 +1,5 @@
+charter.md   text eol=lf
+*.json       text eol=lf
+skills/**    -text
+templates/** -text
+*.wav        binary

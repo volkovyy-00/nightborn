@@ -1,0 +1,19 @@
+{
+  "match": "News on Microsoft",
+  "talk": {
+    "kind": "job",
+    "text": "No hands for that yet. Growing some.",
+    "job": {
+      "skill": null,
+      "intent": "company news",
+      "query": "Microsoft",
+      "needs": ["net:fetch"]
+    }
+  },
+  "forge": {
+    "name": "pull_company_news",
+    "purpose": "Pull recent news for a company via HTTP search.",
+    "query": "Microsoft",
+    "capabilities": ["net:fetch"]
+  }
+}

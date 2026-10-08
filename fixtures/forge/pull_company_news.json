@@ -1,0 +1,6 @@
+{
+  "name": "pull_company_news",
+  "purpose": "Pull recent news for a company via HTTP search.",
+  "query": "Microsoft",
+  "capabilities": ["net:fetch"]
+}

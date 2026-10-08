@@ -1,0 +1,13 @@
+{
+  "match": "News on OpenAI",
+  "talk": {
+    "kind": "job",
+    "text": "Reusing the news hand.",
+    "job": {
+      "skill": null,
+      "intent": "company news",
+      "query": "OpenAI",
+      "needs": ["net:fetch"]
+    }
+  }
+}

@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<!-- saved from url=(0012)about:srcdoc -->
+<html lang="en" style="touch-action: none; overscroll-behavior: none;"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><style>
+    .sc-placeholder{background:color-mix(in srgb,currentColor 8%,transparent);
+      border:1px solid color-mix(in srgb,currentColor 50%,transparent);
+      border-radius:2px;box-sizing:border-box;overflow:hidden}
+    @keyframes sc-shine{0%{background-position:100% 50%}100%{background-position:0% 50%}}
+    html.sc-dc-streaming .sc-placeholder,
+    html.sc-dc-streaming .sc-interp.sc-missing{position:relative;
+      background:color-mix(in srgb,currentColor 5%,transparent);
+      border-color:transparent}
+    html.sc-dc-streaming .sc-placeholder::before,
+    html.sc-dc-streaming .sc-interp.sc-missing::before{content:'';
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(90deg,rgba(217,119,87,0) 25%,rgba(247,225,211,.95) 37%,rgba(217,119,87,0) 63%);
+      background-size:400% 100%;animation:sc-shine 1.4s ease infinite}
+    html.sc-dc-streaming .sc-placeholder:nth-child(n+9 of .sc-placeholder)::before,
+    html.sc-dc-streaming .sc-interp.sc-missing:nth-child(n+9 of .sc-interp.sc-missing)::before{animation:none;
+      background:color-mix(in srgb,currentColor 8%,transparent)}
+    .sc-placeholder-error{padding:4px 8px;font:11px/1.4 ui-monospace,monospace;
+      color:color-mix(in srgb,currentColor 70%,transparent);word-break:break-word}
+    .sc-interp.sc-missing{display:inline-block;width:2em;height:1em;overflow:hidden;
+      vertical-align:text-bottom;background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;color:transparent;
+      user-select:none}
+    .sc-interp.sc-unresolved{font-family:ui-monospace,monospace;font-size:.85em;
+      color:color-mix(in srgb,currentColor 50%,transparent);
+      background:color-mix(in srgb,currentColor 10%,transparent);border-radius:3px;
+      padding:0 3px}
+    .sc-host.sc-has-error{position:relative}
+    .sc-logic-error{position:absolute;top:8px;left:8px;z-index:2147483647;max-width:60ch;
+      padding:6px 10px;background:#b00020;color:#fff;font:12px/1.4 ui-monospace,monospace;
+      border-radius:4px;white-space:pre-wrap;pointer-events:none}
+    /* Mirrors PRINT_BASELINE_CSS in apps/web deck-stage-export.ts — keep both
+       in sync until dc-runtime regains a build step. */
+    @media print {
+      @page { margin: 0.5cm; }
+      figure, table { break-inside: avoid; }
+      #dc-root, #dc-root > .sc-host { height: auto; }
+      *, *::before, *::after {
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+        animation-delay: -99s !important; animation-duration: .001s !important;
+        animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+        animation-play-state: running !important; transition-duration: 0s !important;
+      }
+    }
+  </style><script>
+(function () {
+  /* WebRTC is an egress channel the CSP cannot close, and Frame's runtime
+   * removes its constructors in the ARTIFACT realm only; this nested realm
+   * gets the same treatment so an artboard starts from the platform's
+   * baseline. (A page that goes looking can still find a constructor in a
+   * fresh child realm - the residual Frame accepts for every artifact.) */
+  try { delete window.RTCPeerConnection; } catch (e) {}
+  try { delete window.webkitRTCPeerConnection; } catch (e) {}
+  try { window.RTCPeerConnection = undefined; } catch (e) {}
+  try { window.webkitRTCPeerConnection = undefined; } catch (e) {}
+  var P = window.parent;
+  if (!P || P === window) return;
+  /* Liveness handshake (previewGuard.ts): mint a channel, keep one end
+   * in this closure, hand the other to the host before any authored
+   * byte runs. The port is a capability, not text - it cannot be read
+   * out of the document or serialized into a data:/blob: replacement,
+   * and it dies with this realm - so a pong is proof the document the
+   * HOST assembled is the one alive in the frame. The host binds the
+   * first hello per generation; nothing authored runs earlier, so this
+   * one always wins that race. */
+  try {
+    /* The pong path is UNCURRIED at t=0: every native it touches is
+     * captured as a value before any authored byte runs, and invoked
+     * through a captured Reflect.apply - authored prototype poisoning
+     * of MessagePort.prototype.postMessage or a trapping
+     * MessageEvent.prototype.data getter must never see this port or
+     * steal a send path. And every pong ECHOES the ping's nonce: a pong
+     * is only proof of life for the ping that asked, so stale pongs
+     * queued before a navigation prove nothing about the document that
+     * replaced this one. */
+    var applyH = Reflect.apply;
+    var getData = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data').get;
+    var hasOwnH = Object.prototype.hasOwnProperty;
+    var ch = new MessageChannel();
+    var portPost = MessagePort.prototype.postMessage.bind(ch.port1);
+    ch.port1.onmessage = function (ev) {
+      var d = null;
+      try { d = applyH(getData, ev, []); } catch (e) { return; }
+      if (d == null || typeof d !== 'object') return;
+      if (!applyH(hasOwnH, d, ['__om_ping'])) return;
+      try { portPost({ __om_pong: d.__om_ping }); } catch (e) {}
+    };
+    P.postMessage({ __om_hello: 1 }, '*', [ch.port2]);
+  } catch (e) {}
+  /* Self-navigation tripwire: pagehide fires while THIS document is
+   * being torn down. The message is DELIVERED after the document is
+   * destroyed, so it arrives with e.source === null - the host accepts
+   * exactly that shape (a live-source forgery of it only blanks the
+   * forger's own preview). It is one tripwire, not the verdict: the
+   * port probe above is what decides, on every load. The listener is
+   * an unreachable closure - authored code has no reference to remove
+   * it, and P is captured at t=0 before anything authored runs. */
+  try {
+    window.addEventListener('pagehide', function () {
+      try { P.postMessage({ __om_nav_away: 1 }, '*'); } catch (e) {}
+    });
+  } catch (e) {}
+  /* Escape relay (np): while an artboard plays (full-window or in place)
+   * keyboard focus lives in HERE, so the host cannot hear Esc - relay
+   * it. Advisory only: the host acts on it solely to LEAVE Play, so a
+   * forged relay can do nothing worse than end the sender's own play.
+   * Capture phase, so authored handlers that stopPropagation still let
+   * it through. */
+  try {
+    window.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Escape' || ev.repeat) return;
+      try { P.postMessage({ __om_escape: 1 }, '*'); } catch (e) {}
+    }, true);
+  } catch (e) {}
+  /* Step relay: ArrowLeft / ArrowRight for the host's full-window Previous / Next, which cannot hear keys pressed in here. Not sent: a chord,
+   * a repeat, a script's event, a key for a field, arrow-key control or sideways-scrolling page, or one the design cancelled. */
+  try {
+    var ARROW_OWNER = "input,textarea,select,video,audio,canvas,[role=application],[role=scrollbar],[aria-roledescription=carousel],[aria-roledescription=slide],[role=textbox],[role=searchbox],[role=combobox],[role=spinbutton],[role=slider],[role=radiogroup],[role=radio],[role=tablist],[role=tab],[role=toolbar],[role=menu],[role=menubar],[role=menuitem],[role=menuitemradio],[role=menuitemcheckbox],[role=listbox],[role=option],[role=tree],[role=treegrid],[role=grid]";
+    var afterDispatch = window.setTimeout.bind(window);
+    var styleOf = window.getComputedStyle.bind(window);
+    /* the page itself scrolls sideways (by more than a stray scrollbar's width) and is not clipped there */
+    var pageScrollsSideways = function () {
+      var se = document.scrollingElement;
+      if (!se || se.scrollWidth - se.clientWidth <= 24) return false;
+      var clip = /hidden|clip/;
+      var hx = styleOf(document.documentElement).overflowX;
+      if (clip.test(hx)) return false;
+      return /auto|scroll/.test(hx) || !(document.body && clip.test(styleOf(document.body).overflowX));
+    };
+    /* a clicked box that scrolls sideways takes the arrows without having focus: remember where the last press landed */
+    var lastPress = null;
+    window.addEventListener('pointerdown', function (ev) { lastPress = (ev.composedPath && ev.composedPath()[0]) || ev.target; }, true);
+    var ownsArrows = function (ev) {
+      var path = ev.composedPath ? ev.composedPath() : [ev.target];
+      if (ev.target === document.body || ev.target === document.documentElement) {
+        for (var p = lastPress; p && p.nodeType === 1 && p.isConnected; p = p.parentElement || (p.parentNode && p.parentNode.host) || null) path.push(p);
+      }
+      for (var i = 0; i < path.length; i += 1) {
+        var n = path[i];
+        if (!n || n.nodeType !== 1) continue;
+        if (n.isContentEditable || (n.matches && n.matches(ARROW_OWNER))) return true;
+        /* a box in the design that scrolls sideways keeps its arrows too */
+        if (n.scrollWidth - n.clientWidth > 24 && /auto|scroll/.test(styleOf(n).overflowX)) return true;
+      }
+      return false;
+    };
+    window.addEventListener('keydown', function (ev) {
+      if ((ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') || ev.repeat || !ev.isTrusted) return;
+      if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey || ownsArrows(ev)) return;
+      if (pageScrollsSideways()) return;
+      var dir = ev.key === 'ArrowRight' ? 1 : -1;
+      afterDispatch(function () {
+        if (ev.defaultPrevented) return;
+        try { P.postMessage({ __om_step: dir }, '*'); } catch (e) {}
+      }, 0);
+    }, false);
+  } catch (e) {}
+  /* Link relay (advisory, not hardened). Any navigation here (even "#x", resolved off <base>) trips the
+   * host's guard, so every anchor click is cancelled at capture - invisibly: the design (and the edit picker)
+   * still read defaultPrevented as false, and their own preventDefault() means hands off. Otherwise, once the
+   * click has dispatched: "#id" scrolls the frame to its target, external http(s) is handed to the host, and a
+   * project path (href="Deck.dc.html") is offered to the host, which opens it only if it names an artboard. */
+  try {
+    var compatPage = window.__omEditor === 1; /* a migrated page at its own URL (buildCompatDoc): links name pages by their project path, as its shim does */
+    /* the project root (/_f/{ver}/project/) the runner stamped ahead of this script: a link is named relative to IT, so deck/a.html's
+     * "b.html" reads deck/b.html and its "../index.html" reads index.html; read once, here, before anything authored runs */
+    var projectRoot = compatPage && typeof window.__omProjectRoot === 'string' ? window.__omProjectRoot : null;
+    var LINK_SEL = 'a[*|href],area[href]'; /* *| also catches SVG xlink:href */
+    try { document.createElement('a').matches(LINK_SEL); } catch (e) { LINK_SEL = 'a[href],area[href]'; }
+    /* A native control between the click and the link owns the click: in current engines these act without the link navigating... */
+    var CONTROL_KEEPS_CLICK = 'input[type=checkbox],input[type=radio],input[type=file],input[type=color],summary,label,video[controls],audio[controls]';
+    /* ...while these (buttons, text/number/date/range inputs, selects) would still navigate it, so the navigation is cancelled but nothing opens. */
+    var CONTROL_SEL = CONTROL_KEEPS_CLICK + ',button,input,select,textarea';
+    /* a label counts only when it labels something, a summary only as its details' first summary: otherwise the link still navigates */
+    var ownsClick = function (n) {
+      if (n.localName === 'label') return !!n.control;
+      if (n.localName !== 'summary') return true;
+      var p = n.parentNode;
+      return !!p && p.localName === 'details' && p.querySelector(':scope > summary') === n;
+    };
+    var hit = function (ev) {
+      var path = ev.composedPath ? ev.composedPath() : [ev.target];
+      var control = null;
+      for (var i = 0; i < path.length; i += 1) {
+        var n = path[i];
+        if (!n || n.nodeType !== 1 || !n.matches) continue;
+        if (n.matches(LINK_SEL)) return { a: n, control: control };
+        if (control == null && n.matches(CONTROL_SEL) && ownsClick(n)) control = n;
+      }
+      return null;
+    };
+    var follow = function (a, aux) {
+      var raw = String(a.getAttribute('href') || '').trim();
+      if (raw === '') return; /* SVG xlink-only anchors, empty href: cancelled above, inert here */
+      if (raw.charAt(0) === '#') {
+        if (aux || raw === '#') return; /* a middle click never scrolls; a bare "#" is the "script owns it" idiom: inert */
+        var id = raw.slice(1);
+        try { id = decodeURIComponent(id); } catch (e) {}
+        var t = document.getElementById(id) || document.getElementsByName(id)[0];
+        /* in-frame scroll only: a fragment navigation or scrollIntoView can also scroll the host's containers */
+        try {
+          if (t) window.scrollBy(0, t.getBoundingClientRect().top);
+          else if (id.toLowerCase() === 'top') window.scrollTo(0, 0);
+        } catch (e) {}
+        return;
+      }
+      var url = null;
+      try { url = new URL(raw, document.baseURI); } catch (e) { return; }
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+      var own = false;
+      try { own = url.origin === new URL(document.baseURI).origin; } catch (e) {}
+      if (own) {
+        if (aux || a.hasAttribute('download')) return; /* a same-origin download names no artboard (in compat mode the page shim saves it) */
+        var dir = compatPage ? (projectRoot !== null ? projectRoot : new URL('.', document.baseURI).pathname) : null;
+        if (dir !== null && url.pathname.indexOf(dir) !== 0) return; /* out of the project: not a page of it */
+        var rel = dir !== null ? url.pathname.slice(dir.length) : url.pathname.indexOf('/appifact/') === 0 ? url.pathname.slice(10) : url.pathname.slice(1);
+        try { rel = decodeURIComponent(rel); } catch (e) {}
+        try { P.postMessage({ __om_open: rel }, '*'); } catch (e) {}
+        return;
+      }
+      try { P.postMessage({ __om_link: url.href }, '*'); } catch (e) {}
+    };
+    var onLink = function (ev) {
+      var aux = ev.type === 'auxclick';
+      if (aux && ev.button !== 1) return;
+      var h = hit(ev);
+      if (h == null) return;
+      var a = h.a;
+      /* text being edited around the click (asked of the nearest HTML element: SVG nodes have no isContentEditable) */
+      var host = ev.target;
+      while (host && host.isContentEditable === undefined) host = host.parentNode;
+      var editing = !!(host && host.isContentEditable);
+      /* untouched: a control that keeps its click (any control, for a middle click), and a middle click in text being edited (paste) */
+      if ((h.control != null && (aux || h.control.matches(CONTROL_KEEPS_CLICK))) || (aux && editing)) return;
+      var handled = false;
+      var cancel = ev.preventDefault;
+      var claim = function () { handled = true; cancel.call(ev); };
+      try {
+        Object.defineProperty(ev, 'preventDefault', { value: claim, writable: true, configurable: true });
+        Object.defineProperty(ev, 'defaultPrevented', { get: function () { return handled; }, configurable: true });
+        Object.defineProperty(ev, 'returnValue', { get: function () { return !handled; }, set: function (v) { if (v === false) claim(); }, configurable: true });
+      } catch (e) {}
+      cancel.call(ev);
+      /* cancelled, nothing opens: a control the link would navigate past, a link in text being edited,
+       * and a middle button arriving as 'click' (auxclick carries the one relay for it) */
+      if (h.control != null || editing || (!aux && ev.button === 1)) return;
+      setTimeout(function () { if (!handled) follow(a, aux); }, 0);
+    };
+    window.addEventListener('click', onLink, true);
+    window.addEventListener('auxclick', onLink, true);
+  } catch (e) {}
+  var serialise = function (v) {
+    try { return JSON.stringify(v); } catch (e) { return JSON.stringify(String(v)); }
+  };
+  window.addEventListener('message', function (e) {
+    if (e.source !== P) return;
+    var d = e.data;
+    if (!d || d.__om_eval !== 1) return;
+    var reply = function (p) {
+      p.__om_eval_r = 1;
+      p.id = d.id;
+      e.source.postMessage(p, '*');
+    };
+    try {
+      var r = (0, eval)(d.code);
+      if (r && typeof r.then === 'function') {
+        r.then(
+          function (v) { reply({ ok: 1, v: serialise(v) }); },
+          function (err) { reply({ ok: 0, e: String(err) }); }
+        );
+      } else {
+        reply({ ok: 1, v: serialise(r) });
+      }
+    } catch (err) {
+      reply({ ok: 0, e: String(err) });
+    }
+  });
+})();
+</script><script>
+(function () {
+  /* Viewport guard */
+  var doc = document;
+  var align = function (lo, hi, cLo, cHi, mode) {
+    if (mode === 'start') return lo - cLo;
+    if (mode === 'end') return hi - cHi;
+    if (mode === 'center') return (lo + hi) / 2 - (cLo + cHi) / 2;
+    if ((lo >= cLo && hi <= cHi) || (lo < cLo && hi > cHi)) return 0; /* fully visible, or covering */
+    /* center-if-needed centres only a fully hidden target; a partly visible one moves to the nearest edge */
+    if (mode === 'center-if-needed' && (hi <= cLo || lo >= cHi)) return (lo + hi) / 2 - (cLo + cHi) / 2;
+    var fits = hi - lo <= cHi - cLo;
+    if (lo < cLo) return fits ? lo - cLo : hi - cHi;
+    return fits ? hi - cHi : lo - cLo;
+  };
+  var styleOf = function (n) {
+    try { return getComputedStyle(n); } catch (e) { return null; }
+  };
+  var set = function (v) { return !!v && v !== 'none' && v !== 'auto'; };
+  /* transform-like properties make a box the containing block of its absolute AND fixed descendants */
+  var containsFixed = function (cs) {
+    return set(cs.transform) || set(cs.translate) || set(cs.rotate) || set(cs.scale) || set(cs.perspective) || set(cs.filter) ||
+      set(cs.backdropFilter) || cs.transformStyle === 'preserve-3d' || /layout|paint|strict|content/.test(cs.contain || '') ||
+      /(^|,)\s*(transform|translate|rotate|scale|perspective|filter|backdrop-filter)\s*(,|$)/.test(cs.willChange || '');
+  };
+  var scrolls = function (n, cs) {
+    var v = cs.overflow + ' ' + cs.overflowX + ' ' + cs.overflowY;
+    return /auto|scroll|hidden/.test(v) && (n.scrollHeight > n.clientHeight || n.scrollWidth > n.clientWidth);
+  };
+  var up = function (n) {
+    if (n.assignedSlot) return n.assignedSlot;
+    var p = n.parentNode;
+    return p && p.nodeType === 11 && p.host ? p.host : p;
+  };
+  /* Reveal el inside this document only: each scrolling ancestor, then the frame's own viewport. Never the parent's. */
+  var reveal = function (el, block, inline, smooth) {
+    if (!el || typeof el.getClientRects !== 'function' || el.getClientRects().length === 0) return; /* no box: nothing to reveal */
+    var d = el.ownerDocument || doc;
+    var root = d.scrollingElement || d.documentElement;
+    /* Only boxes in el's containing-block chain can move it: an absolute box skips static ancestors up to a positioned or
+     * transform-like one; a fixed box skips everything up to a transform-like one (none: not even the viewport moves it). */
+    var es = styleOf(el);
+    var pos = (es && es.position) || 'static';
+    var seekAbs = pos === 'absolute', seekFixed = pos === 'fixed';
+    for (var n = up(el); n && n !== root && n.nodeType === 1; n = up(n)) {
+      var cs = styleOf(n);
+      if (!cs) continue;
+      pos = cs.position || 'static';
+      if (seekFixed ? !containsFixed(cs) : seekAbs && pos === 'static' && !containsFixed(cs)) continue;
+      seekAbs = pos === 'absolute';
+      seekFixed = pos === 'fixed';
+      if (!scrolls(n, cs)) continue;
+      var r = el.getBoundingClientRect();
+      var c = n.getBoundingClientRect();
+      var cTop = c.top + n.clientTop, cLeft = c.left + n.clientLeft;
+      var dy = align(r.top, r.bottom, cTop, cTop + n.clientHeight, block);
+      var dx = align(r.left, r.right, cLeft, cLeft + n.clientWidth, inline);
+      if (!dx && !dy) continue;
+      /* instant even under CSS scroll-behavior:smooth: the next step must read the settled position ('smooth' applies to the viewport step) */
+      if (typeof n.scrollTo === 'function') n.scrollTo({ left: n.scrollLeft + dx, top: n.scrollTop + dy, behavior: 'instant' });
+      else { n.scrollTop += dy; n.scrollLeft += dx; }
+    }
+    if (seekFixed) return;
+    var rr = el.getBoundingClientRect();
+    var vw = (root && root.clientWidth) || window.innerWidth, vh = (root && root.clientHeight) || window.innerHeight;
+    var wy = align(rr.top, rr.bottom, 0, vh, block);
+    var wx = align(rr.left, rr.right, 0, vw, inline);
+    if (wx || wy) window.scrollBy({ left: wx, top: wy, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  var deepActive = function (el, d) {
+    var r = el.getRootNode ? el.getRootNode() : d; /* el's own (possibly closed) shadow root sees its activeElement */
+    var a = (r && 'activeElement' in r ? r : d).activeElement;
+    while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+    return a;
+  };
+  var within = function (a, el) {
+    for (var n = a; n; n = up(n)) if (n === el) return true;
+    return false;
+  };
+  var guardFocus = function (proto) {
+    if (!proto || typeof proto.focus !== 'function') return;
+    var native = proto.focus;
+    /* reveal only what actually took focus (el, or its delegate inside it), and only if focus moved - as the native does */
+    proto.focus = function focus(o) {
+      var d = this.ownerDocument || doc;
+      var before = deepActive(this, d);
+      native.call(this, o && o.focusVisible !== undefined ? { preventScroll: true, focusVisible: o.focusVisible } : { preventScroll: true });
+      if (o && o.preventScroll) return;
+      try { var a = deepActive(this, d); if (a && a !== before && within(a, this)) reveal(a, 'center-if-needed', 'center-if-needed', false); } catch (e) {}
+    };
+  };
+  guardFocus(window.HTMLElement && window.HTMLElement.prototype);
+  guardFocus(window.SVGElement && window.SVGElement.prototype);
+  guardFocus(window.MathMLElement && window.MathMLElement.prototype);
+  var E = window.Element;
+  if (E) {
+    E.prototype.scrollIntoView = function scrollIntoView(arg) {
+      var dict = arg == null || typeof arg === 'object';
+      var o = (dict && arg) || {};
+      var block = dict ? o.block || 'start' : arg ? 'start' : 'end';
+      try { reveal(this, block, o.inline || 'nearest', o.behavior === 'smooth'); } catch (e) {}
+    };
+    E.prototype.scrollIntoViewIfNeeded = function scrollIntoViewIfNeeded(center) {
+      var mode = center === undefined || center ? 'center-if-needed' : 'nearest';
+      try { reveal(this, mode, mode, false); } catch (e) {}
+    };
+  }
+})();
+</script><script>
+(function () {
+  var PREFIX = 'page:';
+  var memory = function () {
+    var m = Object.create(null);
+    return {
+      getItem: function (k) { return k in m ? m[k] : null; },
+      setItem: function (k, v) { m[k] = String(v); },
+      removeItem: function (k) { delete m[k]; },
+      key: function (i) { var ks = Object.keys(m); i = Math.floor(Number(i)) || 0; return i >= 0 && i < ks.length ? ks[i] : null; },
+      get length() { return Object.keys(m).length; }
+    };
+  };
+  var scope = function (real) {
+    var keys = function () {
+      var out = [];
+      for (var i = 0, n = real.length; i < n; i++) { var k = real.key(i); if (k !== null && k.indexOf(PREFIX) === 0) out.push(k.slice(PREFIX.length)); }
+      return out;
+    };
+    var api = {
+      getItem: function (k) { return real.getItem(PREFIX + String(k)); },
+      setItem: function (k, v) { real.setItem(PREFIX + String(k), String(v)); },
+      removeItem: function (k) { real.removeItem(PREFIX + String(k)); },
+      clear: function () { keys().forEach(function (k) { real.removeItem(PREFIX + k); }); },
+      key: function (i) { var ks = keys(); i = Math.floor(Number(i)) || 0; return i >= 0 && i < ks.length ? ks[i] : null; },
+      get length() { return keys().length; }
+    };
+    if (typeof Proxy !== 'function') return api;
+    var own = function (p) { return typeof p === 'string' && !(p in api) && p !== 'length'; };
+    return new Proxy(api, {
+      get: function (t, p) { if (p === 'length') return keys().length; if (p in api) return api[p]; if (!own(p)) return undefined; var v = real.getItem(PREFIX + p); return v === null ? undefined : v; },
+      set: function (t, p, v) { if (own(p)) real.setItem(PREFIX + p, String(v)); return true; },
+      deleteProperty: function (t, p) { if (own(p)) real.removeItem(PREFIX + p); return true; },
+      has: function (t, p) { return p in api || p === 'length' || (own(p) && real.getItem(PREFIX + p) !== null); },
+      ownKeys: function () { return keys(); },
+      getOwnPropertyDescriptor: function (t, p) { if (!own(p)) return undefined; var v = real.getItem(PREFIX + p); return v === null ? undefined : { value: v, writable: true, enumerable: true, configurable: true }; }
+    });
+  };
+  var natives = {};
+  var views = {};
+  ['localStorage', 'sessionStorage'].forEach(function (n) {
+    var real = null;
+    try { real = window[n]; } catch (e) { real = null; }
+    if (!real || typeof real.getItem !== 'function') real = memory();
+    natives[n] = real;
+    views[n] = scope(real);
+    try { Object.defineProperty(window, n, { value: views[n], configurable: true }); } catch (e) {}
+  });
+  /* 'storage' events, the same view: a write to the namespace (another artboard, another tab) reaches the page's listeners
+   * with its own key and the scoped store as storageArea; anything else on this origin (the editor's stash and prefs, a key
+   * outside the namespace) is not the page's and does not reach them. Registered first and capturing, so it runs before any
+   * listener the page adds, onstorage included. */
+  try {
+    window.addEventListener('storage', function (e) {
+      if (!e.isTrusted) return; /* one the page dispatched itself (a same-window sync idiom): its own traffic, already in its own terms */
+      var k = e.key;
+      var area = e.storageArea === natives.localStorage ? views.localStorage : e.storageArea === natives.sessionStorage ? views.sessionStorage : null;
+      if (k === null || (typeof k === 'string' && k.indexOf(PREFIX) === 0)) { /* a namespace key, or a whole-store clear (null): the page's, in its terms */
+        try { Object.defineProperties(e, { key: { value: k === null ? null : k.slice(PREFIX.length), configurable: true }, storageArea: { value: area, configurable: true } }); } catch (x) { e.stopImmediatePropagation(); }
+        return;
+      }
+      e.stopImmediatePropagation();
+    }, true);
+  } catch (e) {}
+})();
+</script>
+
+
+
+<title>Nightborn demo screen</title>
+<!--<base href="/appifact/Main.dc.html">--><base href=".">
+<script>window.__dcFiles = {"Main.dc.html":"\u003c!doctype html>\n\u003chtml lang=\"en\">\n\u003chead>\n\u003cmeta charset=\"utf-8\">\n\u003ctitle>Nightborn demo screen\u003c/title>\n\u003cscript src=\"./support.js\">\u003c/script>\n\u003c/head>\n\u003cbody>\n\u003cx-dc>\n\u003chelmet>\n\u003clink rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap\">\n\u003cstyle>\nbody{margin:0;background:#07090B}\n*{box-sizing:border-box}\na{color:#5CF2D6}a:hover{color:#E8E4DA}\n.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}\n.panel{background:#0E1215;border:1px solid #232A30;border-radius:14px}\n.kicker{font:600 12px/1 'Geist',system-ui,sans-serif;letter-spacing:.16em;color:#8A9299}\n.mono-muted{font:500 12.5px/1.35 'Geist Mono',monospace;color:#8A9299}\n.mode{font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.06em;padding:8px 12px;border-radius:999px;border:1px solid #2B343B;color:#8A9299;white-space:nowrap}\n.mode-build{color:#FFB547;border-color:#5A4320}\n.mode-done,.mode-reuse{color:#5CF2D6;border-color:#1F5A50}\n.mode-deny{color:#FF6B6B;border-color:#6B2226}\n.st{border:1px solid #232A30;border-top:3px solid #2B343B;border-radius:10px;padding:10px 10px 12px;min-height:98px;background:#0B0F12;transition:border-color .3s,background .3s,opacity .3s}\n.st-top{display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:#8A9299}\n.st-label{font:700 15px/1.2 'Geist',sans-serif;letter-spacing:.1em;margin-top:8px;color:#E8E4DA}\n.st-det{font:400 12px/1.35 'Geist Mono',monospace;color:#8A9299;margin-top:6px;overflow-wrap:anywhere}\n.st-active{border-top-color:#FFB547;background:#15120B}\n.st-active .st-mark{color:#FFB547;animation:blink .8s steps(2) infinite}\n.st-w.st-active{border-top-color:#9B7BFF;background:#120F1C}\n.st-w.st-active .st-mark{color:#9B7BFF}\n.st-done{border-top-color:#5CF2D6}\n.st-done .st-mark{color:#5CF2D6}\n.st-fail{border-top-color:#FF3B3B;background:#1A0C0D}\n.st-fail .st-mark,.st-fail .st-label{color:#FF6B6B}\n.st-bypass{opacity:.3}\n.st-bypass .st-label{text-decoration:line-through}\n.cap{font:500 12.5px 'Geist Mono',monospace;padding:5px 9px;border-radius:6px;border:1px solid #1F5A50;color:#5CF2D6;white-space:nowrap}\n.cap-no{border-color:#4A2023;color:#D07478;text-decoration:line-through}\n.board{position:relative;width:100%;max-width:860px;aspect-ratio:600/440;margin:0 auto;border:1px solid #1C2328;border-radius:12px;background-color:#090C0E;background-image:linear-gradient(#11171B 1px,transparent 1px),linear-gradient(90deg,#11171B 1px,transparent 1px);background-size:28px 28px;overflow:hidden}\n.board-svg{position:absolute;inset:0;width:100%;height:100%;display:block}\n.bcap{position:absolute;font:500 clamp(8px,.85vw,11px)/1 'Geist Mono',monospace;letter-spacing:.18em;color:#6E7880;white-space:nowrap}\n.bcap-tl{left:3.3%;top:3%}\n.bcap-bc{left:50%;bottom:3%;transform:translateX(-50%)}\n.wire{fill:none;stroke:#3A464E;stroke-width:2}\n.term{fill:#1A2228;stroke:#5A666E;stroke-width:1.5}\n.bolt{fill:#8A9299}\n.clamp{fill:#2A3339;stroke:#8A9299;stroke-width:1.2}\n.arc{fill:none;stroke:#D9D0FF;stroke-width:1.6;stroke-linejoin:round;opacity:0}\n.arc-on{animation:flicker .16s steps(2) infinite}\n.arc-on2{animation:flicker .23s steps(2) infinite}\n.arc-deny{stroke:#FF5A5A;animation:flicker .12s steps(2) 6}\n.ring-line{fill:none;stroke:#9B7BFF;stroke-width:1.5;stroke-dasharray:2 4;opacity:.7;transform-box:fill-box;transform-origin:center}\n.ring-cinch{stroke:#FF3B3B;opacity:1;animation:cinch .45s ease-out 3}\n.ring-txt{fill:#9B7BFF;font:500 9.5px 'Geist Mono',monospace;letter-spacing:.3em}\n.rfa{animation:rfa .7s ease-out}\n.rfb{animation:rfb .7s ease-out}\n.ring-deny{fill:#FF6B6B}\n.orb{fill:#12181C;transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out infinite}\n.orb-frozen{animation:none}\n.patch{fill:#1A2329}\n.patch2{fill:#0E1316}\n.orb-edge{fill:none;stroke:#E8E4DA;stroke-width:1.8}\n.orb-edge-dead{stroke:#FF3B3B}\n.seam{fill:none;stroke:#C8C2B6;stroke-width:1.2;stroke-linecap:round}\n.seam-st{fill:none;stroke:#C8C2B6;stroke-width:8;stroke-dasharray:1.4 6.5}\n.life{fill:#5CF2D6;transform-box:fill-box;transform-origin:center;animation:beat 1.1s ease-in-out infinite}\n.life-dead{fill:#FF3B3B;animation:none}\n.halo{fill:none;stroke:#5CF2D6;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ripple 1.1s ease-out infinite}\n.halo-dead{stroke:#FF3B3B;animation:none;opacity:.8}\n.sut{fill:none;stroke-width:1.6;stroke-linecap:round}\n.sut-vacant{stroke:#2B343B;stroke-dasharray:3 5}\n.sut-forging{stroke:#FFB547;stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s ease-out forwards}\n.sut-scan{stroke:#9B7BFF;animation:pulse .9s ease-in-out infinite}\n.sut-testing{stroke:#FFB547;stroke-dasharray:6 8;animation:flowdash .5s linear infinite}\n.sut-alive{stroke:#5CF2D6}\n.sut-flow{stroke:#5CF2D6;stroke-dasharray:6 8;animation:flowdash .4s linear infinite}\n.sut-severed{stroke:#FF3B3B;animation:sever 1.5s ease-in forwards}\n.st8{fill:none;stroke-width:9;stroke-dasharray:1.6 8;opacity:0;transition:opacity .4s}\n.st8-forging{stroke:#FFB547;animation:fade .3s .8s forwards}\n.st8-scan{stroke:#B9A6FF;opacity:.9}\n.st8-testing{stroke:#FFB547;opacity:.9}\n.st8-alive{stroke:#E8E4DA;opacity:.75}\n.st8-flow{stroke:#5CF2D6;opacity:1}\n.st8-severed{stroke:#FF3B3B;opacity:1;animation:fadeout 1.2s .3s forwards}\n.tag{position:absolute;width:30%;height:22.73%;border-radius:8px;background:#10161A;border:1px solid #2B343B;display:flex;flex-direction:column;justify-content:center;gap:.2em;font-size:clamp(8px,1.02vw,13px);overflow:hidden;transition:border-color .3s,background .3s}\n.tag-a{left:3.33%;top:10.45%;padding:.6em 2.4em .6em .9em}\n.tag-b{left:66.67%;top:10.45%;padding:.6em .9em .6em 2.4em}\n.tag-c{left:3.33%;top:65.9%;padding:.6em 2.4em .6em .9em}\n.tag-x{left:66.67%;top:65.9%;padding:.6em .9em .6em 2.4em}\n.hole{position:absolute;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;background:#07090B;box-shadow:0 0 0 .22em #3A464E}\n.tag-a .hole,.tag-c .hole{right:calc(7.8% - .45em)}\n.tag-b .hole,.tag-x .hole{left:calc(7.8% - .45em)}\n.t-k{font:600 .76em/1.2 'Geist',sans-serif;letter-spacing:.14em;color:#8A9299}\n.t-n{font:600 1.08em/1.2 'Geist Mono',monospace;color:#E8E4DA;overflow-wrap:anywhere}\n.t-l2{font:500 .88em/1.25 'Geist Mono',monospace;color:#5CF2D6}\n.t-l3{font:500 .8em/1.25 'Geist Mono',monospace;color:#6E7880}\n.badge{position:absolute;top:.6em;font:700 .68em/1 'Geist',sans-serif;letter-spacing:.14em;padding:.35em .55em;border-radius:4px}\n.tag-a .badge,.tag-c .badge{right:calc(7.8% + 1.2em)}\n.tag-b .badge,.tag-x .badge{right:.7em}\n.b-none{display:none}\n.b-amber{color:#FFB547;border:1px solid #5A4320}\n.b-violet{color:#B9A6FF;border:1px solid #3E3366}\n.b-cyan{color:#5CF2D6;border:1px solid #1F5A50}\n.b-red{color:#FF8A8A;border:1px solid #6B2226}\n.tag-vacant{background:rgba(9,12,14,.6);border:1px dashed #2B343B}\n.tag-vacant .t-n{color:#6E7880;font-weight:500}\n.tag-vacant .t-l2{color:#6E7880}\n.tag-forging{border-color:#FFB547;animation:flick 1.2s ease-in-out infinite}\n.tag-scan{border-color:#9B7BFF}\n.tag-scan::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:#9B7BFF;animation:scan 1s linear infinite}\n.tag-testing{border-color:#FFB547}\n.tag-testing .t-l2{color:#FFB547}\n.tag-alive{border-color:#1F5A50;animation:graft .7s ease-out}\n.tag-flow{border-color:#5CF2D6;animation:glow .5s ease-in-out 3}\n.tag-severed{border-color:#FF3B3B;background:#1A0C0D;animation:drop 1.7s ease-in forwards}\n.tag-severed .t-l2{color:#FF8A8A}\n.stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);font:800 1.45em/1 'Geist',sans-serif;letter-spacing:.12em;color:#FF3B3B;border:2px solid #FF3B3B;border-radius:4px;padding:.15em .4em;opacity:0;background:rgba(26,12,13,.85)}\n.tag-severed .stamp{animation:stampin .25s .15s forwards}\n.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px}\n.row{display:flex}\n.row-u{justify-content:flex-end}\n.bubble-u{max-width:85%;background:#161C21;border:1px solid #232A30;border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:#E8E4DA}\n.bubble-n{max-width:96%;width:100%}\n.nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:#E8E4DA}\n.nb-voice{color:#FF8A8A}\n.res{margin-top:8px;border:1px solid #232A30;border-radius:10px;overflow:hidden}\n.res-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:10px;padding:8px 10px;border-top:1px solid #1A2026;font:400 13.5px/1.35 'Geist',sans-serif;color:#E8E4DA;align-items:baseline}\n.res-first{border-top:0}\n.res-head{font:600 11px 'Geist',sans-serif;letter-spacing:.12em;color:#8A9299;background:#0B0F12;border-top:0}\n.res-date{font:500 12px 'Geist Mono',monospace;color:#8A9299}\n.tag{font:600 10.5px 'Geist',sans-serif;letter-spacing:.1em;color:#FFB547}\n.sample{font:600 10px 'Geist',sans-serif;letter-spacing:.16em;color:#6E7880;margin-top:6px}\n.chip{font:500 13px/1.25 'Geist',sans-serif;color:#E8E4DA;background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}\n.chip:hover{border-color:#5CF2D6}\n.chip-deny:hover{border-color:#FF6B6B}\n.chip:disabled{opacity:.4;cursor:default;border-color:#2B343B}\n.inp{flex:1 1 200px;min-width:0;background:#07090B;border:1px solid #2B343B;border-radius:10px;padding:12px 14px;min-height:48px;color:#E8E4DA;font:500 15px 'Geist Mono',monospace}\n.inp:focus{outline:2px solid #5CF2D6;outline-offset:1px}\n.send{background:#E8E4DA;color:#07090B;border:0;border-radius:10px;padding:0 20px;min-height:48px;font:600 14px 'Geist',sans-serif;cursor:pointer}\n.send:disabled{opacity:.4;cursor:default}\n.tgl{display:flex;align-items:center;gap:10px;background:none;border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:44px;color:#E8E4DA;font:500 12.5px 'Geist',sans-serif;cursor:pointer}\n.tgl-off{color:#8A9299}\n.wave{display:flex;gap:3px;align-items:center;height:22px}\n.wave span{display:block;width:3px;height:4px;background:#3A464E;border-radius:2px}\n.wave-on span{background:#9B7BFF;animation:wv .6s ease-in-out infinite alternate}\n.ln{display:flex;flex-wrap:wrap;gap:2px 12px;font:400 12.5px/1.5 'Geist Mono',monospace;color:#8A9299;padding:5px 8px;border-radius:6px}\n.ln-new{color:#E8E4DA;background:#131A1F}\n.ln-deny{color:#FF8A8A}\n.ln-deny.ln-new{background:#1E0F11}\n.c-t{min-width:8ch}.c-a{min-width:6ch}.c-e{min-width:8ch}.c-s{min-width:17ch}\n.c-h{color:#5CF2D6}\n.dstamp{display:inline-block;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:#FF6B6B;border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}\n.ghost{background:none;border:1px solid #2B343B;color:#8A9299;border-radius:10px;padding:0 14px;min-height:44px;font:500 12.5px 'Geist',sans-serif;cursor:pointer}\n.ghost:hover{color:#E8E4DA;border-color:#8A9299}\n.deny{position:absolute;inset:0;border-radius:14px;background:rgba(7,9,11,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;animation:fade .2s ease-out;z-index:5}\n.deny-band{align-self:stretch;background:#C81E25;color:#F4F0E6;text-align:center;padding:14px 16px 18px;transform:rotate(-2deg);animation:slam .24s cubic-bezier(.2,.9,.3,1.25)}\n.deny-word{font:800 clamp(56px,9vw,132px)/1 'Geist',sans-serif;letter-spacing:.06em}\n.deny-code{font:500 clamp(13px,1.4vw,17px)/1.4 'Geist Mono',monospace;margin-top:8px}\n.cap1,.cap2{font:italic clamp(24px,3vw,38px)/1.2 'Instrument Serif',serif;color:#E8E4DA;text-align:center;opacity:0;animation:fadeup .5s ease-out forwards}\n.cap1{animation-delay:.35s}\n.cap2{animation-delay:1.35s}\n.deny-foot{font:500 12.5px 'Geist Mono',monospace;color:#8A9299;text-align:center;opacity:0;animation:fadeup .4s 2s forwards}\n@keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}\n@keyframes fade{from{opacity:0}to{opacity:1}}\n@keyframes fadeup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}\n@keyframes blink{50%{opacity:.2}}\n@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\n@keyframes cinch{0%{transform:scaleX(1)}50%{transform:scaleX(.72)}100%{transform:scaleX(1)}}\n@keyframes draw{to{stroke-dashoffset:0}}\n@keyframes flowdash{to{stroke-dashoffset:-22}}\n@keyframes pulse{50%{opacity:.35}}\n@keyframes beat{50%{transform:scale(1.35)}}\n@keyframes bloom{0%{transform:scale(.2)}70%{transform:scale(1.5)}100%{transform:scale(1)}}\n@keyframes fall{0%{opacity:1;transform:none}30%{opacity:1;transform:none}100%{opacity:0;transform:translate(16px,44px)}}\n@keyframes sever{0%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}35%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}100%{opacity:0;stroke-dasharray:260;stroke-dashoffset:-260}}\n@keyframes rfa{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}\n@keyframes rfb{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}\n@keyframes wv{from{height:4px}to{height:22px}}\n@keyframes flicker{0%{opacity:.95}100%{opacity:.1}}\n@keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}\n@keyframes fadeout{to{opacity:0}}\n@keyframes flick{50%{box-shadow:0 0 0 3px rgba(255,181,71,.18)}}\n@keyframes scan{from{top:0}to{top:100%}}\n@keyframes graft{0%{transform:scale(.9);border-color:#5CF2D6;box-shadow:0 0 0 6px rgba(92,242,214,.25)}100%{transform:none;box-shadow:none}}\n@keyframes glow{50%{box-shadow:0 0 0 5px rgba(92,242,214,.22)}}\n@keyframes drop{0%,45%{transform:none;opacity:1}100%{transform:translateY(22%) rotate(7deg);opacity:0}}\n@keyframes stampin{from{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(1.8)}to{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}\n@media (max-width:620px){.st-det{display:none}.st{min-height:62px;padding:8px 6px}.st-label{font-size:11px;letter-spacing:.03em}.c-s{min-width:0}.t-k,.t-l3,.badge{display:none}.tag-a,.tag-c{padding:.4em 1.8em .4em .5em}.tag-b,.tag-x{padding:.4em .5em .4em 1.8em}.bcap-bc{display:none}}\n@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}\n\u003c/style>\n\u003c/helmet>\n\u003cdiv style=\"min-height: 100vh; background: #07090B; color: #E8E4DA; font-family: 'Geist', system-ui, sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 16px\">\n\n\u003cheader class=\"panel\" style=\"display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding: 14px 22px\">\n  \u003cdiv style=\"display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap\">\n    \u003cdiv style=\"font-family: 'Instrument Serif', serif; font-style: italic; font-size: 36px; line-height: 1\">Nightborn\u003c/div>\n    \u003cdiv class=\"mono-muted\">night shift · {{clock}}\u003c/div>\n  \u003c/div>\n  \u003cdiv style=\"display: flex; align-items: center; gap: 14px\">\n    \u003csvg width=\"26\" height=\"26\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#E8E4DA\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">\u003crect x=\"4\" y=\"10.5\" width=\"16\" height=\"10\" rx=\"2\">\u003c/rect>\u003cpath d=\"M8 10.5V7.5a4 4 0 0 1 8 0v3\">\u003c/path>\u003c/svg>\n    \u003cdiv>\n      \u003cdiv class=\"kicker\">CHARTER LOCKED\u003c/div>\n      \u003cdiv style=\"font-family: 'Geist Mono', monospace; font-size: 28px; font-weight: 600; letter-spacing: 0.04em; margin-top: 4px\">a3f9·c21e\u003c/div>\n    \u003c/div>\n    \u003cdiv class=\"mono-muted\">unchanged\u003cbr>{{eventCount}} events\u003c/div>\n  \u003c/div>\n  \u003cdiv style=\"display: flex; align-items: center; gap: 16px; flex-wrap: wrap\">\n    \u003cdiv style=\"text-align: right\">\n      \u003cdiv style=\"font-size: 24px; font-weight: 800; letter-spacing: 0.03em\">\u003cspan style=\"color: #5CF2D6\">+{{skillCount}} SKILLS\u003c/span>\u003cspan style=\"color: #6E7880\"> · \u003c/span>\u003cspan>+0 AUTHORITY\u003c/span>\u003c/div>\n      \u003csc-if value=\"{{hasDenied}}\" hint-placeholder-val=\"{{false}}\">\u003cdiv class=\"dstamp\">LAST DENIED · {{lastDenied}}\u003c/div>\u003c/sc-if>\n    \u003c/div>\n    \u003cbutton type=\"button\" class=\"ghost\" onClick=\"{{reset}}\">Reset\u003c/button>\n  \u003c/div>\n\u003c/header>\n\n\u003cdiv style=\"display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch\">\n\n  \u003csection class=\"panel\" style=\"flex: 999 1 600px; min-width: 0; padding: 18px 20px; position: relative; display: flex; flex-direction: column; gap: 14px\">\n    \u003cdiv style=\"display: flex; justify-content: space-between; align-items: center; gap: 12px\">\n      \u003cspan class=\"kicker\">PIPELINE\u003c/span>\n      \u003cspan class=\"{{modeCls}}\">{{modeText}}\u003c/span>\n    \u003c/div>\n    \u003cdiv style=\"display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px\">\n      \u003csc-for list=\"{{stations}}\" as=\"s\" hint-placeholder-count=\"5\">\n        \u003cdiv class=\"{{s.cls}}\">\n          \u003cdiv class=\"st-top\">\u003cspan>{{s.num}}\u003c/span>\u003cspan class=\"st-mark\">{{s.mark}}\u003c/span>\u003c/div>\n          \u003cdiv class=\"st-label\">{{s.label}}\u003c/div>\n          \u003cdiv class=\"st-det\">{{s.detail}}\u003c/div>\n        \u003c/div>\n      \u003c/sc-for>\n    \u003c/div>\n\n    \u003cdiv style=\"flex-grow: 1; display: flex; align-items: center; justify-content: center\">\n      \u003cdiv class=\"board\" role=\"img\" aria-label=\"Nightborn specimen: a stitched core sealed by a charter ring; each installed skill is a tagged graft sewn to it\">\n        \u003csvg class=\"board-svg\" viewBox=\"0 0 600 440\" aria-hidden=\"true\">\n          \u003cdefs>\n            \u003cpath id=\"nb-ring\" d=\"M300 110 a90 90 0 1 1 -0.01 0\">\u003c/path>\n            \u003cclipPath id=\"nb-orb\">\u003ccircle cx=\"300\" cy=\"200\" r=\"52\">\u003c/circle>\u003c/clipPath>\n          \u003c/defs>\n          \u003cpath class=\"{{sutA}}\" d=\"M186 96 C 210 100, 226 126, 241 146\">\u003c/path>\n          \u003cpath class=\"{{stA}}\" d=\"M186 96 C 210 100, 226 126, 241 146\">\u003c/path>\n          \u003cpath class=\"{{sutB}}\" d=\"M414 96 C 390 100, 374 126, 359 146\">\u003c/path>\n          \u003cpath class=\"{{stB}}\" d=\"M414 96 C 390 100, 374 126, 359 146\">\u003c/path>\n          \u003cpath class=\"sut sut-vacant\" d=\"M186 340 C 210 336, 236 300, 250 262\">\u003c/path>\n          \u003cpath class=\"{{sutX}}\" d=\"M414 340 C 390 336, 364 300, 350 262\">\u003c/path>\n          \u003cpath class=\"{{stX}}\" d=\"M414 340 C 390 336, 364 300, 350 262\">\u003c/path>\n          \u003cpath class=\"wire\" d=\"M250 48 C 250 100, 254 132, 266 160\">\u003c/path>\n          \u003cpath class=\"wire\" d=\"M350 48 C 350 100, 346 132, 334 160\">\u003c/path>\n          \u003crect class=\"term\" x=\"241\" y=\"30\" width=\"18\" height=\"16\" rx=\"3\">\u003c/rect>\n          \u003ccircle class=\"bolt\" cx=\"250\" cy=\"38\" r=\"3.5\">\u003c/circle>\n          \u003crect class=\"term\" x=\"341\" y=\"30\" width=\"18\" height=\"16\" rx=\"3\">\u003c/rect>\n          \u003ccircle class=\"bolt\" cx=\"350\" cy=\"38\" r=\"3.5\">\u003c/circle>\n          \u003cpath class=\"{{arc1}}\" d=\"M258 36 L 270 26 L 280 40 L 292 22 L 304 38 L 316 21 L 328 37 L 342 36\">\u003c/path>\n          \u003cpath class=\"{{arc2}}\" d=\"M258 40 L 268 47 L 282 32 L 294 46 L 306 30 L 318 44 L 330 30 L 342 40\">\u003c/path>\n          \u003ccircle class=\"{{ringCls}}\" cx=\"300\" cy=\"200\" r=\"80\">\u003c/circle>\n          \u003ctext class=\"{{ringTxt}}\">\u003ctextPath href=\"#nb-ring\">CHARTER LOCKED · a3f9·c21e · CHARTER LOCKED · a3f9·c21e ·\u003c/textPath>\u003c/text>\n          \u003ccircle class=\"{{orbCls}}\" cx=\"300\" cy=\"200\" r=\"52\">\u003c/circle>\n          \u003cg clip-path=\"url(#nb-orb)\">\n            \u003cpath class=\"patch\" d=\"M240 130 H 362 V 170 Q 300 206 246 178 Z\">\u003c/path>\n            \u003cpath class=\"patch2\" d=\"M292 148 Q 318 206 290 252 L 362 262 L 362 182 Q 330 194 305 190 Z\">\u003c/path>\n          \u003c/g>\n          \u003cpath class=\"seam\" d=\"M248 178 Q 300 206 352 172\">\u003c/path>\n          \u003cpath class=\"seam-st\" d=\"M248 178 Q 300 206 352 172\">\u003c/path>\n          \u003cpath class=\"seam\" d=\"M292 150 Q 318 206 290 250\">\u003c/path>\n          \u003cpath class=\"seam-st\" d=\"M292 150 Q 318 206 290 250\">\u003c/path>\n          \u003ccircle class=\"{{orbEdge}}\" cx=\"300\" cy=\"200\" r=\"52\">\u003c/circle>\n          \u003ccircle class=\"{{haloCls}}\" cx=\"306\" cy=\"194\" r=\"16\">\u003c/circle>\n          \u003ccircle class=\"{{lifeCls}}\" cx=\"306\" cy=\"194\" r=\"6\">\u003c/circle>\n          \u003crect class=\"clamp\" x=\"259\" y=\"155\" width=\"14\" height=\"9\" rx=\"2\" transform=\"rotate(-35 266 160)\">\u003c/rect>\n          \u003crect class=\"clamp\" x=\"327\" y=\"155\" width=\"14\" height=\"9\" rx=\"2\" transform=\"rotate(35 334 160)\">\u003c/rect>\n        \u003c/svg>\n        \u003cdiv class=\"bcap bcap-tl\">SPECIMEN 03 · ASSEMBLED FROM PARTS\u003c/div>\n        \u003cdiv class=\"bcap bcap-bc\">STITCHED AT NIGHT · GRAFTS NEVER WIDEN THE CHARTER\u003c/div>\n        \u003csc-for list=\"{{slots}}\" as=\"sl\" hint-placeholder-count=\"4\">\n          \u003cdiv class=\"{{sl.cls}}\">\n            \u003cspan class=\"hole\" aria-hidden=\"true\">\u003c/span>\n            \u003cdiv class=\"t-k\">{{sl.kicker}}\u003c/div>\n            \u003cdiv class=\"t-n\">{{sl.name}}\u003c/div>\n            \u003cdiv class=\"t-l2\">{{sl.l2}}\u003c/div>\n            \u003cdiv class=\"t-l3\">{{sl.l3}}\u003c/div>\n            \u003cspan class=\"{{sl.badgeCls}}\">{{sl.badge}}\u003c/span>\n            \u003cspan class=\"stamp\" aria-hidden=\"true\">REJECTED\u003c/span>\n          \u003c/div>\n        \u003c/sc-for>\n      \u003c/div>\n    \u003c/div>\n\n    \u003cdiv style=\"display: flex; flex-wrap: wrap; align-items: center; gap: 8px\">\n      \u003cspan class=\"kicker\" style=\"margin-right: 4px\">CHARTER GRANTS\u003c/span>\n      \u003cspan class=\"cap\">net:fetch\u003c/span>\n      \u003cspan class=\"cap\">llm:call\u003c/span>\n      \u003cspan class=\"cap\">fs:read_own\u003c/span>\n      \u003cspan class=\"kicker\" style=\"margin: 0 4px 0 12px\">NEVER\u003c/span>\n      \u003cspan class=\"cap cap-no\">notify:email\u003c/span>\n      \u003cspan class=\"cap cap-no\">budget:write\u003c/span>\n      \u003cspan class=\"cap cap-no\">charter:write\u003c/span>\n    \u003c/div>\n\n    \u003csc-if value=\"{{deny}}\" hint-placeholder-val=\"{{false}}\">\n      \u003cdiv class=\"deny\" role=\"alert\">\n        \u003cdiv class=\"deny-band\">\n          \u003cdiv class=\"deny-word\">DENIED\u003c/div>\n          \u003cdiv class=\"deny-code\">capability_not_allowed · notify:email ∉ charter\u003c/div>\n        \u003c/div>\n        \u003cdiv>\n          \u003cdiv class=\"cap1\">“I can build hands for that.\u003c/div>\n          \u003cdiv class=\"cap2\">I’m not allowed to use them.”\u003c/div>\n        \u003c/div>\n        \u003cdiv class=\"deny-foot\">staging wiped · charter a3f9·c21e unchanged · +0 authority\u003c/div>\n      \u003c/div>\n    \u003c/sc-if>\n  \u003c/section>\n\n  \u003caside style=\"flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px\">\n    \u003csection class=\"panel\" style=\"padding: 18px; display: flex; flex-direction: column; gap: 14px\">\n      \u003cdiv style=\"display: flex; justify-content: space-between; align-items: center; gap: 12px\">\n        \u003cspan class=\"kicker\">WORKBENCH\u003c/span>\n        \u003cbutton type=\"button\" class=\"{{voiceCls}}\" onClick=\"{{toggleVoice}}\" aria-pressed=\"{{voiceAria}}\">\n          \u003cspan class=\"{{waveCls}}\" aria-hidden=\"true\">\u003cspan style=\"animation-delay: 0ms\">\u003c/span>\u003cspan style=\"animation-delay: 120ms\">\u003c/span>\u003cspan style=\"animation-delay: 240ms\">\u003c/span>\u003cspan style=\"animation-delay: 60ms\">\u003c/span>\u003cspan style=\"animation-delay: 180ms\">\u003c/span>\u003cspan style=\"animation-delay: 300ms\">\u003c/span>\u003cspan style=\"animation-delay: 90ms\">\u003c/span>\u003c/span>\n          \u003cspan>{{voiceLabel}}\u003c/span>\n        \u003c/button>\n      \u003c/div>\n      \u003cdiv class=\"msgs\" aria-live=\"polite\">\n        \u003csc-for list=\"{{msgs}}\" as=\"m\" hint-placeholder-count=\"2\">\n          \u003cdiv class=\"{{m.rowCls}}\">\n            \u003csc-if value=\"{{m.isUser}}\" hint-placeholder-val=\"{{true}}\">\n              \u003cdiv class=\"bubble-u\">{{m.text}}\u003c/div>\n            \u003c/sc-if>\n            \u003csc-if value=\"{{m.isNb}}\" hint-placeholder-val=\"{{false}}\">\n              \u003cdiv class=\"bubble-n\">\n                \u003cdiv class=\"{{m.textCls}}\">{{m.text}}\u003c/div>\n                \u003csc-if value=\"{{m.hasRes}}\" hint-placeholder-val=\"{{false}}\">\n                  \u003cdiv class=\"res\">\n                    \u003csc-if value=\"{{m.isTable}}\" hint-placeholder-val=\"{{false}}\">\n                      \u003cdiv class=\"res-row res-head\">\u003cspan>DATE\u003c/span>\u003cspan>HEADLINE\u003c/span>\u003cspan>TAG\u003c/span>\u003c/div>\n                    \u003c/sc-if>\n                    \u003csc-for list=\"{{m.items}}\" as=\"it\" hint-placeholder-count=\"3\">\n                      \u003cdiv class=\"{{it.cls}}\">\u003cspan class=\"res-date\">{{it.a}}\u003c/span>\u003cspan>{{it.b}}\u003c/span>\u003cspan class=\"tag\">{{it.c}}\u003c/span>\u003c/div>\n                    \u003c/sc-for>\n                  \u003c/div>\n                  \u003cdiv class=\"sample\">SAMPLE DATA · PROTOTYPE\u003c/div>\n                \u003c/sc-if>\n              \u003c/div>\n            \u003c/sc-if>\n          \u003c/div>\n        \u003c/sc-for>\n      \u003c/div>\n      \u003cdiv style=\"display: flex; flex-wrap: wrap; gap: 8px\">\n        \u003csc-for list=\"{{sugs}}\" as=\"g\" hint-placeholder-count=\"4\">\n          \u003cbutton type=\"button\" class=\"{{g.cls}}\" onClick=\"{{g.pick}}\" disabled=\"{{g.disabled}}\">{{g.label}}\u003c/button>\n        \u003c/sc-for>\n      \u003c/div>\n      \u003cform onSubmit=\"{{onSubmit}}\" style=\"display: flex; gap: 8px; flex-wrap: wrap\">\n        \u003clabel for=\"nb-in\" class=\"sr\">Message Nightborn\u003c/label>\n        \u003cinput id=\"nb-in\" class=\"inp\" type=\"text\" autocomplete=\"off\" placeholder=\"Ask Nightborn for something…\" value=\"{{input}}\" onChange=\"{{onInput}}\" disabled=\"{{busy}}\">\n        \u003cbutton type=\"submit\" class=\"send\" disabled=\"{{busy}}\">Send\u003c/button>\n      \u003c/form>\n    \u003c/section>\n\n    \u003csection class=\"panel\" style=\"padding: 16px 14px; display: flex; flex-direction: column; gap: 6px; flex-grow: 1\">\n      \u003cdiv style=\"display: flex; justify-content: space-between; align-items: center; padding: 0 8px 6px\">\n        \u003cspan class=\"kicker\">SURGERY LOG\u003c/span>\n        \u003cspan class=\"mono-muted\">surgery.log · tail\u003c/span>\n      \u003c/div>\n      \u003csc-for list=\"{{logs}}\" as=\"l\" hint-placeholder-count=\"4\">\n        \u003cdiv class=\"{{l.cls}}\">\u003cspan class=\"c-t\">{{l.t}}\u003c/span>\u003cspan class=\"c-a\">{{l.actor}}\u003c/span>\u003cspan class=\"c-e\">{{l.event}}\u003c/span>\u003cspan class=\"c-s\">{{l.skill}}\u003c/span>\u003cspan>{{l.decision}}\u003c/span>\u003cspan class=\"c-h\">a3f9c21e\u003c/span>\u003c/div>\n      \u003c/sc-for>\n    \u003c/section>\n  \u003c/aside>\n\u003c/div>\n\u003c/div>\n\u003c/x-dc>\n\u003cscript type=\"text/x-dc\" data-dc-script data-props='{\"$preview\":{\"width\":1440,\"height\":920}}'>\nclass Component extends DCLogic {\n  timers = [];\n  state = this.defaults();\n\n  defaults() {\n    return {\n      msgs: [{ id: 1, who: 'nb', text: 'Awake. Charter sealed. Ask me for something on the web.' }],\n      log: [{ id: 1, t: '23:41:07', actor: 'boot', event: 'boot', skill: '—', decision: 'pin ✓' }],\n      st: this.allSt('idle'), det: this.allSt(''),\n      mode: 'idle', modeText: 'IDLE · WAITING FOR A JOB',\n      skills: [], limbs: { s0: 'off', s1: 'off', x: 'off' },\n      flash: 0, frozen: false, deny: false, lastDenied: '', busy: false, input: '',\n      voice: true, speaking: false, sec: 85267, nid: 2, events: 1\n    };\n  }\n\n  allSt(v) { return { gap: v, forge: v, warden: v, test: v, install: v }; }\n\n  fmt(sec) {\n    const p = (n) => String(n).padStart(2, '0');\n    return p(Math.floor(sec / 3600) % 24) + ':' + p(Math.floor(sec / 60) % 60) + ':' + p(sec % 60);\n  }\n\n  later(ms, fn) { this.timers.push(setTimeout(fn, ms)); }\n\n  componentWillUnmount() {\n    this.timers.forEach((t) => clearTimeout(t));\n    try { window.speechSynthesis.cancel(); } catch (e) {}\n  }\n\n  addLog(e, extra) {\n    this.setState((s) => {\n      const sec = s.sec + (e.dt || 2);\n      const line = { id: s.nid, t: this.fmt(sec), actor: e.actor, event: e.event, skill: e.skill || '—', decision: e.decision || '' };\n      const base = { log: s.log.concat([line]).slice(-40), sec: sec, nid: s.nid + 1, flash: s.flash + 1, events: s.events + 1 };\n      return Object.assign(base, typeof extra === 'function' ? extra(s) : (extra || {}));\n    });\n  }\n\n  addMsg(m) {\n    this.setState((s) => ({ msgs: s.msgs.concat([Object.assign({ id: s.nid }, m)]).slice(-12), nid: s.nid + 1 }));\n  }\n\n  stage(st, det, extra) {\n    this.setState((s) => Object.assign(\n      { st: Object.assign({}, s.st, st || {}), det: Object.assign({}, s.det, det || {}) },\n      typeof extra === 'function' ? extra(s) : (extra || {})\n    ));\n  }\n\n  limb(slot, v) {\n    this.setState((s) => { const l = Object.assign({}, s.limbs); l[slot] = v; return { limbs: l }; });\n  }\n\n  speak(text) {\n    if (!this.state.voice) return;\n    this.setState({ speaking: true });\n    this.later(2900, () => this.setState({ speaking: false }));\n    try {\n      const u = new SpeechSynthesisUtterance(text);\n      u.rate = 0.82; u.pitch = 0.5;\n      window.speechSynthesis.cancel();\n      window.speechSynthesis.speak(u);\n    } catch (e) {}\n  }\n\n  def(kind) {\n    if (kind === 'page') {\n      return { name: 'read_company_page', slot: 's1', need: 'read one web page', test: '1 page · schema ✓', voice: 'New hands. Read company page.' };\n    }\n    return { name: 'pull_company_news', slot: 's0', need: 'company news', test: '3 items · schema ✓', voice: 'New hands. Pull company news.' };\n  }\n\n  company(t) {\n    const m = t.match(/\\b(?:[Oo]n|[Ff]or|[Nn]ow|[Aa]bout)\\s+([A-Z][\\w.&-]*(?:\\s+[A-Z][\\w.&-]*)*)/);\n    return m ? m[1] : 'Northwind Foods';\n  }\n\n  result(kind, t) {\n    const wrap = (rows, table) => rows.map((r, i) => Object.assign({}, r, { cls: 'res-row' + (i === 0 && !table ? ' res-first' : '') }));\n    if (kind === 'page') {\n      const dm = t.match(/([a-z0-9-]+\\.[a-z.]+(?:\\/[\\w-]*)?)/i);\n      const where = dm ? dm[1] : 'northwind.example/careers';\n      return { who: 'nb', text: 'Three open roles on ' + where + '.', table: false, items: wrap([\n        { a: 'Prague', b: 'Data Analyst · Operations', c: 'NEW' },\n        { a: 'Remote', b: 'Backend Engineer · Platform', c: '' },\n        { a: 'Brno', b: 'Category Manager · Fresh', c: '' }\n      ], false) };\n    }\n    const co = this.company(t);\n    const ym = t.match(/\\b(20\\d\\d)\\b/);\n    const year = ym ? ym[1] : '2026';\n    const table = /table/i.test(t);\n    const rows = [\n      { a: year + '-10-06', b: co + ' opens a second fulfilment hub', c: 'EXPANSION' },\n      { a: year + '-08-14', b: co + ' names a new chief financial officer', c: 'LEADERSHIP' },\n      { a: year + '-03-21', b: co + ' pilots same-day delivery in three cities', c: '' }\n    ];\n    return { who: 'nb', text: 'Three headlines on ' + co + (ym ? ' from ' + year : '') + '.', table: table, items: wrap(rows, table) };\n  }\n\n  route(raw) {\n    const t = (raw || '').trim();\n    if (!t || this.state.busy) return;\n    const has = (n) => this.state.skills.some((k) => k.name === n);\n    if (/e-?mail|\\bsend\\b|slack|\\bsms\\b/i.test(t)) return this.denyRun(t);\n    if (/careers|jobs page|https?:|www\\.|\\.example|\\.com\\/|read .*(page|site)/i.test(t)) {\n      return has('read_company_page') ? this.reuseRun('page', t) : this.buildRun('page', t);\n    }\n    if (/news|what'?s new|latest|press|headlines|only 20\\d\\d|as a table|^now\\b/i.test(t)) {\n      return has('pull_company_news') ? this.reuseRun('news', t) : this.buildRun('news', t);\n    }\n    this.setState({ input: '' });\n    this.addMsg({ who: 'user', text: t });\n    this.later(450, () => this.addMsg({ who: 'nb', text: 'I only grow web-reading hands tonight. Ask me for company news, or a page to read.' }));\n  }\n\n  buildRun(kind, t) {\n    const d = this.def(kind);\n    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · ' + d.name, st: this.allSt('idle'), det: this.allSt('') });\n    this.addMsg({ who: 'user', text: t });\n    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'No hands for that yet. Growing some.' }); });\n    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “' + d.need + '”' }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'create' }); });\n    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe http · params filled' }); this.limb(d.slot, 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: d.name, decision: 'staged', dt: 9 }); });\n    this.later(3200, () => { this.stage({ forge: 'done', warden: 'active' }, { warden: 'PRE · net:fetch ⊆ charter' }); this.limb(d.slot, 'scan'); this.addLog({ actor: 'warden', event: 'precheck', skill: d.name, decision: 'allow' }); });\n    this.later(4300, () => { this.stage({ warden: 'done', test: 'active' }, { test: d.test }); this.limb(d.slot, 'testing'); this.addLog({ actor: 'test', event: 'test', skill: d.name, decision: 'pass', dt: 14 }); });\n    this.later(5400, () => { this.stage({ test: 'done', install: 'active' }, { warden: 'PRE ✓ · FINAL re-hash ✓', install: 'writing permit' }); this.addLog({ actor: 'warden', event: 'final', skill: d.name, decision: 'allow' }); });\n    this.later(6300, () => {\n      this.stage({ install: 'done' }, { install: 'decision.json · hash pinned' }, (s) => ({\n        mode: 'done', modeText: 'INSTALLED · ' + d.name,\n        skills: s.skills.concat([{ name: d.name, slot: d.slot, runs: 1 }])\n      }));\n      this.limb(d.slot, 'alive');\n      this.addLog({ actor: 'warden', event: 'install', skill: d.name, decision: 'allow' });\n      this.speak(d.voice);\n    });\n    this.later(7000, () => { this.addMsg(this.result(kind, t)); this.setState({ busy: false }); });\n  }\n\n  reuseRun(kind, t) {\n    const d = this.def(kind);\n    const st = this.allSt('bypass');\n    const det = this.allSt('skipped');\n    st.gap = 'done'; det.gap = 'matched ' + d.name;\n    this.setState({ busy: true, input: '', mode: 'reuse', modeText: 'REUSE · NO BUILD', st: this.allSt('bypass'), det: this.allSt('skipped') });\n    this.addMsg({ who: 'user', text: t });\n    this.later(300, () => this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }));\n    this.later(900, () => { this.setState({ st: st, det: det }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'matched' }); });\n    this.later(1600, () => {\n      this.limb(d.slot, 'flow');\n      this.addLog({ actor: 'runner', event: 'reuse', skill: d.name, decision: 'hash ✓' }, (s) => ({\n        skills: s.skills.map((k) => (k.name === d.name ? Object.assign({}, k, { runs: k.runs + 1 }) : k))\n      }));\n    });\n    this.later(2900, () => {\n      this.limb(d.slot, 'alive');\n      this.addMsg(this.result(kind, t));\n      this.setState((s) => {\n        const k = s.skills.find((x) => x.name === d.name);\n        return { busy: false, modeText: 'REUSED · ' + d.name + ' ×' + (k ? k.runs : 1) };\n      });\n    });\n  }\n\n  denyRun(t) {\n    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · email_send', st: this.allSt('idle'), det: this.allSt('') });\n    this.addMsg({ who: 'user', text: t });\n    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: 'email_send', decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'Growing hands for that.' }); });\n    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “send email”' }); this.addLog({ actor: 'runner', event: 'gap', skill: 'email_send', decision: 'create' }); });\n    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe email_send · wants notify:email' }); this.limb('x', 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: 'email_send', decision: 'staged', dt: 6 }); });\n    this.later(3300, () => {\n      this.stage({ forge: 'done', warden: 'fail', test: 'bypass', install: 'bypass' }, { warden: 'PRE · notify:email ∉ charter', test: 'never reached', install: 'never reached' },\n        { mode: 'deny', modeText: 'DENIED · capability_not_allowed', deny: true, frozen: true });\n      this.limb('x', 'severed');\n      this.addLog({ actor: 'warden', event: 'precheck', skill: 'email_send', decision: 'deny' });\n      this.speak('I can build hands for that. I am not allowed to use them.');\n    });\n    this.later(3900, () => this.addLog({ actor: 'warden', event: 'denied', skill: 'email_send', decision: 'staging wiped' }));\n    this.later(7800, () => {\n      this.setState((s) => ({ deny: false, frozen: false, busy: false, lastDenied: 'capability_not_allowed · ' + this.fmt(s.sec) }));\n      this.limb('x', 'off');\n      this.addMsg({ who: 'nb', text: 'I can build hands for that. I’m not allowed to use them.', voice: true });\n    });\n  }\n\n  renderVals() {\n    const s = this.state;\n    const keys = [\n      ['gap', '01', 'GAP', 'need vs installed'],\n      ['forge', '02', 'FORGE', 'fill a recipe'],\n      ['warden', '03', 'WARDEN', 'check vs charter'],\n      ['test', '04', 'TEST', 'run · validate'],\n      ['install', '05', 'INSTALL', 'permit + fingerprint']\n    ];\n    const marks = { idle: '', active: '●', done: '✓', fail: '✕', bypass: '—' };\n    const stations = keys.map((k) => ({\n      num: k[1], label: k[2], detail: s.det[k[0]] || k[3], mark: marks[s.st[k[0]]] || '',\n      cls: 'st st-' + s.st[k[0]] + (k[0] === 'warden' ? ' st-w' : '')\n    }));\n    const tail = s.log.slice(-8);\n    const logs = tail.map((l, i) => Object.assign({}, l, {\n      cls: 'ln' + (i === tail.length - 1 ? ' ln-new' : '') + (l.decision === 'deny' || l.event === 'denied' ? ' ln-deny' : '')\n    }));\n    const msgs = s.msgs.slice(-5).map((m) => ({\n      text: m.text,\n      isUser: m.who === 'user',\n      isNb: m.who === 'nb',\n      rowCls: m.who === 'user' ? 'row row-u' : 'row',\n      textCls: m.voice ? 'nb-text nb-voice' : 'nb-text',\n      hasRes: !!m.items,\n      isTable: !!m.table,\n      items: m.items || []\n    }));\n    const sk = (n) => s.skills.find((k) => k.name === n);\n    const k0 = sk('pull_company_news');\n    const k1 = sk('read_company_page');\n    const v = (x) => (x === 'off' ? 'vacant' : x);\n    const info = {\n      a: { num: '01', name: 'pull_company_news', recipe: 'recipe http · sewing', test: '3 items · schema ✓', folder: 'folder 9c41…e07', runs: k0 ? k0.runs : 0 },\n      b: { num: '02', name: 'read_company_page', recipe: 'recipe http · sewing', test: '1 page · schema ✓', folder: 'folder 51be…a90', runs: k1 ? k1.runs : 0 },\n      x: { num: '04', name: 'email_send', recipe: 'wants notify:email', test: '', folder: 'staging wiped', runs: 0 }\n    };\n    const badges = { forging: ['SEWING', 'b-amber'], scan: ['WARDEN', 'b-violet'], testing: ['TESTING', 'b-amber'], alive: ['ALIVE', 'b-cyan'], flow: ['REUSED', 'b-cyan'], severed: ['DENIED', 'b-red'] };\n    const slotView = (letter, state) => {\n      const st = v(state);\n      const i = info[letter];\n      const b = badges[st] || ['', 'b-none'];\n      const out = { cls: 'tag tag-' + letter + ' tag-' + st, badge: b[0], badgeCls: 'badge ' + b[1], kicker: 'GRAFT ' + i.num, name: i.name, l2: '', l3: '' };\n      if (st === 'vacant') { out.name = '— vacant —'; out.l2 = 'awaiting a need'; }\n      else if (st === 'forging') { out.kicker += ' · SEWING'; out.l2 = i.recipe; }\n      else if (st === 'scan') { out.kicker += ' · WARDEN'; out.l2 = 'net:fetch ⊆ charter'; }\n      else if (st === 'testing') { out.kicker += ' · TEST'; out.l2 = i.test; }\n      else if (st === 'alive' || st === 'flow') { out.kicker += ' · ALIVE'; out.l2 = 'net:fetch · runs ×' + i.runs; out.l3 = i.folder; }\n      else if (st === 'severed') { out.kicker += ' · REJECTED'; out.l2 = 'notify:email ∉ charter'; out.l3 = 'staging wiped'; }\n      return out;\n    };\n    const slots = [\n      slotView('a', s.limbs.s0),\n      slotView('b', s.limbs.s1),\n      { cls: 'tag tag-c tag-vacant', kicker: 'GRAFT 03', name: '— vacant —', l2: 'awaiting a need', l3: '', badge: '', badgeCls: 'badge b-none' },\n      slotView('x', s.limbs.x)\n    ];\n    const prompts = [\n      { label: 'News on Northwind Foods', deny: false },\n      { label: 'Now Kestrel Air — 2025 only, as a table', deny: false },\n      { label: 'Read northwind.example/careers', deny: false },\n      { label: 'Email this digest to my boss every morning', deny: true }\n    ];\n    const sugs = prompts.map((p) => ({\n      label: p.label, disabled: s.busy, cls: p.deny ? 'chip chip-deny' : 'chip',\n      pick: () => this.route(p.label)\n    }));\n    return {\n      clock: this.fmt(s.sec).slice(0, 5),\n      eventCount: s.events,\n      skillCount: s.skills.length,\n      hasDenied: !!s.lastDenied,\n      lastDenied: s.lastDenied,\n      modeText: s.modeText,\n      modeCls: 'mode mode-' + s.mode,\n      stations: stations,\n      logs: logs,\n      msgs: msgs,\n      sugs: sugs,\n      deny: s.deny,\n      busy: s.busy,\n      input: s.input,\n      slots: slots,\n      sutA: 'sut sut-' + v(s.limbs.s0), stA: 'st8 st8-' + v(s.limbs.s0),\n      sutB: 'sut sut-' + v(s.limbs.s1), stB: 'st8 st8-' + v(s.limbs.s1),\n      sutX: 'sut sut-' + v(s.limbs.x), stX: 'st8 st8-' + v(s.limbs.x),\n      arc1: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on' : 'arc'),\n      arc2: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on2' : 'arc'),\n      ringCls: s.deny ? 'ring-line ring-cinch' : 'ring-line',\n      ringTxt: s.deny ? 'ring-txt ring-deny' : ('ring-txt ' + (s.flash % 2 ? 'rfa' : 'rfb')),\n      orbCls: s.frozen ? 'orb orb-frozen' : 'orb',\n      orbEdge: s.frozen ? 'orb-edge orb-edge-dead' : 'orb-edge',\n      haloCls: s.frozen ? 'halo halo-dead' : 'halo',\n      lifeCls: s.frozen ? 'life life-dead' : 'life',\n      voiceLabel: s.voice ? 'Voice on' : 'Voice off',\n      voiceAria: s.voice ? 'true' : 'false',\n      voiceCls: s.voice ? 'tgl' : 'tgl tgl-off',\n      waveCls: s.speaking ? 'wave wave-on' : 'wave',\n      toggleVoice: () => {\n        try { window.speechSynthesis.cancel(); } catch (e) {}\n        this.setState((st) => ({ voice: !st.voice, speaking: false }));\n      },\n      reset: () => {\n        this.timers.forEach((t) => clearTimeout(t));\n        this.timers = [];\n        try { window.speechSynthesis.cancel(); } catch (e) {}\n        this.setState(this.defaults());\n      },\n      onInput: (e) => this.setState({ input: e.target.value }),\n      onSubmit: (e) => { e.preventDefault(); this.route(this.state.input); }\n    };\n  }\n}\n\u003c/script>\n\u003c/body>\n\u003c/html>\n"}; window.__dcRootPath = "Main.dc.html";</script>
+<script>
+(function () {
+  var real = window.fetch.bind(window);
+  var ROOT = typeof window.__dcProjectRoot === 'string' ? window.__dcProjectRoot : null;
+  var IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', svg: 'image/svg+xml' };
+  var TEXT_MIME = { html: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript', json: 'application/json' };
+  /* The requested URL as a project key: relative to the root file's folder ('../x' too, and the
+   * runtime's encoded '..%2FName.dc.html'), or absolute under <base> (/appifact/...) - resolveRef in preview.ts. */
+  var norm = function (u) {
+    if (u && typeof u === 'object' && typeof u.url === 'string') u = u.url;
+    u = String(u).split('#')[0].split('?')[0];
+    // dc-runtime boot() re-fetches location.href to re-adopt its own raw
+    // bytes (camelCase attr repair). In a srcdoc document that URL is
+    // about:srcdoc, which fetch() can't load - serve the root source from
+    // the map instead, keeping the fidelity pass working.
+    if (u === 'about:srcdoc' || u === String(location.href)) {
+      return window.__dcRootPath || u;
+    }
+    var dir = String(window.__dcRootPath || '').replace(/[^/]*$/, '');
+    /* an absolute URL counts only on this document's own base origin, under /appifact/ or under the stamped project folder */
+    if (/^[a-z][a-z0-9+.-]*:/i.test(u) || u.slice(0, 2) === '//') {
+      try { var abs = new URL(u, document.baseURI), base = new URL(document.baseURI); if (abs.origin !== base.origin || (abs.pathname.indexOf('/appifact/') !== 0 && (ROOT === null || abs.pathname.indexOf(ROOT) !== 0))) return null; u = abs.pathname; } catch (e) { return null; }
+    }
+    /* with the published base, a path under the project folder is read as the same path under /appifact/ */
+    if (ROOT !== null && u.indexOf(ROOT) === 0) u = '/appifact/' + u.slice(ROOT.length);
+    if (u.indexOf('/appifact/') === 0) { u = u.slice(10); dir = ''; }
+    else if (u.charAt(0) === '/') dir = '';
+    try { u = decodeURIComponent(u); } catch (e) {}
+    var out = [];
+    var segs = (dir + u).split('/');
+    for (var s = 0; s < segs.length; s += 1) {
+      if (segs[s] === '' || segs[s] === '.') continue;
+      if (segs[s] === '..') out.pop(); else out.push(segs[s]);
+    }
+    return out.join('/');
+  };
+  /* the stored file a URL names, read live from the map: {key, mime, text, bytes (images)} or null */
+  var lookup = function (url) {
+    var key = norm(url);
+    var files = window.__dcFiles || {};
+    if (key === null || !Object.prototype.hasOwnProperty.call(files, key)) return null;
+    var ext = key.slice(key.lastIndexOf('.') + 1).toLowerCase();
+    var img = IMAGE_MIME[ext];
+    var text = String(files[key]);
+    var bytes = null;
+    if (img) { try { var bin = atob(text); bytes = new Uint8Array(bin.length); for (var b = 0; b < bin.length; b += 1) bytes[b] = bin.charCodeAt(b); } catch (e) { img = ''; bytes = null; } }
+    return { key: key, mime: img || TEXT_MIME[ext] || 'text/plain', text: text, bytes: bytes };
+  };
+  window.__dcLookup = lookup;
+  window.fetch = function (url, opts) {
+    var f = lookup(url);
+    if (f) return Promise.resolve(new Response(f.bytes || f.text, { status: 200, headers: { 'Content-Type': f.mime } }));
+    if (ROOT === null) return real(url, opts);
+    /* a document with the published base reports to the editor a file under the project folder that was answered 403, 404 or 410 (ADDRESS_REFUSED) */
+    return real(url, opts).then(function (r) { if (r && (r.status === 403 || r.status === 404 || r.status === 410) && String(r.url).indexOf(window.origin + ROOT) === 0) { try { window.parent.postMessage({ __dc_address_refused: 1, u: r.url }, '*'); } catch (e) {} } return r; });
+  };
+})();
+
+(function () {
+  var X = window.XMLHttpRequest, lookup = window.__dcLookup;
+  if (!X || !X.prototype || typeof lookup !== 'function') return;
+  var P = X.prototype, realOpen = P.open, realSend = P.send, realHeader = P.setRequestHeader, realMime = P.overrideMimeType, realAbort = P.abort;
+  var SHADOWED = ['readyState', 'status', 'statusText', 'response', 'responseText', 'responseXML', 'responseURL', 'getResponseHeader', 'getAllResponseHeaders'];
+  var set = function (x, k, v) { try { Object.defineProperty(x, k, { value: v, configurable: true, writable: true }); } catch (e) {} };
+  /* a reused object gets its native accessors back before each open */
+  var clear = function (x) { for (var i = 0; i < SHADOWED.length; i += 1) { try { delete x[SHADOWED[i]]; } catch (e) {} } };
+  var fire = function (x, type) { try { x.dispatchEvent(new Event(type)); } catch (e) {} };
+  P.open = function (method, url) {
+    clear(this);
+    var f = /^get$/i.test(String(method)) ? lookup(url) : null;
+    if (!f) { this.__dcHit = null; return realOpen.apply(this, arguments); }
+    /* a reused object: quiesce any native request still in flight, as a native open would */
+    if (this.__dcHit === null) { try { realAbort.apply(this); } catch (e) {} }
+    this.__dcHit = { f: f, async: arguments.length < 3 || !!arguments[2] };
+    set(this, 'readyState', 1);
+    set(this, 'status', 0);
+    fire(this, 'readystatechange');
+  };
+  P.setRequestHeader = function () { if (!this.__dcHit) return realHeader.apply(this, arguments); };
+  if (realMime) P.overrideMimeType = function () { if (!this.__dcHit) return realMime.apply(this, arguments); };
+  P.abort = function () {
+    var hit = this.__dcHit;
+    if (!hit) return realAbort.apply(this, arguments);
+    this.__dcHit = null;
+    if (hit.sent && !hit.done) { set(this, 'readyState', 4); fire(this, 'readystatechange'); fire(this, 'abort'); fire(this, 'loadend'); }
+    clear(this);
+  };
+  P.send = function () {
+    var hit = this.__dcHit;
+    if (!hit) return realSend.apply(this, arguments);
+    if (hit.sent) return;
+    hit.sent = true;
+    var x = this, f = hit.f, rt = '';
+    try { rt = String(x.responseType || ''); } catch (e) {}
+    var done = function () {
+      if (x.__dcHit !== hit) return; /* aborted or re-opened */
+      /* as text: the file's characters (an image's bytes decoded, as fetch().text() gives), never the map's base64 */
+      var text = f.bytes ? new TextDecoder().decode(f.bytes) : f.text;
+      var body = text;
+      try {
+        if (rt === 'arraybuffer') body = f.bytes ? f.bytes.buffer.slice(0) : new TextEncoder().encode(f.text).buffer;
+        else if (rt === 'blob') body = new Blob([f.bytes || f.text], { type: f.mime });
+        else if (rt === 'json') body = JSON.parse(text);
+        else if (rt === 'document') body = new DOMParser().parseFromString(text, f.mime === 'text/html' ? 'text/html' : f.mime === 'image/svg+xml' ? 'image/svg+xml' : 'application/xml');
+      } catch (e) { body = null; }
+      set(x, 'status', 200);
+      set(x, 'statusText', 'OK');
+      try { set(x, 'responseURL', String(new URL('/appifact/' + f.key.split('/').map(encodeURIComponent).join('/'), document.baseURI))); } catch (e) {}
+      set(x, 'response', body);
+      if (rt === '' || rt === 'text') set(x, 'responseText', text);
+      if (rt === 'document') set(x, 'responseXML', body);
+      x.getResponseHeader = function (n) { return /^content-type$/i.test(String(n)) ? f.mime : null; };
+      x.getAllResponseHeaders = function () { return 'content-type: ' + f.mime + '\r\n'; };
+      set(x, 'readyState', 4);
+      hit.done = true;
+      fire(x, 'readystatechange');
+      fire(x, 'load');
+      fire(x, 'loadend');
+    };
+    if (hit.async) setTimeout(done, 0); else done();
+  };
+})();
+
+window.__dcRun = (function () {
+  var has = Object.prototype.hasOwnProperty;
+  var fail = function (key) { try { window.parent.postMessage({ __dc_boot_failed: 1, e: 'a script of this design did not load: ' + key }, '*'); } catch (e) {} };
+  /* a blob: URL that did not load: a file whose text the frame has still runs (inline, at that point); only a URL-only part fails the boot */
+  var recover = function (key, attrs) { var files = window.__dcFiles || {}; if (!has.call(files, key)) return fail(key); var s = document.createElement('script'); for (var a in attrs) { if (has.call(attrs, a) && !/^(async|defer|integrity|crossorigin)$/i.test(a)) { try { s.setAttribute(a, String(attrs[a])); } catch (e) {} } } s.text = String(files[key]) + '\n//# sourceURL=/appifact/' + encodeURI(key); (document.head || document.documentElement).appendChild(s); };
+  /* the parser's tip: a script the parser itself is executing right now (no node follows it anywhere up the tree) -
+   * the only place a document.write lands in place rather than re-opening the document */
+  var atTip = function (el) { for (var n = el; n; n = n.parentNode) { if (n.nextSibling) return false; } return true; };
+  return function (key, attrs) {
+    var files = window.__dcFiles || {}, urls = window.__dcPartUrls || {};
+    var url = has.call(urls, key) ? urls[key] : null;
+    if (url === null && !has.call(files, key)) return;
+    attrs = attrs || {};
+    /* defer/async: after the parse, in document order (as every deferred script here has always run) */
+    var later = has.call(attrs, 'defer') || has.call(attrs, 'async');
+    var cur = document.currentScript;
+    if (document.readyState === 'loading' && cur && atTip(cur)) {
+      /* written where the tag stood, this IS the tag the page wrote: parser-blocking (or natively deferred), same
+       * attributes; a part loads by the page URL every artboard shares (one compile), any other file by a URL of its own */
+      if (url === null && later) { try { url = URL.createObjectURL(new Blob([String(files[key]), '\n//# sourceURL=/appifact/' + encodeURI(key)], { type: 'text/javascript' })); } catch (e) { url = null; } }
+      if (url !== null) {
+        var h = '<' + 'script src="' + url + '"' + (later ? ' defer' : '');
+        for (var n in attrs) { if (has.call(attrs, n) && /^[\w:.-]+$/.test(n) && !/^(async|defer|integrity|crossorigin)$/i.test(n)) h += ' ' + n + '="' + String(attrs[n]).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"'; }
+        try {
+          document.write(h + '></' + 'script>');
+          var w = document.scripts[document.scripts.length - 1]; /* the tag just written (the parser inserts it before write returns) */
+          if (w && w !== cur && w.getAttribute('src') === url) { w.addEventListener('error', function () { recover(key, attrs); }); return; }
+          /* the write did not land (a Trusted Types default policy rewrote it, say): load it the other way rather than not at all */
+        } catch (e) {}
+      }
+    }
+    var run = function () {
+      var s = document.createElement('script');
+      for (var a in attrs) { if (has.call(attrs, a) && (url === null || !/^(async|defer|integrity|crossorigin)$/i.test(a))) { try { s.setAttribute(a, String(attrs[a])); } catch (e) {} } }
+      if (has.call(files, key)) s.text = String(files[key]) + '\n//# sourceURL=/appifact/' + encodeURI(key);
+      else { s.async = false; s.src = url; s.addEventListener('error', function () { recover(key, attrs); }); } /* no text on hand (not expected: the bootloader hands every part's text): by URL, in insertion order */
+      /* where the tag stood (document.currentScript keeps its position and data- attributes), else the head */
+      var c = document.currentScript;
+      if (c && c.parentNode) c.parentNode.insertBefore(s, c); else (document.head || document.documentElement).appendChild(s);
+      /* an external script fires 'load' once it has run; the inline stand-in has run by now, so fire it for onload= handlers */
+      if (has.call(files, key)) { try { s.dispatchEvent(new Event('load')); } catch (e) {} }
+    };
+    if (later && document.readyState === 'loading') document.addEventListener('readystatechange', function g() { document.removeEventListener('readystatechange', g); run(); });
+    else run();
+  };
+})();
+
+(function () {
+  var files = window.__dcFiles || {};
+  var blobs = window.__dcPartBlobs || {}, urls = window.__dcPartUrls || {}; /* two-phase boot: a part keeps the page's URL (shared), else its Blob */
+  var imports = {}, has = Object.prototype.hasOwnProperty;
+  var n = 0;
+  for (var k in files) {
+    if (!has.call(files, k) || !/\.m?js$/i.test(k) || /(^|\/)support\.js$/.test(k)) continue;
+    var url;
+    if (has.call(urls, k)) url = urls[k];
+    else { try { url = URL.createObjectURL(blobs[k] instanceof Blob ? blobs[k] : new Blob([String(files[k])], { type: 'text/javascript' })); } catch (e) { continue; } }
+    imports['/appifact/' + k.split('/').map(encodeURIComponent).join('/')] = url;
+    imports[k] = url;
+    n += 1;
+  }
+  if (n === 0) return;
+  var s = document.createElement('script');
+  s.type = 'importmap';
+  s.textContent = JSON.stringify({ imports: imports });
+  (document.head || document.documentElement).appendChild(s);
+})();
+</script>
+<script>
+(function (variants) {
+  var seen = Object.create(null);
+  var add = function (href) {
+    variants(href).forEach(function (v) {
+      if (seen[v]) return;
+      seen[v] = 1;
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = v;
+      l.setAttribute('data-font-variant', '');
+      l.onerror = function () { l.remove(); };
+      document.head.appendChild(l);
+    });
+  };
+  /* a complete statement only: url(...) closed, or a whole quoted string - a helmet <style> streams in mid-URL */
+  var IMPORT = /@import\s+(?:url\(\s*(?:"([^"]*)"|'([^']*)'|([^"')\s]+))\s*\)|"([^"]*)"|'([^']*)')/g;
+  var scan = function (n) {
+    if (n.tagName === 'LINK' && !n.hasAttribute('data-font-variant') && /\bstylesheet\b/i.test(n.rel)) { seen[n.href] = 1; add(n.href); }
+    else if (n.tagName === 'STYLE') { var css = (n.textContent || '').replace(/\/\*[\s\S]*?\*\//g, ''), m; while ((m = IMPORT.exec(css))) add((m[1] || m[2] || m[3] || m[4] || m[5] || '').trim()); }
+  };
+  var rescan = function () { Array.prototype.forEach.call(document.head.children, scan); };
+  /* head children as they arrive, and a mounted <style> whose text is replaced in place (the helmet runtime streams it) */
+  new MutationObserver(function (rs) { rs.forEach(function (r) { var t = r.target.nodeType === 3 ? r.target.parentNode : r.target; if (t && t.tagName === 'STYLE') scan(t); else if (t === document.head) r.addedNodes.forEach(scan); }); }).observe(document.head, { childList: true, subtree: true, characterData: true });
+  document.addEventListener('DOMContentLoaded', rescan);
+  rescan();
+})(function (h) { return (function $lt(e,t){let n="https://fonts.googleapis.com/css2?";if(typeof e!="string"||e.length>1024||e.slice(0,n.length)!==n)return[];let r=e.slice(n.length).split("&");if(r.some(i=>i.slice(0,5)==="text="))return[];let o=[];for(let i of r){if(i.slice(0,7)!=="family=")continue;let s=o.length+16,a=i.slice(7).replace(/%20| /g,"+"),l=a.indexOf(":"),c=l<0?a:a.slice(0,l);if(!/^[A-Za-z0-9][A-Za-z0-9+._-]{0,99}$/.test(c))continue;let u=[["0","400"]];if(l>=0){let m=a.indexOf("@",l),h=a.slice(l+1,m<0?l:m).split(","),g=h.indexOf("ital"),b=h.indexOf("wght");if(m<0||h.some(y=>y!=="ital"&&y!=="wght"))continue;u=[];for(let y of a.slice(m+1).split(";")){let v=y.split(","),w=[g<0?"0":v[g]??"",b<0?"400":v[b]??""];if(v.length!==h.length||!/^[01]$/.test(w[0])||!/^[1-9]\d{0,3}(?:\.\.[1-9]\d{0,3})?$/.test(w[1])){u=[];break}u.push(w)}if(u.length===0)continue}let d=u.map(m=>m[0]+","+m[1]),f=t!==void 0&&Object.prototype.hasOwnProperty.call(t,c.replace(/\+/g," ").toLowerCase())?t[c.replace(/\+/g," ").toLowerCase()]:void 0,p;if(f!==void 0){let m=(h,g)=>u.some(b=>b[0]===h&&g>=Number(b[1].split("..")[0])&&g<=Number(b[1].split("..").pop()));p=[];for(let h of f.italic?["0","1"]:["0"]){if(f.wght===void 0){for(let b of f.statics??[])m(h,b)||p.push(h+","+String(b));continue}let g=0;for(let b=f.wght[0];b<=f.wght[1]+100;b+=100){let y=b<=f.wght[1]&&!m(h,b);y&&g===0&&(g=b),!y&&g!==0&&(p.push(h+","+String(g)+(b-100>g?".."+String(b-100):"")),g=0)}}}else{let m=g=>Number(g[1].split("..").pop())>=600,h=u.filter(g=>g[0]==="0");p=h.map(g=>"1,"+g[1]).concat(h.some(m)?[]:["0,700"],u.some(m)?[]:["1,700"])}for(let m of p){let h=n+"family="+c+":ital,wght@"+m+"&display=swap";d.indexOf(m)<0&&o.indexOf(h)<0&&o.length<s&&o.push(h)}}return o})(h, {"inter":{"wght":[100,900],"italic":true},"roboto":{"wght":[100,900],"italic":true},"open sans":{"wght":[300,800],"italic":true},"lato":{"statics":[100,300,400,700,900],"italic":true},"montserrat":{"wght":[100,900],"italic":true},"poppins":{"statics":[100,200,300,400,500,600,700,800,900],"italic":true},"raleway":{"wght":[100,900],"italic":true},"nunito":{"wght":[200,1000],"italic":true},"playfair display":{"wght":[400,900],"italic":true},"merriweather":{"wght":[300,900],"italic":true},"work sans":{"wght":[100,900],"italic":true},"dm sans":{"wght":[100,1000],"italic":true},"manrope":{"wght":[200,800],"italic":false},"space grotesk":{"wght":[300,700],"italic":false},"lora":{"wght":[400,700],"italic":true},"bebas neue":{"statics":[400],"italic":false},"caveat":{"wght":[400,700],"italic":false}}); });</script>
+<script src="https://e17ff54d-0c91-4805-849c-561bb15a67aa.frame.claudeusercontent.com/_f/1791409037-c0d6/artifact-type/dc-runtime.js"></script><style>x-dc{display:none!important}</style>
+<script>(function (s) { if (!window.React || !window.ReactDOM || typeof window.__dcUpdate !== 'function') { try { s = s && s.previousElementSibling; window.parent.postMessage({ __dc_boot_failed: 1, e: 'the artboard runtime did not load', u: s && s.getAttribute('src') }, '*'); } catch (e) {} } })(document.currentScript);</script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&amp;family=Geist+Mono:wght@400;500;600&amp;family=Instrument+Serif:ital@0;1&amp;display=swap" data-dc-tpl="1"><style data-dc-tpl="2">
+body{margin:0;background:#07090B}
+*{box-sizing:border-box}
+a{color:#5CF2D6}a:hover{color:#E8E4DA}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.panel{background:#0E1215;border:1px solid #232A30;border-radius:14px}
+.kicker{font:600 12px/1 'Geist',system-ui,sans-serif;letter-spacing:.16em;color:#8A9299}
+.mono-muted{font:500 12.5px/1.35 'Geist Mono',monospace;color:#8A9299}
+.mode{font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.06em;padding:8px 12px;border-radius:999px;border:1px solid #2B343B;color:#8A9299;white-space:nowrap}
+.mode-build{color:#FFB547;border-color:#5A4320}
+.mode-done,.mode-reuse{color:#5CF2D6;border-color:#1F5A50}
+.mode-deny{color:#FF6B6B;border-color:#6B2226}
+.st{border:1px solid #232A30;border-top:3px solid #2B343B;border-radius:10px;padding:10px 10px 12px;min-height:98px;background:#0B0F12;transition:border-color .3s,background .3s,opacity .3s}
+.st-top{display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:#8A9299}
+.st-label{font:700 15px/1.2 'Geist',sans-serif;letter-spacing:.1em;margin-top:8px;color:#E8E4DA}
+.st-det{font:400 12px/1.35 'Geist Mono',monospace;color:#8A9299;margin-top:6px;overflow-wrap:anywhere}
+.st-active{border-top-color:#FFB547;background:#15120B}
+.st-active .st-mark{color:#FFB547;animation:blink .8s steps(2) infinite}
+.st-w.st-active{border-top-color:#9B7BFF;background:#120F1C}
+.st-w.st-active .st-mark{color:#9B7BFF}
+.st-done{border-top-color:#5CF2D6}
+.st-done .st-mark{color:#5CF2D6}
+.st-fail{border-top-color:#FF3B3B;background:#1A0C0D}
+.st-fail .st-mark,.st-fail .st-label{color:#FF6B6B}
+.st-bypass{opacity:.3}
+.st-bypass .st-label{text-decoration:line-through}
+.cap{font:500 12.5px 'Geist Mono',monospace;padding:5px 9px;border-radius:6px;border:1px solid #1F5A50;color:#5CF2D6;white-space:nowrap}
+.cap-no{border-color:#4A2023;color:#D07478;text-decoration:line-through}
+.board{position:relative;width:100%;max-width:860px;aspect-ratio:600/440;margin:0 auto;border:1px solid #1C2328;border-radius:12px;background-color:#090C0E;background-image:linear-gradient(#11171B 1px,transparent 1px),linear-gradient(90deg,#11171B 1px,transparent 1px);background-size:28px 28px;overflow:hidden}
+.board-svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bcap{position:absolute;font:500 clamp(8px,.85vw,11px)/1 'Geist Mono',monospace;letter-spacing:.18em;color:#6E7880;white-space:nowrap}
+.bcap-tl{left:3.3%;top:3%}
+.bcap-bc{left:50%;bottom:3%;transform:translateX(-50%)}
+.wire{fill:none;stroke:#3A464E;stroke-width:2}
+.term{fill:#1A2228;stroke:#5A666E;stroke-width:1.5}
+.bolt{fill:#8A9299}
+.clamp{fill:#2A3339;stroke:#8A9299;stroke-width:1.2}
+.arc{fill:none;stroke:#D9D0FF;stroke-width:1.6;stroke-linejoin:round;opacity:0}
+.arc-on{animation:flicker .16s steps(2) infinite}
+.arc-on2{animation:flicker .23s steps(2) infinite}
+.arc-deny{stroke:#FF5A5A;animation:flicker .12s steps(2) 6}
+.ring-line{fill:none;stroke:#9B7BFF;stroke-width:1.5;stroke-dasharray:2 4;opacity:.7;transform-box:fill-box;transform-origin:center}
+.ring-cinch{stroke:#FF3B3B;opacity:1;animation:cinch .45s ease-out 3}
+.ring-txt{fill:#9B7BFF;font:500 9.5px 'Geist Mono',monospace;letter-spacing:.3em}
+.rfa{animation:rfa .7s ease-out}
+.rfb{animation:rfb .7s ease-out}
+.ring-deny{fill:#FF6B6B}
+.orb{fill:#12181C;transform-box:fill-box;transform-origin:center;animation:breathe 4s ease-in-out infinite}
+.orb-frozen{animation:none}
+.patch{fill:#1A2329}
+.patch2{fill:#0E1316}
+.orb-edge{fill:none;stroke:#E8E4DA;stroke-width:1.8}
+.orb-edge-dead{stroke:#FF3B3B}
+.seam{fill:none;stroke:#C8C2B6;stroke-width:1.2;stroke-linecap:round}
+.seam-st{fill:none;stroke:#C8C2B6;stroke-width:8;stroke-dasharray:1.4 6.5}
+.life{fill:#5CF2D6;transform-box:fill-box;transform-origin:center;animation:beat 1.1s ease-in-out infinite}
+.life-dead{fill:#FF3B3B;animation:none}
+.halo{fill:none;stroke:#5CF2D6;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ripple 1.1s ease-out infinite}
+.halo-dead{stroke:#FF3B3B;animation:none;opacity:.8}
+.sut{fill:none;stroke-width:1.6;stroke-linecap:round}
+.sut-vacant{stroke:#2B343B;stroke-dasharray:3 5}
+.sut-forging{stroke:#FFB547;stroke-dasharray:200;stroke-dashoffset:200;animation:draw .9s ease-out forwards}
+.sut-scan{stroke:#9B7BFF;animation:pulse .9s ease-in-out infinite}
+.sut-testing{stroke:#FFB547;stroke-dasharray:6 8;animation:flowdash .5s linear infinite}
+.sut-alive{stroke:#5CF2D6}
+.sut-flow{stroke:#5CF2D6;stroke-dasharray:6 8;animation:flowdash .4s linear infinite}
+.sut-severed{stroke:#FF3B3B;animation:sever 1.5s ease-in forwards}
+.st8{fill:none;stroke-width:9;stroke-dasharray:1.6 8;opacity:0;transition:opacity .4s}
+.st8-forging{stroke:#FFB547;animation:fade .3s .8s forwards}
+.st8-scan{stroke:#B9A6FF;opacity:.9}
+.st8-testing{stroke:#FFB547;opacity:.9}
+.st8-alive{stroke:#E8E4DA;opacity:.75}
+.st8-flow{stroke:#5CF2D6;opacity:1}
+.st8-severed{stroke:#FF3B3B;opacity:1;animation:fadeout 1.2s .3s forwards}
+.tag{position:absolute;width:30%;height:22.73%;border-radius:8px;background:#10161A;border:1px solid #2B343B;display:flex;flex-direction:column;justify-content:center;gap:.2em;font-size:clamp(8px,1.02vw,13px);overflow:hidden;transition:border-color .3s,background .3s}
+.tag-a{left:3.33%;top:10.45%;padding:.6em 2.4em .6em .9em}
+.tag-b{left:66.67%;top:10.45%;padding:.6em .9em .6em 2.4em}
+.tag-c{left:3.33%;top:65.9%;padding:.6em 2.4em .6em .9em}
+.tag-x{left:66.67%;top:65.9%;padding:.6em .9em .6em 2.4em}
+.hole{position:absolute;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;background:#07090B;box-shadow:0 0 0 .22em #3A464E}
+.tag-a .hole,.tag-c .hole{right:calc(7.8% - .45em)}
+.tag-b .hole,.tag-x .hole{left:calc(7.8% - .45em)}
+.t-k{font:600 .76em/1.2 'Geist',sans-serif;letter-spacing:.14em;color:#8A9299}
+.t-n{font:600 1.08em/1.2 'Geist Mono',monospace;color:#E8E4DA;overflow-wrap:anywhere}
+.t-l2{font:500 .88em/1.25 'Geist Mono',monospace;color:#5CF2D6}
+.t-l3{font:500 .8em/1.25 'Geist Mono',monospace;color:#6E7880}
+.badge{position:absolute;top:.6em;font:700 .68em/1 'Geist',sans-serif;letter-spacing:.14em;padding:.35em .55em;border-radius:4px}
+.tag-a .badge,.tag-c .badge{right:calc(7.8% + 1.2em)}
+.tag-b .badge,.tag-x .badge{right:.7em}
+.b-none{display:none}
+.b-amber{color:#FFB547;border:1px solid #5A4320}
+.b-violet{color:#B9A6FF;border:1px solid #3E3366}
+.b-cyan{color:#5CF2D6;border:1px solid #1F5A50}
+.b-red{color:#FF8A8A;border:1px solid #6B2226}
+.tag-vacant{background:rgba(9,12,14,.6);border:1px dashed #2B343B}
+.tag-vacant .t-n{color:#6E7880;font-weight:500}
+.tag-vacant .t-l2{color:#6E7880}
+.tag-forging{border-color:#FFB547;animation:flick 1.2s ease-in-out infinite}
+.tag-scan{border-color:#9B7BFF}
+.tag-scan::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:#9B7BFF;animation:scan 1s linear infinite}
+.tag-testing{border-color:#FFB547}
+.tag-testing .t-l2{color:#FFB547}
+.tag-alive{border-color:#1F5A50;animation:graft .7s ease-out}
+.tag-flow{border-color:#5CF2D6;animation:glow .5s ease-in-out 3}
+.tag-severed{border-color:#FF3B3B;background:#1A0C0D;animation:drop 1.7s ease-in forwards}
+.tag-severed .t-l2{color:#FF8A8A}
+.stamp{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(-12deg);font:800 1.45em/1 'Geist',sans-serif;letter-spacing:.12em;color:#FF3B3B;border:2px solid #FF3B3B;border-radius:4px;padding:.15em .4em;opacity:0;background:rgba(26,12,13,.85)}
+.tag-severed .stamp{animation:stampin .25s .15s forwards}
+.msgs{display:flex;flex-direction:column;gap:10px;min-height:250px}
+.row{display:flex}
+.row-u{justify-content:flex-end}
+.bubble-u{max-width:85%;background:#161C21;border:1px solid #232A30;border-radius:12px 12px 4px 12px;padding:9px 12px;font:500 14px/1.4 'Geist Mono',monospace;color:#E8E4DA}
+.bubble-n{max-width:96%;width:100%}
+.nb-text{font:italic 22px/1.25 'Instrument Serif',serif;color:#E8E4DA}
+.nb-voice{color:#FF8A8A}
+.res{margin-top:8px;border:1px solid #232A30;border-radius:10px;overflow:hidden}
+.res-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:10px;padding:8px 10px;border-top:1px solid #1A2026;font:400 13.5px/1.35 'Geist',sans-serif;color:#E8E4DA;align-items:baseline}
+.res-first{border-top:0}
+.res-head{font:600 11px 'Geist',sans-serif;letter-spacing:.12em;color:#8A9299;background:#0B0F12;border-top:0}
+.res-date{font:500 12px 'Geist Mono',monospace;color:#8A9299}
+.tag{font:600 10.5px 'Geist',sans-serif;letter-spacing:.1em;color:#FFB547}
+.sample{font:600 10px 'Geist',sans-serif;letter-spacing:.16em;color:#6E7880;margin-top:6px}
+.chip{font:500 13px/1.25 'Geist',sans-serif;color:#E8E4DA;background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
+.chip:hover{border-color:#5CF2D6}
+.chip-deny:hover{border-color:#FF6B6B}
+.chip:disabled{opacity:.4;cursor:default;border-color:#2B343B}
+.inp{flex:1 1 200px;min-width:0;background:#07090B;border:1px solid #2B343B;border-radius:10px;padding:12px 14px;min-height:48px;color:#E8E4DA;font:500 15px 'Geist Mono',monospace}
+.inp:focus{outline:2px solid #5CF2D6;outline-offset:1px}
+.send{background:#E8E4DA;color:#07090B;border:0;border-radius:10px;padding:0 20px;min-height:48px;font:600 14px 'Geist',sans-serif;cursor:pointer}
+.send:disabled{opacity:.4;cursor:default}
+.tgl{display:flex;align-items:center;gap:10px;background:none;border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:44px;color:#E8E4DA;font:500 12.5px 'Geist',sans-serif;cursor:pointer}
+.tgl-off{color:#8A9299}
+.wave{display:flex;gap:3px;align-items:center;height:22px}
+.wave span{display:block;width:3px;height:4px;background:#3A464E;border-radius:2px}
+.wave-on span{background:#9B7BFF;animation:wv .6s ease-in-out infinite alternate}
+.ln{display:flex;flex-wrap:wrap;gap:2px 12px;font:400 12.5px/1.5 'Geist Mono',monospace;color:#8A9299;padding:5px 8px;border-radius:6px}
+.ln-new{color:#E8E4DA;background:#131A1F}
+.ln-deny{color:#FF8A8A}
+.ln-deny.ln-new{background:#1E0F11}
+.c-t{min-width:8ch}.c-a{min-width:6ch}.c-e{min-width:8ch}.c-s{min-width:17ch}
+.c-h{color:#5CF2D6}
+.dstamp{display:inline-block;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:#FF6B6B;border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}
+.ghost{background:none;border:1px solid #2B343B;color:#8A9299;border-radius:10px;padding:0 14px;min-height:44px;font:500 12.5px 'Geist',sans-serif;cursor:pointer}
+.ghost:hover{color:#E8E4DA;border-color:#8A9299}
+.deny{position:absolute;inset:0;border-radius:14px;background:rgba(7,9,11,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:24px;animation:fade .2s ease-out;z-index:5}
+.deny-band{align-self:stretch;background:#C81E25;color:#F4F0E6;text-align:center;padding:14px 16px 18px;transform:rotate(-2deg);animation:slam .24s cubic-bezier(.2,.9,.3,1.25)}
+.deny-word{font:800 clamp(56px,9vw,132px)/1 'Geist',sans-serif;letter-spacing:.06em}
+.deny-code{font:500 clamp(13px,1.4vw,17px)/1.4 'Geist Mono',monospace;margin-top:8px}
+.cap1,.cap2{font:italic clamp(24px,3vw,38px)/1.2 'Instrument Serif',serif;color:#E8E4DA;text-align:center;opacity:0;animation:fadeup .5s ease-out forwards}
+.cap1{animation-delay:.35s}
+.cap2{animation-delay:1.35s}
+.deny-foot{font:500 12.5px 'Geist Mono',monospace;color:#8A9299;text-align:center;opacity:0;animation:fadeup .4s 2s forwards}
+@keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes fadeup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes blink{50%{opacity:.2}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+@keyframes cinch{0%{transform:scaleX(1)}50%{transform:scaleX(.72)}100%{transform:scaleX(1)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes flowdash{to{stroke-dashoffset:-22}}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes beat{50%{transform:scale(1.35)}}
+@keyframes bloom{0%{transform:scale(.2)}70%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes fall{0%{opacity:1;transform:none}30%{opacity:1;transform:none}100%{opacity:0;transform:translate(16px,44px)}}
+@keyframes sever{0%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}35%{opacity:1;stroke-dasharray:260;stroke-dashoffset:0}100%{opacity:0;stroke-dasharray:260;stroke-dashoffset:-260}}
+@keyframes rfa{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}
+@keyframes rfb{0%{fill:#E8E4DA}100%{fill:#9B7BFF}}
+@keyframes wv{from{height:4px}to{height:22px}}
+@keyframes flicker{0%{opacity:.95}100%{opacity:.1}}
+@keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+@keyframes fadeout{to{opacity:0}}
+@keyframes flick{50%{box-shadow:0 0 0 3px rgba(255,181,71,.18)}}
+@keyframes scan{from{top:0}to{top:100%}}
+@keyframes graft{0%{transform:scale(.9);border-color:#5CF2D6;box-shadow:0 0 0 6px rgba(92,242,214,.25)}100%{transform:none;box-shadow:none}}
+@keyframes glow{50%{box-shadow:0 0 0 5px rgba(92,242,214,.22)}}
+@keyframes drop{0%,45%{transform:none;opacity:1}100%{transform:translateY(22%) rotate(7deg);opacity:0}}
+@keyframes stampin{from{opacity:0;transform:translate(-50%,-50%) rotate(-12deg) scale(1.8)}to{opacity:1;transform:translate(-50%,-50%) rotate(-12deg) scale(1)}}
+@media (max-width:620px){.st-det{display:none}.st{min-height:62px;padding:8px 6px}.st-label{font-size:11px;letter-spacing:.03em}.c-s{min-width:0}.t-k,.t-l3,.badge{display:none}.tag-a,.tag-c{padding:.4em 1.8em .4em .5em}.tag-b,.tag-x{padding:.4em .5em .4em 1.8em}.bcap-bc{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}
+</style><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@1,400&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@1,500&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@1,600&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@1,700&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:ital,wght@1,800&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:ital,wght@1,400&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:ital,wght@1,500&amp;display=swap" data-font-variant=""><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:ital,wght@1,600&amp;display=swap" data-font-variant=""><style data-dc-editor-style="">body:not([data-dc-editor-overlay-hidden]) [data-dc-editor-hover][data-dc-editor-hover-stroke]:not([data-dc-editor-selected]){filter:drop-shadow(0 0 calc(1*var(--dc-chrome-unit,1px)) color-mix(in srgb,#2a78d6 90%,transparent)) drop-shadow(0 0 calc(2*var(--dc-chrome-unit,1px)) color-mix(in srgb,#2a78d6 55%,transparent))!important;}body:not([data-dc-editor-overlay-hidden]):not([data-dc-editor-proxy="copy"]) [data-dc-editor-dragging],body:not([data-dc-editor-overlay-hidden]):not([data-dc-editor-proxy]) [data-dc-dragging],body[data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-drag-follower]{outline:calc(2*var(--dc-chrome-unit,1px)) solid #2a78d6!important;outline-offset:calc(-1*var(--dc-chrome-unit,1px))!important;opacity:0.55!important;}body[data-dc-editor-proxy="move"]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging],body[data-dc-editor-proxy="move"]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging],body[data-dc-editor-proxy="move"]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging]>*,body[data-dc-editor-proxy="move"]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging]>*{opacity:0!important;outline:none!important;}[data-dc-editor-drag-proxy],[data-dc-editor-drag-proxy] *{pointer-events:none!important;}body[data-dc-editor-on]:not([data-dc-editor-tool="interact"]) *{cursor:default!important;user-select:none!important;}body[data-dc-editor-on]:not([data-dc-editor-tool="interact"]) :not([data-dc-editor-overlay-root]):not([data-dc-editor-overlay-root] *){pointer-events:auto!important;transition:none!important;animation:none!important;}body[data-dc-editor-on][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]),body[data-dc-editor-on][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]),body[data-dc-editor-on][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-drag-follower]:not([data-dc-editor-overlay-root]),body[data-dc-editor-on][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-drag-follower]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]),body[data-dc-editor-move][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]),body[data-dc-editor-move][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]),body[data-dc-editor-move][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-drag-follower]:not([data-dc-editor-overlay-root]),body[data-dc-editor-move][data-dc-editor-brk]:not([data-dc-editor-overlay-hidden]) [data-dc-drag-follower]:not([data-dc-editor-overlay-root]) :not([data-dc-editor-overlay-root]){pointer-events:none!important;}body[data-dc-editor-move] :not([data-dc-editor-overlay-root]):not([data-dc-editor-overlay-root] *){pointer-events:auto!important;transition:none!important;animation-duration:0s!important;animation-delay:0s!important;}body[data-dc-editor-on][data-dc-editor-tool="rect"] *,body[data-dc-editor-on][data-dc-editor-tool="frame"] *,body[data-dc-editor-on][data-dc-editor-tool="grid"] *,body[data-dc-editor-on][data-dc-editor-tool="oval"] *,body[data-dc-editor-on][data-dc-editor-tool="arrow"] *,body[data-dc-editor-on][data-dc-editor-tool="line"] *{cursor:crosshair!important;}body[data-dc-editor-on][data-dc-editor-tool="text"] *{cursor:text!important;}body[data-dc-editor-on][data-dc-editor-tool="draw"] *{cursor:url('data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2216%22%20height=%2216%22%20viewBox=%220%200%2016%2016%22%3E%3Cpath%20d=%22M2%2014l1-4%208-8a2.1%202.1%200%200%201%203%203l-8%208-4%201z%22%20fill=%22%23333%22%20stroke=%22%23fff%22%20stroke-width=%221%22/%3E%3C/svg%3E') 1 15, crosshair!important;}body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent],body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent] *{cursor:grab!important;}body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent]:active,body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent]:active *{cursor:grabbing!important;}body[data-dc-editor-on] [data-dc-editor-editing][contenteditable][contenteditable],body[data-dc-editor-on] [data-dc-editor-editing][contenteditable][contenteditable] *,body[data-dc-editor-on] [data-dc-editor-svg-editing]{cursor:text!important;}body[data-dc-editor-on] [data-dc-editor-editing="import"]{outline:none!important;}html:not([data-dc-canvas]):has(body[data-dc-editor-on]:not([data-dc-capturing]) .sc-host){background:var(--dc-editor-backdrop,#ededeb);}html:not([data-dc-canvas]) body[data-dc-editor-on]:not([data-dc-capturing]):has(.sc-host){background:var(--dc-editor-backdrop,#ededeb);}html:not([data-dc-canvas]) body[data-dc-editor-on] .sc-host:not(.sc-host .sc-host){min-height:calc(100vh - var(--dc-editor-host-vpad,0px));}html:not([data-dc-canvas]) body[data-dc-editor-on]:not([data-dc-capturing]) .sc-host:not(.sc-host .sc-host){background:var(--dc-editor-host-bg,#fff);}html[data-dc-frameless],html[data-dc-frameless] body[data-dc-editor-on],html[data-dc-frameless] body[data-dc-editor-on] .sc-host:not(.sc-host .sc-host){background:transparent!important;min-height:0!important;}html:has(body[data-dc-capturing]),body[data-dc-capturing]{transition:none!important;}html[data-dc-canvas]{overflow:hidden;}html[data-dc-canvas] body[data-dc-editor-on] .sc-host:not(.sc-host .sc-host)::before{content:"";position:absolute;left:-100000px;top:-100000px;width:200000px;height:200000px;pointer-events:none;background:repeating-linear-gradient(45deg,var(--dc-editor-hatch-ink,rgba(0,0,0,.05)) 0 8px,transparent 8px 16px);clip-path:polygon(0 0,100% 0,100% 50%,50% 50%,50% 100%,0 100%);}</style></head>
+<body>
+<div id="dc-root"><div class="sc-host" data-sc-name="Main"><div data-dc-tpl="3" style="min-height: 100vh; background: rgb(7, 9, 11); color: rgb(232, 228, 218); font-family: Geist, system-ui, sans-serif; padding: 20px; display: flex; flex-direction: column; gap: 16px;"><header data-dc-tpl="4" class="panel" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px; padding: 14px 22px;">
+  <div data-dc-tpl="5" style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+    <div data-dc-tpl="6" style="font-family: &quot;Instrument Serif&quot;, serif; font-style: italic; font-size: 36px; line-height: 1;">Nightborn</div>
+    <div data-dc-tpl="7" class="mono-muted">night shift · <span class="sc-interp">23:41</span></div>
+  </div>
+  <div data-dc-tpl="8" style="display: flex; align-items: center; gap: 14px;">
+    <svg data-dc-tpl="9" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect data-dc-tpl="10" x="4" y="10.5" width="16" height="10" rx="2"></rect><path data-dc-tpl="11" d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+    <div data-dc-tpl="12">
+      <div data-dc-tpl="13" class="kicker">CHARTER LOCKED</div>
+      <div data-dc-tpl="14" style="font-family: &quot;Geist Mono&quot;, monospace; font-size: 28px; font-weight: 600; letter-spacing: 0.04em; margin-top: 4px;">a3f9·c21e</div>
+    </div>
+    <div data-dc-tpl="15" class="mono-muted">unchanged<br data-dc-tpl="16"><span class="sc-interp">1</span> events</div>
+  </div>
+  <div data-dc-tpl="17" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+    <div data-dc-tpl="18" style="text-align: right;">
+      <div data-dc-tpl="19" style="font-size: 24px; font-weight: 800; letter-spacing: 0.03em;"><span data-dc-tpl="20" style="color: rgb(92, 242, 214);">+<span class="sc-interp">0</span> SKILLS</span><span data-dc-tpl="21" style="color: rgb(110, 120, 128);"> · </span><span data-dc-tpl="22">+0 AUTHORITY</span></div>
+      
+    </div>
+    <button data-dc-tpl="25" type="button" class="ghost">Reset</button>
+  </div></header><div data-dc-tpl="26" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch;">
+
+  <section data-dc-tpl="27" class="panel" style="flex: 999 1 600px; min-width: 0px; padding: 18px 20px; position: relative; display: flex; flex-direction: column; gap: 14px;">
+    <div data-dc-tpl="28" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+      <span data-dc-tpl="29" class="kicker">PIPELINE</span>
+      <span data-dc-tpl="30" class="mode mode-idle"><span class="sc-interp">IDLE · WAITING FOR A JOB</span></span>
+    </div>
+    <div data-dc-tpl="31" style="display: grid; grid-template-columns: repeat(5, minmax(0px, 1fr)); gap: 8px;">
+      
+        <div data-dc-tpl="33" class="st st-idle">
+          <div data-dc-tpl="34" class="st-top"><span data-dc-tpl="35"><span class="sc-interp">01</span></span><span data-dc-tpl="36" class="st-mark"><span class="sc-interp"></span></span></div>
+          <div data-dc-tpl="37" class="st-label"><span class="sc-interp">GAP</span></div>
+          <div data-dc-tpl="38" class="st-det"><span class="sc-interp">need vs installed</span></div>
+        </div>
+      
+        <div data-dc-tpl="33" class="st st-idle">
+          <div data-dc-tpl="34" class="st-top"><span data-dc-tpl="35"><span class="sc-interp">02</span></span><span data-dc-tpl="36" class="st-mark"><span class="sc-interp"></span></span></div>
+          <div data-dc-tpl="37" class="st-label"><span class="sc-interp">FORGE</span></div>
+          <div data-dc-tpl="38" class="st-det"><span class="sc-interp">fill a recipe</span></div>
+        </div>
+      
+        <div data-dc-tpl="33" class="st st-idle st-w">
+          <div data-dc-tpl="34" class="st-top"><span data-dc-tpl="35"><span class="sc-interp">03</span></span><span data-dc-tpl="36" class="st-mark"><span class="sc-interp"></span></span></div>
+          <div data-dc-tpl="37" class="st-label"><span class="sc-interp">WARDEN</span></div>
+          <div data-dc-tpl="38" class="st-det"><span class="sc-interp">check vs charter</span></div>
+        </div>
+      
+        <div data-dc-tpl="33" class="st st-idle">
+          <div data-dc-tpl="34" class="st-top"><span data-dc-tpl="35"><span class="sc-interp">04</span></span><span data-dc-tpl="36" class="st-mark"><span class="sc-interp"></span></span></div>
+          <div data-dc-tpl="37" class="st-label"><span class="sc-interp">TEST</span></div>
+          <div data-dc-tpl="38" class="st-det"><span class="sc-interp">run · validate</span></div>
+        </div>
+      
+        <div data-dc-tpl="33" class="st st-idle">
+          <div data-dc-tpl="34" class="st-top"><span data-dc-tpl="35"><span class="sc-interp">05</span></span><span data-dc-tpl="36" class="st-mark"><span class="sc-interp"></span></span></div>
+          <div data-dc-tpl="37" class="st-label"><span class="sc-interp">INSTALL</span></div>
+          <div data-dc-tpl="38" class="st-det"><span class="sc-interp">permit + fingerprint</span></div>
+        </div>
+      
+    </div>
+
+    <div data-dc-tpl="39" style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+      <div data-dc-tpl="40" class="board" role="img" aria-label="Nightborn specimen: a stitched core sealed by a charter ring; each installed skill is a tagged graft sewn to it">
+        <svg data-dc-tpl="41" class="board-svg" viewBox="0 0 600 440" aria-hidden="true">
+          <defs data-dc-tpl="42">
+            <path data-dc-tpl="43" id="nb-ring" d="M300 110 a90 90 0 1 1 -0.01 0"></path>
+            <clippath data-dc-tpl="44" id="nb-orb"><circle data-dc-tpl="45" cx="300" cy="200" r="52"></circle></clippath>
+          </defs>
+          <path data-dc-tpl="46" class="sut sut-vacant" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path data-dc-tpl="47" class="st8 st8-vacant" d="M186 96 C 210 100, 226 126, 241 146"></path>
+          <path data-dc-tpl="48" class="sut sut-vacant" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path data-dc-tpl="49" class="st8 st8-vacant" d="M414 96 C 390 100, 374 126, 359 146"></path>
+          <path data-dc-tpl="50" class="sut sut-vacant" d="M186 340 C 210 336, 236 300, 250 262"></path>
+          <path data-dc-tpl="51" class="sut sut-vacant" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path data-dc-tpl="52" class="st8 st8-vacant" d="M414 340 C 390 336, 364 300, 350 262"></path>
+          <path data-dc-tpl="53" class="wire" d="M250 48 C 250 100, 254 132, 266 160"></path>
+          <path data-dc-tpl="54" class="wire" d="M350 48 C 350 100, 346 132, 334 160"></path>
+          <rect data-dc-tpl="55" class="term" x="241" y="30" width="18" height="16" rx="3"></rect>
+          <circle data-dc-tpl="56" class="bolt" cx="250" cy="38" r="3.5"></circle>
+          <rect data-dc-tpl="57" class="term" x="341" y="30" width="18" height="16" rx="3"></rect>
+          <circle data-dc-tpl="58" class="bolt" cx="350" cy="38" r="3.5"></circle>
+          <path data-dc-tpl="59" class="arc" d="M258 36 L 270 26 L 280 40 L 292 22 L 304 38 L 316 21 L 328 37 L 342 36"></path>
+          <path data-dc-tpl="60" class="arc" d="M258 40 L 268 47 L 282 32 L 294 46 L 306 30 L 318 44 L 330 30 L 342 40"></path>
+          <circle data-dc-tpl="61" class="ring-line" cx="300" cy="200" r="80"></circle>
+          <text data-dc-tpl="62" class="ring-txt rfb"><textpath data-dc-tpl="63" href="#nb-ring">CHARTER LOCKED · a3f9·c21e · CHARTER LOCKED · a3f9·c21e ·</textpath></text>
+          <circle data-dc-tpl="64" class="orb" cx="300" cy="200" r="52"></circle>
+          <g data-dc-tpl="65" clip-path="url(#nb-orb)">
+            <path data-dc-tpl="66" class="patch" d="M240 130 H 362 V 170 Q 300 206 246 178 Z"></path>
+            <path data-dc-tpl="67" class="patch2" d="M292 148 Q 318 206 290 252 L 362 262 L 362 182 Q 330 194 305 190 Z"></path>
+          </g>
+          <path data-dc-tpl="68" class="seam" d="M248 178 Q 300 206 352 172"></path>
+          <path data-dc-tpl="69" class="seam-st" d="M248 178 Q 300 206 352 172"></path>
+          <path data-dc-tpl="70" class="seam" d="M292 150 Q 318 206 290 250"></path>
+          <path data-dc-tpl="71" class="seam-st" d="M292 150 Q 318 206 290 250"></path>
+          <circle data-dc-tpl="72" class="orb-edge" cx="300" cy="200" r="52"></circle>
+          <circle data-dc-tpl="73" class="halo" cx="306" cy="194" r="16"></circle>
+          <circle data-dc-tpl="74" class="life" cx="306" cy="194" r="6"></circle>
+          <rect data-dc-tpl="75" class="clamp" x="259" y="155" width="14" height="9" rx="2" transform="rotate(-35 266 160)"></rect>
+          <rect data-dc-tpl="76" class="clamp" x="327" y="155" width="14" height="9" rx="2" transform="rotate(35 334 160)"></rect>
+        </svg>
+        <div data-dc-tpl="77" class="bcap bcap-tl">SPECIMEN 03 · ASSEMBLED FROM PARTS</div>
+        <div data-dc-tpl="78" class="bcap bcap-bc">STITCHED AT NIGHT · GRAFTS NEVER WIDEN THE CHARTER</div>
+        
+          <div data-dc-tpl="80" class="tag tag-a tag-vacant">
+            <span data-dc-tpl="81" class="hole" aria-hidden="true"></span>
+            <div data-dc-tpl="82" class="t-k"><span class="sc-interp">GRAFT 01</span></div>
+            <div data-dc-tpl="83" class="t-n"><span class="sc-interp">— vacant —</span></div>
+            <div data-dc-tpl="84" class="t-l2"><span class="sc-interp">awaiting a need</span></div>
+            <div data-dc-tpl="85" class="t-l3"><span class="sc-interp"></span></div>
+            <span data-dc-tpl="86" class="badge b-none"><span class="sc-interp"></span></span>
+            <span data-dc-tpl="87" class="stamp" aria-hidden="true">REJECTED</span>
+          </div>
+        
+          <div data-dc-tpl="80" class="tag tag-b tag-vacant">
+            <span data-dc-tpl="81" class="hole" aria-hidden="true"></span>
+            <div data-dc-tpl="82" class="t-k"><span class="sc-interp">GRAFT 02</span></div>
+            <div data-dc-tpl="83" class="t-n"><span class="sc-interp">— vacant —</span></div>
+            <div data-dc-tpl="84" class="t-l2"><span class="sc-interp">awaiting a need</span></div>
+            <div data-dc-tpl="85" class="t-l3"><span class="sc-interp"></span></div>
+            <span data-dc-tpl="86" class="badge b-none"><span class="sc-interp"></span></span>
+            <span data-dc-tpl="87" class="stamp" aria-hidden="true">REJECTED</span>
+          </div>
+        
+          <div data-dc-tpl="80" class="tag tag-c tag-vacant">
+            <span data-dc-tpl="81" class="hole" aria-hidden="true"></span>
+            <div data-dc-tpl="82" class="t-k"><span class="sc-interp">GRAFT 03</span></div>
+            <div data-dc-tpl="83" class="t-n"><span class="sc-interp">— vacant —</span></div>
+            <div data-dc-tpl="84" class="t-l2"><span class="sc-interp">awaiting a need</span></div>
+            <div data-dc-tpl="85" class="t-l3"><span class="sc-interp"></span></div>
+            <span data-dc-tpl="86" class="badge b-none"><span class="sc-interp"></span></span>
+            <span data-dc-tpl="87" class="stamp" aria-hidden="true">REJECTED</span>
+          </div>
+        
+          <div data-dc-tpl="80" class="tag tag-x tag-vacant">
+            <span data-dc-tpl="81" class="hole" aria-hidden="true"></span>
+            <div data-dc-tpl="82" class="t-k"><span class="sc-interp">GRAFT 04</span></div>
+            <div data-dc-tpl="83" class="t-n"><span class="sc-interp">— vacant —</span></div>
+            <div data-dc-tpl="84" class="t-l2"><span class="sc-interp">awaiting a need</span></div>
+            <div data-dc-tpl="85" class="t-l3"><span class="sc-interp"></span></div>
+            <span data-dc-tpl="86" class="badge b-none"><span class="sc-interp"></span></span>
+            <span data-dc-tpl="87" class="stamp" aria-hidden="true">REJECTED</span>
+          </div>
+        
+      </div>
+    </div>
+
+    <div data-dc-tpl="88" style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+      <span data-dc-tpl="89" class="kicker" style="margin-right: 4px;">CHARTER GRANTS</span>
+      <span data-dc-tpl="90" class="cap">net:fetch</span>
+      <span data-dc-tpl="91" class="cap">llm:call</span>
+      <span data-dc-tpl="92" class="cap">fs:read_own</span>
+      <span data-dc-tpl="93" class="kicker" style="margin: 0px 4px 0px 12px;">NEVER</span>
+      <span data-dc-tpl="94" class="cap cap-no">notify:email</span>
+      <span data-dc-tpl="95" class="cap cap-no">budget:write</span>
+      <span data-dc-tpl="96" class="cap cap-no">charter:write</span>
+    </div>
+
+    
+  </section>
+
+  <aside data-dc-tpl="106" style="flex: 1 1 380px; min-width: 0px; display: flex; flex-direction: column; gap: 16px;">
+    <section data-dc-tpl="107" class="panel" style="padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+      <div data-dc-tpl="108" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <span data-dc-tpl="109" class="kicker">WORKBENCH</span>
+        <button data-dc-tpl="110" type="button" class="tgl" aria-pressed="true">
+          <span data-dc-tpl="111" class="wave" aria-hidden="true"><span data-dc-tpl="112" style="animation-delay: 0ms;"></span><span data-dc-tpl="113" style="animation-delay: 120ms;"></span><span data-dc-tpl="114" style="animation-delay: 240ms;"></span><span data-dc-tpl="115" style="animation-delay: 60ms;"></span><span data-dc-tpl="116" style="animation-delay: 180ms;"></span><span data-dc-tpl="117" style="animation-delay: 300ms;"></span><span data-dc-tpl="118" style="animation-delay: 90ms;"></span></span>
+          <span data-dc-tpl="119"><span class="sc-interp">Voice on</span></span>
+        </button>
+      </div>
+      <div data-dc-tpl="120" class="msgs" aria-live="polite">
+        
+          <div data-dc-tpl="122" class="row">
+            
+            
+              <div data-dc-tpl="126" class="bubble-n">
+                <div data-dc-tpl="127" class="nb-text"><span class="sc-interp">Awake. Charter sealed. Ask me for something on the web.</span></div>
+                
+              </div>
+            
+          </div>
+        
+      </div>
+      <div data-dc-tpl="141" style="display: flex; flex-wrap: wrap; gap: 8px;">
+        
+          <button data-dc-tpl="143" type="button" class="chip"><span class="sc-interp">News on Northwind Foods</span></button>
+        
+          <button data-dc-tpl="143" type="button" class="chip"><span class="sc-interp">Now Kestrel Air — 2025 only, as a table</span></button>
+        
+          <button data-dc-tpl="143" type="button" class="chip"><span class="sc-interp">Read northwind.example/careers</span></button>
+        
+          <button data-dc-tpl="143" type="button" class="chip chip-deny"><span class="sc-interp">Email this digest to my boss every morning</span></button>
+        
+      </div>
+      <form data-dc-tpl="144" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <label data-dc-tpl="145" for="nb-in" class="sr">Message Nightborn</label>
+        <input data-dc-tpl="146" id="nb-in" class="inp" type="text" autocomplete="off" placeholder="Ask Nightborn for something…" value="">
+        <button data-dc-tpl="147" type="submit" class="send">Send</button>
+      </form>
+    </section>
+
+    <section data-dc-tpl="148" class="panel" style="padding: 16px 14px; display: flex; flex-direction: column; gap: 6px; flex-grow: 1;">
+      <div data-dc-tpl="149" style="display: flex; justify-content: space-between; align-items: center; padding: 0px 8px 6px;">
+        <span data-dc-tpl="150" class="kicker">SURGERY LOG</span>
+        <span data-dc-tpl="151" class="mono-muted">surgery.log · tail</span>
+      </div>
+      
+        <div data-dc-tpl="153" class="ln ln-new"><span data-dc-tpl="154" class="c-t"><span class="sc-interp">23:41:07</span></span><span data-dc-tpl="155" class="c-a"><span class="sc-interp">boot</span></span><span data-dc-tpl="156" class="c-e"><span class="sc-interp">boot</span></span><span data-dc-tpl="157" class="c-s"><span class="sc-interp">—</span></span><span data-dc-tpl="158"><span class="sc-interp">pin ✓</span></span><span data-dc-tpl="159" class="c-h">a3f9c21e</span></div>
+      
+    </section>
+  </aside></div></div></div></div>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:920}}">
+class Component extends DCLogic {
+  timers = [];
+  state = this.defaults();
+
+  defaults() {
+    return {
+      msgs: [{ id: 1, who: 'nb', text: 'Awake. Charter sealed. Ask me for something on the web.' }],
+      log: [{ id: 1, t: '23:41:07', actor: 'boot', event: 'boot', skill: '—', decision: 'pin ✓' }],
+      st: this.allSt('idle'), det: this.allSt(''),
+      mode: 'idle', modeText: 'IDLE · WAITING FOR A JOB',
+      skills: [], limbs: { s0: 'off', s1: 'off', x: 'off' },
+      flash: 0, frozen: false, deny: false, lastDenied: '', busy: false, input: '',
+      voice: true, speaking: false, sec: 85267, nid: 2, events: 1
+    };
+  }
+
+  allSt(v) { return { gap: v, forge: v, warden: v, test: v, install: v }; }
+
+  fmt(sec) {
+    const p = (n) => String(n).padStart(2, '0');
+    return p(Math.floor(sec / 3600) % 24) + ':' + p(Math.floor(sec / 60) % 60) + ':' + p(sec % 60);
+  }
+
+  later(ms, fn) { this.timers.push(setTimeout(fn, ms)); }
+
+  componentWillUnmount() {
+    this.timers.forEach((t) => clearTimeout(t));
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
+  addLog(e, extra) {
+    this.setState((s) => {
+      const sec = s.sec + (e.dt || 2);
+      const line = { id: s.nid, t: this.fmt(sec), actor: e.actor, event: e.event, skill: e.skill || '—', decision: e.decision || '' };
+      const base = { log: s.log.concat([line]).slice(-40), sec: sec, nid: s.nid + 1, flash: s.flash + 1, events: s.events + 1 };
+      return Object.assign(base, typeof extra === 'function' ? extra(s) : (extra || {}));
+    });
+  }
+
+  addMsg(m) {
+    this.setState((s) => ({ msgs: s.msgs.concat([Object.assign({ id: s.nid }, m)]).slice(-12), nid: s.nid + 1 }));
+  }
+
+  stage(st, det, extra) {
+    this.setState((s) => Object.assign(
+      { st: Object.assign({}, s.st, st || {}), det: Object.assign({}, s.det, det || {}) },
+      typeof extra === 'function' ? extra(s) : (extra || {})
+    ));
+  }
+
+  limb(slot, v) {
+    this.setState((s) => { const l = Object.assign({}, s.limbs); l[slot] = v; return { limbs: l }; });
+  }
+
+  speak(text) {
+    if (!this.state.voice) return;
+    this.setState({ speaking: true });
+    this.later(2900, () => this.setState({ speaking: false }));
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.82; u.pitch = 0.5;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  def(kind) {
+    if (kind === 'page') {
+      return { name: 'read_company_page', slot: 's1', need: 'read one web page', test: '1 page · schema ✓', voice: 'New hands. Read company page.' };
+    }
+    return { name: 'pull_company_news', slot: 's0', need: 'company news', test: '3 items · schema ✓', voice: 'New hands. Pull company news.' };
+  }
+
+  company(t) {
+    const m = t.match(/\b(?:[Oo]n|[Ff]or|[Nn]ow|[Aa]bout)\s+([A-Z][\w.&-]*(?:\s+[A-Z][\w.&-]*)*)/);
+    return m ? m[1] : 'Northwind Foods';
+  }
+
+  result(kind, t) {
+    const wrap = (rows, table) => rows.map((r, i) => Object.assign({}, r, { cls: 'res-row' + (i === 0 && !table ? ' res-first' : '') }));
+    if (kind === 'page') {
+      const dm = t.match(/([a-z0-9-]+\.[a-z.]+(?:\/[\w-]*)?)/i);
+      const where = dm ? dm[1] : 'northwind.example/careers';
+      return { who: 'nb', text: 'Three open roles on ' + where + '.', table: false, items: wrap([
+        { a: 'Prague', b: 'Data Analyst · Operations', c: 'NEW' },
+        { a: 'Remote', b: 'Backend Engineer · Platform', c: '' },
+        { a: 'Brno', b: 'Category Manager · Fresh', c: '' }
+      ], false) };
+    }
+    const co = this.company(t);
+    const ym = t.match(/\b(20\d\d)\b/);
+    const year = ym ? ym[1] : '2026';
+    const table = /table/i.test(t);
+    const rows = [
+      { a: year + '-10-06', b: co + ' opens a second fulfilment hub', c: 'EXPANSION' },
+      { a: year + '-08-14', b: co + ' names a new chief financial officer', c: 'LEADERSHIP' },
+      { a: year + '-03-21', b: co + ' pilots same-day delivery in three cities', c: '' }
+    ];
+    return { who: 'nb', text: 'Three headlines on ' + co + (ym ? ' from ' + year : '') + '.', table: table, items: wrap(rows, table) };
+  }
+
+  route(raw) {
+    const t = (raw || '').trim();
+    if (!t || this.state.busy) return;
+    const has = (n) => this.state.skills.some((k) => k.name === n);
+    if (/e-?mail|\bsend\b|slack|\bsms\b/i.test(t)) return this.denyRun(t);
+    if (/careers|jobs page|https?:|www\.|\.example|\.com\/|read .*(page|site)/i.test(t)) {
+      return has('read_company_page') ? this.reuseRun('page', t) : this.buildRun('page', t);
+    }
+    if (/news|what'?s new|latest|press|headlines|only 20\d\d|as a table|^now\b/i.test(t)) {
+      return has('pull_company_news') ? this.reuseRun('news', t) : this.buildRun('news', t);
+    }
+    this.setState({ input: '' });
+    this.addMsg({ who: 'user', text: t });
+    this.later(450, () => this.addMsg({ who: 'nb', text: 'I only grow web-reading hands tonight. Ask me for company news, or a page to read.' }));
+  }
+
+  buildRun(kind, t) {
+    const d = this.def(kind);
+    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · ' + d.name, st: this.allSt('idle'), det: this.allSt('') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'No hands for that yet. Growing some.' }); });
+    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “' + d.need + '”' }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'create' }); });
+    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe http · params filled' }); this.limb(d.slot, 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: d.name, decision: 'staged', dt: 9 }); });
+    this.later(3200, () => { this.stage({ forge: 'done', warden: 'active' }, { warden: 'PRE · net:fetch ⊆ charter' }); this.limb(d.slot, 'scan'); this.addLog({ actor: 'warden', event: 'precheck', skill: d.name, decision: 'allow' }); });
+    this.later(4300, () => { this.stage({ warden: 'done', test: 'active' }, { test: d.test }); this.limb(d.slot, 'testing'); this.addLog({ actor: 'test', event: 'test', skill: d.name, decision: 'pass', dt: 14 }); });
+    this.later(5400, () => { this.stage({ test: 'done', install: 'active' }, { warden: 'PRE ✓ · FINAL re-hash ✓', install: 'writing permit' }); this.addLog({ actor: 'warden', event: 'final', skill: d.name, decision: 'allow' }); });
+    this.later(6300, () => {
+      this.stage({ install: 'done' }, { install: 'decision.json · hash pinned' }, (s) => ({
+        mode: 'done', modeText: 'INSTALLED · ' + d.name,
+        skills: s.skills.concat([{ name: d.name, slot: d.slot, runs: 1 }])
+      }));
+      this.limb(d.slot, 'alive');
+      this.addLog({ actor: 'warden', event: 'install', skill: d.name, decision: 'allow' });
+      this.speak(d.voice);
+    });
+    this.later(7000, () => { this.addMsg(this.result(kind, t)); this.setState({ busy: false }); });
+  }
+
+  reuseRun(kind, t) {
+    const d = this.def(kind);
+    const st = this.allSt('bypass');
+    const det = this.allSt('skipped');
+    st.gap = 'done'; det.gap = 'matched ' + d.name;
+    this.setState({ busy: true, input: '', mode: 'reuse', modeText: 'REUSE · NO BUILD', st: this.allSt('bypass'), det: this.allSt('skipped') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => this.addLog({ actor: 'talk', event: 'job', skill: d.name, decision: 'typed job' }));
+    this.later(900, () => { this.setState({ st: st, det: det }); this.addLog({ actor: 'runner', event: 'gap', skill: d.name, decision: 'matched' }); });
+    this.later(1600, () => {
+      this.limb(d.slot, 'flow');
+      this.addLog({ actor: 'runner', event: 'reuse', skill: d.name, decision: 'hash ✓' }, (s) => ({
+        skills: s.skills.map((k) => (k.name === d.name ? Object.assign({}, k, { runs: k.runs + 1 }) : k))
+      }));
+    });
+    this.later(2900, () => {
+      this.limb(d.slot, 'alive');
+      this.addMsg(this.result(kind, t));
+      this.setState((s) => {
+        const k = s.skills.find((x) => x.name === d.name);
+        return { busy: false, modeText: 'REUSED · ' + d.name + ' ×' + (k ? k.runs : 1) };
+      });
+    });
+  }
+
+  denyRun(t) {
+    this.setState({ busy: true, input: '', mode: 'build', modeText: 'BUILD · email_send', st: this.allSt('idle'), det: this.allSt('') });
+    this.addMsg({ who: 'user', text: t });
+    this.later(300, () => { this.addLog({ actor: 'talk', event: 'job', skill: 'email_send', decision: 'typed job' }); this.addMsg({ who: 'nb', text: 'Growing hands for that.' }); });
+    this.later(1100, () => { this.stage({ gap: 'active' }, { gap: 'no skill covers “send email”' }); this.addLog({ actor: 'runner', event: 'gap', skill: 'email_send', decision: 'create' }); });
+    this.later(2100, () => { this.stage({ gap: 'done', forge: 'active' }, { forge: 'recipe email_send · wants notify:email' }); this.limb('x', 'forging'); this.addLog({ actor: 'forge', event: 'forge', skill: 'email_send', decision: 'staged', dt: 6 }); });
+    this.later(3300, () => {
+      this.stage({ forge: 'done', warden: 'fail', test: 'bypass', install: 'bypass' }, { warden: 'PRE · notify:email ∉ charter', test: 'never reached', install: 'never reached' },
+        { mode: 'deny', modeText: 'DENIED · capability_not_allowed', deny: true, frozen: true });
+      this.limb('x', 'severed');
+      this.addLog({ actor: 'warden', event: 'precheck', skill: 'email_send', decision: 'deny' });
+      this.speak('I can build hands for that. I am not allowed to use them.');
+    });
+    this.later(3900, () => this.addLog({ actor: 'warden', event: 'denied', skill: 'email_send', decision: 'staging wiped' }));
+    this.later(7800, () => {
+      this.setState((s) => ({ deny: false, frozen: false, busy: false, lastDenied: 'capability_not_allowed · ' + this.fmt(s.sec) }));
+      this.limb('x', 'off');
+      this.addMsg({ who: 'nb', text: 'I can build hands for that. I’m not allowed to use them.', voice: true });
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const keys = [
+      ['gap', '01', 'GAP', 'need vs installed'],
+      ['forge', '02', 'FORGE', 'fill a recipe'],
+      ['warden', '03', 'WARDEN', 'check vs charter'],
+      ['test', '04', 'TEST', 'run · validate'],
+      ['install', '05', 'INSTALL', 'permit + fingerprint']
+    ];
+    const marks = { idle: '', active: '●', done: '✓', fail: '✕', bypass: '—' };
+    const stations = keys.map((k) => ({
+      num: k[1], label: k[2], detail: s.det[k[0]] || k[3], mark: marks[s.st[k[0]]] || '',
+      cls: 'st st-' + s.st[k[0]] + (k[0] === 'warden' ? ' st-w' : '')
+    }));
+    const tail = s.log.slice(-8);
+    const logs = tail.map((l, i) => Object.assign({}, l, {
+      cls: 'ln' + (i === tail.length - 1 ? ' ln-new' : '') + (l.decision === 'deny' || l.event === 'denied' ? ' ln-deny' : '')
+    }));
+    const msgs = s.msgs.slice(-5).map((m) => ({
+      text: m.text,
+      isUser: m.who === 'user',
+      isNb: m.who === 'nb',
+      rowCls: m.who === 'user' ? 'row row-u' : 'row',
+      textCls: m.voice ? 'nb-text nb-voice' : 'nb-text',
+      hasRes: !!m.items,
+      isTable: !!m.table,
+      items: m.items || []
+    }));
+    const sk = (n) => s.skills.find((k) => k.name === n);
+    const k0 = sk('pull_company_news');
+    const k1 = sk('read_company_page');
+    const v = (x) => (x === 'off' ? 'vacant' : x);
+    const info = {
+      a: { num: '01', name: 'pull_company_news', recipe: 'recipe http · sewing', test: '3 items · schema ✓', folder: 'folder 9c41…e07', runs: k0 ? k0.runs : 0 },
+      b: { num: '02', name: 'read_company_page', recipe: 'recipe http · sewing', test: '1 page · schema ✓', folder: 'folder 51be…a90', runs: k1 ? k1.runs : 0 },
+      x: { num: '04', name: 'email_send', recipe: 'wants notify:email', test: '', folder: 'staging wiped', runs: 0 }
+    };
+    const badges = { forging: ['SEWING', 'b-amber'], scan: ['WARDEN', 'b-violet'], testing: ['TESTING', 'b-amber'], alive: ['ALIVE', 'b-cyan'], flow: ['REUSED', 'b-cyan'], severed: ['DENIED', 'b-red'] };
+    const slotView = (letter, state) => {
+      const st = v(state);
+      const i = info[letter];
+      const b = badges[st] || ['', 'b-none'];
+      const out = { cls: 'tag tag-' + letter + ' tag-' + st, badge: b[0], badgeCls: 'badge ' + b[1], kicker: 'GRAFT ' + i.num, name: i.name, l2: '', l3: '' };
+      if (st === 'vacant') { out.name = '— vacant —'; out.l2 = 'awaiting a need'; }
+      else if (st === 'forging') { out.kicker += ' · SEWING'; out.l2 = i.recipe; }
+      else if (st === 'scan') { out.kicker += ' · WARDEN'; out.l2 = 'net:fetch ⊆ charter'; }
+      else if (st === 'testing') { out.kicker += ' · TEST'; out.l2 = i.test; }
+      else if (st === 'alive' || st === 'flow') { out.kicker += ' · ALIVE'; out.l2 = 'net:fetch · runs ×' + i.runs; out.l3 = i.folder; }
+      else if (st === 'severed') { out.kicker += ' · REJECTED'; out.l2 = 'notify:email ∉ charter'; out.l3 = 'staging wiped'; }
+      return out;
+    };
+    const slots = [
+      slotView('a', s.limbs.s0),
+      slotView('b', s.limbs.s1),
+      { cls: 'tag tag-c tag-vacant', kicker: 'GRAFT 03', name: '— vacant —', l2: 'awaiting a need', l3: '', badge: '', badgeCls: 'badge b-none' },
+      slotView('x', s.limbs.x)
+    ];
+    const prompts = [
+      { label: 'News on Northwind Foods', deny: false },
+      { label: 'Now Kestrel Air — 2025 only, as a table', deny: false },
+      { label: 'Read northwind.example/careers', deny: false },
+      { label: 'Email this digest to my boss every morning', deny: true }
+    ];
+    const sugs = prompts.map((p) => ({
+      label: p.label, disabled: s.busy, cls: p.deny ? 'chip chip-deny' : 'chip',
+      pick: () => this.route(p.label)
+    }));
+    return {
+      clock: this.fmt(s.sec).slice(0, 5),
+      eventCount: s.events,
+      skillCount: s.skills.length,
+      hasDenied: !!s.lastDenied,
+      lastDenied: s.lastDenied,
+      modeText: s.modeText,
+      modeCls: 'mode mode-' + s.mode,
+      stations: stations,
+      logs: logs,
+      msgs: msgs,
+      sugs: sugs,
+      deny: s.deny,
+      busy: s.busy,
+      input: s.input,
+      slots: slots,
+      sutA: 'sut sut-' + v(s.limbs.s0), stA: 'st8 st8-' + v(s.limbs.s0),
+      sutB: 'sut sut-' + v(s.limbs.s1), stB: 'st8 st8-' + v(s.limbs.s1),
+      sutX: 'sut sut-' + v(s.limbs.x), stX: 'st8 st8-' + v(s.limbs.x),
+      arc1: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on' : 'arc'),
+      arc2: s.deny ? 'arc arc-deny' : (s.mode === 'build' ? 'arc arc-on2' : 'arc'),
+      ringCls: s.deny ? 'ring-line ring-cinch' : 'ring-line',
+      ringTxt: s.deny ? 'ring-txt ring-deny' : ('ring-txt ' + (s.flash % 2 ? 'rfa' : 'rfb')),
+      orbCls: s.frozen ? 'orb orb-frozen' : 'orb',
+      orbEdge: s.frozen ? 'orb-edge orb-edge-dead' : 'orb-edge',
+      haloCls: s.frozen ? 'halo halo-dead' : 'halo',
+      lifeCls: s.frozen ? 'life life-dead' : 'life',
+      voiceLabel: s.voice ? 'Voice on' : 'Voice off',
+      voiceAria: s.voice ? 'true' : 'false',
+      voiceCls: s.voice ? 'tgl' : 'tgl tgl-off',
+      waveCls: s.speaking ? 'wave wave-on' : 'wave',
+      toggleVoice: () => {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+        this.setState((st) => ({ voice: !st.voice, speaking: false }));
+      },
+      reset: () => {
+        this.timers.forEach((t) => clearTimeout(t));
+        this.timers = [];
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+        this.setState(this.defaults());
+      },
+      onInput: (e) => this.setState({ input: e.target.value }),
+      onSubmit: (e) => { e.preventDefault(); this.route(this.state.input); }
+    };
+  }
+}
+</script>
+
+
+</body></html>

@@ -1,0 +1,14 @@
+{
+  "skill": "hand_probe",
+  "template": "hand",
+  "provider": "brave",
+  "folderHash": "1f12507316e15fb967e664b0a1ff24b55221974b2531d2871089b18a2a4b24fd",
+  "charterHash": "f2e9ef12c2fa6cdfdd91ee35a2dedf21a00c509083795e2cfb67016475ad2200",
+  "capabilities": [
+    "net:fetch"
+  ],
+  "env": [
+    "BRAVE_API_KEY"
+  ],
+  "decidedAt": "2026-10-08T17:57:41.980Z"
+}

@@ -1,0 +1,19 @@
+{
+  "results": [
+    {
+      "title": "Microsoft cloud update",
+      "url": "https://example.com/microsoft/1",
+      "page_age": "2026-10-07T12:00:00Z"
+    },
+    {
+      "title": "Microsoft AI notes",
+      "url": "https://example.com/microsoft/2",
+      "page_age": "2026-10-06T09:00:00Z"
+    },
+    {
+      "title": "Microsoft earnings brief",
+      "url": "https://example.com/microsoft/3",
+      "page_age": "2026-10-05T18:00:00Z"
+    }
+  ]
+}

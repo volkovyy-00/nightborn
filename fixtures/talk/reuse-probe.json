@@ -1,0 +1,13 @@
+{
+  "match": "reuse hand_probe",
+  "talk": {
+    "kind": "job",
+    "text": "Probing hand_probe.",
+    "job": {
+      "skill": "hand_probe",
+      "intent": "probe",
+      "query": "Microsoft",
+      "needs": ["net:fetch"]
+    }
+  }
+}

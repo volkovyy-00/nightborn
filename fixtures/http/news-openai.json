@@ -1,0 +1,19 @@
+{
+  "results": [
+    {
+      "title": "OpenAI product update",
+      "url": "https://example.com/openai/1",
+      "page_age": "2026-10-07T11:00:00Z"
+    },
+    {
+      "title": "OpenAI research note",
+      "url": "https://example.com/openai/2",
+      "page_age": "2026-10-06T08:00:00Z"
+    },
+    {
+      "title": "OpenAI partnership news",
+      "url": "https://example.com/openai/3",
+      "page_age": "2026-10-04T16:00:00Z"
+    }
+  ]
+}

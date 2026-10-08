@@ -1,0 +1,5 @@
+{
+  "name": "email_send",
+  "template": "email_send",
+  "capabilities": ["notify:email"]
+}

@@ -1,1 +1,7 @@
 .env
+node_modules/
+staging/
+video/
+*.mp4
+*.mov
+.DS_Store

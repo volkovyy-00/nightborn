@@ -1,0 +1,25 @@
+{
+  "ts": "2026-10-08T18:02:47.470Z",
+  "results": [
+    {
+      "name": "charter_hash_recipe",
+      "status": "Works",
+      "detail": "f2e9ef12"
+    },
+    {
+      "name": "tripwire_email",
+      "status": "Works",
+      "detail": "email matches; news does not"
+    },
+    {
+      "name": "charter_byte_flip",
+      "status": "Works",
+      "detail": "copy-only flip changes hash"
+    },
+    {
+      "name": "pi_talk_forge",
+      "status": "Simulated",
+      "detail": "Talk/Forge via Pi terminating tools; JUDGE_MODE fixtures available"
+    }
+  ]
+}
