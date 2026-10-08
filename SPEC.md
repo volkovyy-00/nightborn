@@ -39,6 +39,7 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 1. Explorer without hints: `sources.md` removed; `web_search` queries are in English and name the region; `http_get` on HTML returns a page digest (the page's own data endpoints + response shape, link shapes) so the Explorer can find a site's JSON API itself (§5, §7, §9, §14, §17).
 2. Chips and the reference use case no longer name the site ("… on Sauto" dropped): the Explorer has to find it (§1, §13).
 3. Recipe `maxFilter`: the hand itself drops items above a numeric input (e.g. `max_price`) when the site's API can't take it; a `map.url` with a missing placeholder value yields an empty `url` (§9, §17).
+4. Charter forge budget for the Explorer: `recipe_max_turns` 6 → 10, `recipe_max_seconds` 60 → 90 (re-pin `6e4aa8f0`, new `hand_probe` seed): hint-free discovery needs room to try a second site (§6, §9).
 
 ---
 
@@ -162,8 +163,8 @@ openrouter.ai
 ```
 ```forge
 recipe_tools: web_search http_get emit_recipe
-recipe_max_turns: 6
-recipe_max_seconds: 60
+recipe_max_turns: 10
+recipe_max_seconds: 90
 code_tools: web_search http_get write_skill run_test submit_skill
 code_max_turns: 16
 code_max_seconds: 150
@@ -375,8 +376,8 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 | skill `fetch` | 6 s |
 | skill process | 15 s |
 | Talk | 45 s of LLM time per request; the timer pauses while `use_hand` runs the Runner; expiry → `void session.abort()` → `talk_timeout` |
-| T1 recipe forge (one-shot) | `recipe_max_seconds` (60 s) → Broken `forge_invalid` |
-| Explorer | `recipe_max_seconds` (60 s) / `recipe_max_turns` → Broken `forge_invalid` |
+| T1 recipe forge (one-shot) | `recipe_max_seconds` (90 s) → Broken `forge_invalid` |
+| Explorer | `recipe_max_seconds` (90 s) / `recipe_max_turns` → Broken `forge_invalid` |
 | Builder | `code_max_seconds` (150 s) / `code_max_turns` → fallback to recipe |
 | `POST /api/talk` | ≤ 300 s; server `requestTimeout` 310 s |
 
