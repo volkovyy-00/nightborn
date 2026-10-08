@@ -6,7 +6,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { Job } from "./types.ts";
+import type { ForgeArtifact, Job } from "./types.ts";
 import { repoPath, dataPath, REPO_ROOT } from "./paths.ts";
 import { listSkillDirs } from "./hash.ts";
 import { ALLOWED_CAPS } from "./charter.ts";
@@ -30,8 +30,8 @@ function snapshot(): string {
   return [
     `Capabilities (needs may only use these): ${ALLOWED_CAPS.join(", ")}`,
     `Installed skills: ${names.length ? names.join(", ") : "(none)"}`,
-    "Ordinary news/search: skill=null (Runner may Reuse by capability) or an installed name.",
-    "Grow / forge / make an arm / don't reuse X: skill=new_snake_case name NOT in the installed list (forces Create).",
+    "Same kind of job as an installed skill (e.g. another company news): skill=null → Reuse.",
+    "Different job (forums, deals, listings) or grow/forge/don't reuse X: skill=new_snake_case NOT installed → Create (free-form Forge).",
     "Never set skill to hand_probe.",
   ].join("\n");
 }
@@ -64,8 +64,8 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
       "Request skill work or growth (news/search/deals). Final action. Use for grow/forge/make-an-arm requests too.",
     promptGuidelines: [
       "Call emit_chat OR emit_job, exactly one, as your last action.",
-      "Grow / forge / make an arm / extend / don't use <skill> → emit_job with skill=new_snake_case name not already installed.",
-      "Ordinary news/search (no grow ask) → skill=null or an installed skill name.",
+      "Grow / forge / make an arm / extend / don't use <skill> / forums / deals / listings unlike installed skills → skill=new_snake_case not installed.",
+      "Same-class news (e.g. News on OpenAI after a news skill exists) → skill=null.",
       "needs = charter capabilities only (usually [\"net:fetch\"]). Never hand_probe.",
       "query = the search string (topic), not the whole user sentence.",
     ],
@@ -114,7 +114,7 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
   const system = [
     "You are Nightborn's Talk layer.",
     "You never write skills yourself — emit_job requests work; the host Create/Reuse.",
-    "Do not refuse growth in chat. Ordinary search: skill=null. Explicit grow: propose a new snake_case skill name.",
+    "Do not refuse growth in chat. Same-class news: skill=null. Distinct jobs / explicit grow: new snake_case skill name (Create → free-form Forge).",
     "Only emit_chat or emit_job. needs ⊆ charter caps (net:fetch for web).",
     soul,
     "",
@@ -174,7 +174,7 @@ export async function talkViaPi(userText: string): Promise<TalkEmit> {
 export type TalkFixture = {
   match: string;
   talk: TalkEmit;
-  forge?: { name: string; purpose: string; query: string; capabilities: string[] };
+  forge?: ForgeArtifact;
 };
 
 export function loadTalkFixture(filename: string): TalkFixture | null {

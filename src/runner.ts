@@ -16,8 +16,16 @@ import {
   wardenPre,
   wipeStaging,
 } from "./warden.ts";
-import { copyEmailSendTemplate, forgeParamsViaPi, loadForgeFixture, renderHttpTemplate } from "./forge.ts";
+import {
+  copyEmailSendTemplate,
+  defaultNewsSkillSource,
+  ensureRunnableSkillSource,
+  forgeSkillViaPi,
+  loadForgeFixture,
+  writeForgedSkill,
+} from "./forge.ts";
 import { findJudgeFixture, loadTalkFixture, pushHistory, talkViaPi, type TalkFixture } from "./talk.ts";
+import type { ForgeArtifact } from "./types.ts";
 import { runSkill } from "./exec.ts";
 import { validateHttpOutput } from "../templates/schemas.ts";
 import { clearProvisionalGrant, provisionalOr, searchEnvKey } from "./broker.ts";
@@ -217,19 +225,28 @@ async function runCreate(
     });
   }
 
-  let params;
+  let artifact: ForgeArtifact;
   try {
     if (forgeOverride) {
-      params = forgeOverride;
+      artifact = ensureRunnableSkillSource(
+        { ...forgeOverride, skillSource: forgeOverride.skillSource || defaultNewsSkillSource() },
+        job.intent,
+      );
     } else if (process.env.JUDGE_MODE === "1") {
-      params = loadForgeFixture("pull_company_news.json") ?? (await forgeParamsViaPi(job.intent, job.query));
+      const fx = loadForgeFixture("pull_company_news.json");
+      artifact = fx
+        ? ensureRunnableSkillSource(
+            { ...fx, skillSource: fx.skillSource || defaultNewsSkillSource() },
+            job.intent,
+          )
+        : await forgeSkillViaPi(job.intent, job.query, job.skill);
     } else {
-      params = await forgeParamsViaPi(job.intent, job.query);
+      artifact = await forgeSkillViaPi(job.intent, job.query, job.skill);
     }
-    // Explicit grow: Talk's proposed skill name wins over Forge's name (fixture override unchanged above).
     if (!forgeOverride && job.skill) {
-      params = { ...params, name: job.skill };
+      artifact = { ...artifact, name: job.skill };
     }
+    if (!artifact.query) artifact = { ...artifact, query: job.query };
   } catch {
     wipeStaging(runDir);
     appendLog({
@@ -252,11 +269,35 @@ async function runCreate(
     };
   }
 
-  const { skillName, testQuery } = renderHttpTemplate(
-    { ...params, query: params.query || job.query },
-    runDir,
-    skillsRoot(),
-  );
+  let skillName: string;
+  let testQuery: string;
+  let freeform = false;
+  try {
+    const written = writeForgedSkill(artifact, runDir, skillsRoot());
+    skillName = written.skillName;
+    testQuery = written.testQuery || job.query;
+    freeform = written.freeform;
+  } catch {
+    wipeStaging(runDir);
+    appendLog({
+      actor: "forge",
+      event: "broken",
+      skill: null,
+      decision: "fail",
+      failureCode: "forge_invalid",
+      charterHash: getCharterHash(),
+      voice: "voice/broken.wav",
+      source,
+    });
+    return {
+      kind: "job",
+      job,
+      outcome: "broken",
+      skill: null,
+      failureCode: "forge_invalid",
+      reply: replyFor("forge_invalid", "Forge write failed."),
+    };
+  }
 
   appendLog({
     actor: "forge",
@@ -264,7 +305,7 @@ async function runCreate(
     skill: skillName,
     decision: "allow",
     charterHash: getCharterHash(),
-    detail: "params into http template",
+    detail: freeform ? "freeform skillSource" : "params into http template",
     source,
   });
 

@@ -35,8 +35,8 @@ quote the § line, ask. Don't loosen, don't route around.
 - Talk returns chat or a typed Job; never installs, never writes `skills/`, never writes the
   denied/broken reply — templated per failureCode (§10 "Replies").
 - Tripwire on raw text before Talk; exactly one voiced `denied` line, `actor: warden` (§11).
-- Forge = params only; LLM strings reach files only via `JSON.stringify`; `query` arrives on
-  stdin, never in `skill.mjs`; no Forge retry (§9 "Forge").
+- Forge Create = free-form `skillSource` written to `skill.mjs`; host writes notes/manifest;
+  `query` on stdin at runtime; no Forge retry; `email_send` stays template (§9 "Forge").
 - Reuse/Create = the §9 "Runner rule" (tripwire → by name → named missing skill = Create →
   exactly one http skill by capability → ≥2 matches = ambiguous `gap` → else Create).
   Implement verbatim, no LLM.
@@ -49,8 +49,8 @@ quote the § line, ask. Don't loosen, don't route around.
   `public/index.html` polling `/api/log` (§7, §13).
 - Routes: exactly §13 "Merge contract" (2 API + static + `/mock` only when `OFFLINE=1`).
 - Deps: the §7 list; `typescript` exact `5.9.3` in `dependencies`. Anything else → Ask first.
-- OpenAI structured-output schemas (Talk, Forge params): `.nullable()`, never `.optional()`
-  (§10). The Test schema's `date?` stays optional (§9 "Test").
+- Pi tool schemas (Talk, Forge artifact): prefer `.nullable()` over omitting fields where TypeBox
+  allows (§10). The Test schema's `date?` stays optional (§9 "Test").
 - `staging/<runId>/` inside repo, never `os.tmpdir`; `surgery.log` append-only, each line written
   when its step happens, never batched at the end of the request (§3, §4, §5).
 - WAVs only in `public/voice/`; `voice` only on lines §12 allows. Public word "Forge", never "Adopt".

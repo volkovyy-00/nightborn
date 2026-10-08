@@ -68,12 +68,17 @@ export type TalkResult =
       reply: string;
     };
 
-export type ForgeParams = {
+/** Create-path Forge artifact. skillSource required on live path; optional for legacy fixtures. */
+export type ForgeArtifact = {
   name: string;
   purpose: string;
   query: string;
   capabilities: string[];
+  skillSource?: string;
 };
+
+/** @deprecated alias — use ForgeArtifact */
+export type ForgeParams = ForgeArtifact;
 
 export type DecisionJson = {
   skill: string;
