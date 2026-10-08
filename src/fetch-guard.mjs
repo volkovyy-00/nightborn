@@ -23,8 +23,7 @@ function headerText(headers) {
 function bodyText(body) {
   if (body === undefined || body === null) return "";
   if (typeof body === "string") return body;
-  if (body instanceof URLSearchParams) return body.toString();
-  return null; // opaque body (stream, blob, buffer): cannot be inspected
+  return null; // opaque body (stream, blob, buffer, params object): not inspected
 }
 
 function check(url, headers, body) {
@@ -36,21 +35,19 @@ function check(url, headers, body) {
   if (KEY_FORMS.some((k) => blob.includes(k))) throw new Error("guard: key to a non-Brave host");
 }
 
-const guarded = async function fetch(input, init = {}) {
-  let url;
-  let headers = init?.headers;
-  let body = init?.body;
-  if (typeof input === "string") url = new URL(input);
-  else if (input instanceof URL) url = input;
-  else if (input instanceof Request) {
-    url = new URL(input.url);
-    const merged = new Headers(input.headers);
-    for (const [k, v] of new Headers(init?.headers ?? {})) merged.set(k, v);
-    headers = merged;
-    if (body === undefined && input.body !== null) body = input.body;
-  } else throw new Error("guard: unsupported fetch input");
-  check(url, headers, body);
-  const res = await realFetch(input, { ...init, redirect: "manual" });
+const guarded = async function fetch(input, init) {
+  if (!(typeof input === "string" || input instanceof URL || input instanceof Request)) {
+    throw new Error("guard: unsupported fetch input");
+  }
+  // Check exactly what is sent: snapshot init once (spread reads each getter once), build one plain
+  // Request from it, check that Request's own url/headers, and pass that same Request on. A URL or
+  // Request subclass with lying getters cannot make the checked target differ from the fetched one.
+  const opts = init == null ? {} : { ...init };
+  const req = new Request(input, { ...opts, redirect: "manual" });
+  let body = opts.body;
+  if (body === undefined && input instanceof Request && input.body !== null) body = input.body;
+  check(new URL(req.url), req.headers, body);
+  const res = await realFetch(req);
   if (res.status >= 300 && res.status < 400) throw new Error("guard: redirect blocked");
   return res;
 };
