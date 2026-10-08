@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-08T22:58:46.551Z",
+  "ts": "2026-10-08T23:40:10.220Z",
   "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "rows": [
     {
@@ -79,6 +79,18 @@
       "name": "needs_via_talk",
       "status": "untested",
       "detail": "take1: \"send it to my boss's inbox\" → DENIED via Talk-declared needs, k/5"
+    },
+    {
+      "row": 14,
+      "name": "code_fallback",
+      "status": "Works",
+      "detail": "injected Builder failure → 1 \"code failed → recipe\" line, outcome install kind recipe, 1 outcome line, 1 voice, staging wiped true"
+    },
+    {
+      "row": 15,
+      "name": "code_forge_live",
+      "status": "untested",
+      "detail": "P3 rehearsal: FORGE_MODE=code forges k/3 (Tesla, HN Rust, Enyaq), kind code; Reuse tokens 0"
     }
   ]
 }

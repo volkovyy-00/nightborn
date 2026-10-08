@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { FailureCode, HandResult, Item, Job, Manifest, TalkResult, TalkStats } from "./types.ts";
+import type { FailureCode, HandResult, InputValues, Item, Job, Manifest, TalkResult, TalkStats } from "./types.ts";
+import { buildCode, type BuildCodeFn } from "./builder.ts";
 import { getCharterHash } from "./charter.ts";
 import { appendLog } from "./log.ts";
 import { dataPath } from "./paths.ts";
@@ -20,8 +21,18 @@ import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisional
 type Source = "live" | "fixture";
 type Ctx = { source: Source; fixturePath: boolean; request?: string }; // request = the user's words, for the Explorer
 
+/** Injectable forge dependencies (validate.ts injects a failing Builder to prove the fallback). */
+export type RunnerDeps = { buildCode: BuildCodeFn | null };
+
 const BROKEN_VOICE = "voice/broken.wav";
 const ITEMS_MAX = 5;
+const TALK_BUDGET_MS = 300_000; // POST /api/talk cap (SPEC §9 "Timeouts")
+const FALLBACK_RESERVE_MS = 45_000; // Test + FINAL + Talk summary after a fallback Explorer
+
+/** SPEC §9: code forge is online-only; OFFLINE and fixture requests always take the recipe path. */
+function defaultDeps(ctx: Ctx): RunnerDeps {
+  return { buildCode: process.env.FORGE_MODE === "code" && !offline() && !ctx.fixturePath ? buildCode : null };
+}
 
 function skillsRoot(): string {
   return dataPath("skills");
@@ -111,27 +122,108 @@ async function reuse(name: string, inputs: Job["inputs"], ctx: Ctx): Promise<Han
 
 // ── Create: gap → forge → PRE → Test → FINAL → Install ──────────────────
 
-async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult> {
+type ForgeCost = { tokens: number; costUsd: number; ms: number };
+
+/** The staged hand handed from the forge phase to PRE → Test → FINAL → Install. */
+type Staged = { job: Job; name: string; runDir: string; hosts: string[]; testInputs: InputValues; visited: string[]; forge: ForgeCost; ctx: Ctx; t0: number };
+
+/** Warden PRE → provisional grant → sandboxed Test → FINAL (= PRE) → Install. One outcome, staging wiped on every failure. */
+async function testAndInstall(s: Staged): Promise<HandResult> {
+  const { job, name, runDir, ctx, forge } = s;
+  const runId = path.basename(runDir);
+  const done = (r: HandResult): HandResult => ({ ...r, forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd, ms: Date.now() - s.t0 });
+  try {
+    const pre = wardenPre(runDir, { job, name, visited: s.visited });
+    if (!pre.ok) {
+      denyAndWipe(runDir, name, pre.failureCode, pre.caps, pre.detail);
+      return done({ outcome: "denied", skill: name, failureCode: pre.failureCode });
+    }
+    setProvisionalGrant(runId, pre.env);
+    const r = await runSkill(
+      path.join(runDir, "skill.mjs"),
+      runDir,
+      { inputs: s.testInputs, max: ITEMS_MAX, ...stdinExtras() },
+      brokerGrant(getProvisionalGrant(runId)),
+      runHosts(s.hosts),
+    );
+    const fail = runFailure(r);
+    if (fail) {
+      wipeStaging(runDir);
+      return done(broken(name, fail.code, `test: ${fail.detail.replace(/^run: /, "")}`, ctx, "test"));
+    }
+    const v = validateOutput(r.stdout);
+    if (!v.ok) {
+      wipeStaging(runDir);
+      return done(broken(name, "schema_invalid", `test: ${v.reason}`, ctx, "test"));
+    }
+    line({ actor: "test", event: "test", skill: name, decision: "pass", detail: `${v.items.length} items`, ms: r.ms }, ctx);
+
+    if (!wardenFinal(runDir, name, pre.folderHash, pre.caps)) {
+      denyAndWipe(runDir, name, "hash_mismatch", pre.caps, "FINAL hash != PRE");
+      return done({ outcome: "denied", skill: name, failureCode: "hash_mismatch" });
+    }
+    installSkill(runDir, skillsRoot(), pre, { tokens: forge.tokens, costUsd: forge.costUsd, ms: Date.now() - s.t0 });
+    return done({ outcome: "install", skill: name, items: v.items.slice(0, ITEMS_MAX) });
+  } catch {
+    // Unexpected I/O or parse failure: still exactly one outcome, staging wiped, no raw error text.
+    wipeStaging(runDir);
+    return done(broken(name, "forge_invalid", "runner: internal error", ctx));
+  } finally {
+    clearProvisionalGrant(runId);
+  }
+}
+
+function readStagedManifest(runDir: string): Manifest | null {
+  try {
+    return JSON.parse(readFileSync(path.join(runDir, "manifest.json"), "utf8")) as Manifest;
+  } catch {
+    return null;
+  }
+}
+
+async function create(job: Job, gapDetail: string, ctx: Ctx, deps: RunnerDeps): Promise<HandResult> {
   const t0 = Date.now();
   const named = nullishSkill(job.skill) ? null : job.skill;
   line({ actor: "runner", event: "gap", skill: named, decision: "allow", detail: gapDetail }, ctx);
 
-  // Explorer steps are `forge` lines without tokens; the session total lands on the pass/fail line below (SPEC §12).
+  // Explorer / Builder steps are `forge` lines without tokens; the session total lands on the pass/fail line (SPEC §12).
   const step = (detail: string, ms?: number) =>
     line({ actor: "forge", event: "forge", skill: named, decision: "pass", detail, ...(ms !== undefined ? { ms } : {}) }, ctx);
-  const forge: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step, ctx.request);
-  const fctx: Ctx = forge.source === "fixture" ? { ...ctx, source: "fixture" } : ctx;
-  if (!forge.ok) {
-    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: forge.reason, tokens: forge.tokens, costUsd: forge.costUsd, ms: forge.ms }, fctx);
-    const r = broken(named, "forge_invalid", forge.reason, fctx);
-    return { ...r, forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
+
+  // Code forge (SPEC §9 "Code forge"): the Builder writes the hand; a failure before submit_skill falls back to recipe once.
+  const carry: ForgeCost = { tokens: 0, costUsd: 0, ms: 0 };
+  if (deps.buildCode) {
+    const code = await deps.buildCode(job, step, { skillsRoot: skillsRoot(), stdinExtras, runHosts }, ctx.request);
+    if (code.ok) {
+      const manifest = readStagedManifest(code.runDir);
+      const forge: ForgeCost = { tokens: code.tokens, costUsd: code.costUsd, ms: code.ms };
+      if (!manifest) {
+        wipeStaging(code.runDir);
+        line({ actor: "forge", event: "forge", skill: code.name, decision: "fail", detail: "code: manifest unreadable", ...forge }, ctx);
+        return { ...broken(code.name, "forge_invalid", "code: manifest unreadable", ctx), forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
+      }
+      line({ actor: "forge", event: "forge", skill: code.name, decision: "pass", detail: `code: ${manifest.hosts.join(", ")}`, ...forge }, ctx);
+      const testInputs = coerceInputs(manifest.inputs ?? [], job.inputs) ?? code.lastPassingInputs;
+      return testAndInstall({ job, name: code.name, runDir: code.runDir, hosts: manifest.hosts ?? [], testInputs, visited: code.visited, forge, ctx, t0 });
+    }
+    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: `code failed: ${code.reason} → recipe`, tokens: code.tokens, costUsd: code.costUsd, ms: code.ms }, ctx);
+    carry.tokens = code.tokens;
+    carry.costUsd = code.costUsd;
+    carry.ms = code.ms;
   }
-  const prepared = prepareRecipe(forge.recipe, job, forge.visited, skillsRoot());
-  if (!prepared.ok) {
-    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: prepared.reason, tokens: forge.tokens, costUsd: forge.costUsd, ms: forge.ms }, fctx);
-    const r = broken(named, "forge_invalid", prepared.reason, fctx);
-    return { ...r, forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
-  }
+
+  // Recipe forge. After a code fallback the Explorer gets only what is left of the request budget (never more than the charter's cap).
+  const explorerCap = deps.buildCode ? Math.floor((TALK_BUDGET_MS - (Date.now() - t0) - FALLBACK_RESERVE_MS) / 1000) : undefined;
+  const recipe: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step, ctx.request, explorerCap);
+  const fctx: Ctx = recipe.source === "fixture" ? { ...ctx, source: "fixture" } : ctx;
+  const forge: ForgeCost = { tokens: recipe.tokens + carry.tokens, costUsd: recipe.costUsd + carry.costUsd, ms: recipe.ms + carry.ms };
+  const forgeFail = (reason: string): HandResult => {
+    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: reason, ...forge }, fctx);
+    return { ...broken(named, "forge_invalid", reason, fctx), forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
+  };
+  if (!recipe.ok) return forgeFail(recipe.reason);
+  const prepared = prepareRecipe(recipe.recipe, job, recipe.visited, skillsRoot());
+  if (!prepared.ok) return forgeFail(prepared.reason);
   const { hand } = prepared;
   line(
     {
@@ -143,66 +235,23 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
         hand.manifest.recipe?.endpoint === "json"
           ? `recipe: json ${hand.manifest.hosts.join(", ")}`
           : `recipe: ${hand.manifest.recipe?.endpoint} "${hand.manifest.recipe?.queryPattern}"`,
-      tokens: forge.tokens,
-      costUsd: forge.costUsd,
-      ms: forge.ms,
+      ...forge,
     },
     fctx,
   );
-  const runId = randomUUID().slice(0, 8);
-  const runDir = dataPath("staging", runId);
-  const done = (r: HandResult): HandResult => ({ ...r, forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd, ms: Date.now() - t0 });
+  const runDir = dataPath("staging", randomUUID().slice(0, 8));
   try {
     renderRecipe(hand, runDir);
   } catch {
     wipeStaging(runDir);
-    return done(broken(hand.name, "forge_invalid", "render: failed", fctx));
+    return { ...broken(hand.name, "forge_invalid", "render: failed", fctx), forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd, ms: Date.now() - t0 };
   }
-
-  try {
-    const pre = wardenPre(runDir, { job, name: hand.name, visited: forge.visited });
-    if (!pre.ok) {
-      denyAndWipe(runDir, hand.name, pre.failureCode, pre.caps, pre.detail);
-      return done({ outcome: "denied", skill: hand.name, failureCode: pre.failureCode });
-    }
-    setProvisionalGrant(runId, pre.env);
-    const r = await runSkill(
-      path.join(runDir, "skill.mjs"),
-      runDir,
-      { inputs: hand.testInputs, max: ITEMS_MAX, ...stdinExtras() },
-      brokerGrant(getProvisionalGrant(runId)),
-      runHosts(hand.manifest.hosts),
-    );
-    const fail = runFailure(r);
-    if (fail) {
-      wipeStaging(runDir);
-      return done(broken(hand.name, fail.code, `test: ${fail.detail.replace(/^run: /, "")}`, fctx, "test"));
-    }
-    const v = validateOutput(r.stdout);
-    if (!v.ok) {
-      wipeStaging(runDir);
-      return done(broken(hand.name, "schema_invalid", `test: ${v.reason}`, fctx, "test"));
-    }
-    line({ actor: "test", event: "test", skill: hand.name, decision: "pass", detail: `${v.items.length} items`, ms: r.ms }, fctx);
-
-    if (!wardenFinal(runDir, hand.name, pre.folderHash, pre.caps)) {
-      denyAndWipe(runDir, hand.name, "hash_mismatch", pre.caps, "FINAL hash != PRE");
-      return done({ outcome: "denied", skill: hand.name, failureCode: "hash_mismatch" });
-    }
-    installSkill(runDir, skillsRoot(), pre, { tokens: forge.tokens, costUsd: forge.costUsd, ms: Date.now() - t0 });
-    return done({ outcome: "install", skill: hand.name, items: v.items.slice(0, ITEMS_MAX) });
-  } catch {
-    // Unexpected I/O or parse failure: still exactly one outcome, staging wiped, no raw error text.
-    wipeStaging(runDir);
-    return done(broken(hand.name, "forge_invalid", "runner: internal error", fctx));
-  } finally {
-    clearProvisionalGrant(runId);
-  }
+  return testAndInstall({ job, name: hand.name, runDir, hosts: hand.manifest.hosts, testInputs: hand.testInputs, visited: recipe.visited, forge, ctx: fctx, t0 });
 }
 
 // ── Runner rule (SPEC §9), steps 2–6; step 1 (tripwire) runs before Talk ─
 
-export async function runJob(rawJob: Job, stats: TalkStats, ctx: Ctx): Promise<HandResult> {
+export async function runJob(rawJob: Job, stats: TalkStats, ctx: Ctx, deps: RunnerDeps = defaultDeps(ctx)): Promise<HandResult> {
   const job: Job = {
     skill: nullishSkill(rawJob.skill) ? null : String(rawJob.skill).trim(),
     intent: String(rawJob.intent ?? "").slice(0, 200),
@@ -235,26 +284,26 @@ export async function runJob(rawJob: Job, stats: TalkStats, ctx: Ctx): Promise<H
     return { outcome: "denied", skill: null, failureCode: "invalid_skill_name" };
   }
   try {
-    return await dispatch(job, ctx);
+    return await dispatch(job, ctx, deps);
   } catch {
     return broken(job.skill, "forge_invalid", "runner: internal error", ctx);
   }
 }
 
-async function dispatch(job: Job, ctx: Ctx): Promise<HandResult> {
+async function dispatch(job: Job, ctx: Ctx, deps: RunnerDeps): Promise<HandResult> {
   // 4. installed hand → validate inputs → Reuse, else Create
   if (job.skill !== null) {
     const manifest = readManifest(job.skill);
     if (manifest) {
       const inputs = coerceInputs(manifest.inputs ?? [], job.inputs);
       if (inputs) return reuse(job.skill, inputs, ctx);
-      return create(job, `inputs don't fit ${job.skill} → create`, ctx);
+      return create(job, `inputs don't fit ${job.skill} → create`, ctx, deps);
     }
     // 5. named hand not installed → Create
-    return create(job, `named skill ${job.skill} not installed → create`, ctx);
+    return create(job, `named skill ${job.skill} not installed → create`, ctx, deps);
   }
   // 6. null → Create
-  return create(job, `no installed hand covers ${job.intent || "this"} → create`, ctx);
+  return create(job, `no installed hand covers ${job.intent || "this"} → create`, ctx, deps);
 }
 
 // ── Tripwire path (SPEC §11) ─────────────────────────────────────────────

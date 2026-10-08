@@ -145,6 +145,8 @@ After the latest `job` line:
 | `test` / `broken` | TEST (`broken` = red) |
 | `final` / `install` / `reuse` | INSTALL |
 
+`FORGE_MODE=code` (T3): the Builder's steps are `forge` lines (`write: skill.mjs`, `test 2/3: protected_path`, `submit_skill`). A `precheck` line with `decision:"deny"` + `failureCode` is an in-loop Warden rejection: no `voice`, not an outcome — the Builder rewrites and retries. The one voiced `denied` / `install` / `broken` line still ends the request.
+
 ---
 
 ## UI bootstrap (no Pi keys)

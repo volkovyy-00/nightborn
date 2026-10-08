@@ -15,6 +15,7 @@ import { validateOutput } from "../templates/schemas.ts";
 import { handleTalk, runJob } from "../src/runner.ts";
 import { prepareRecipe, renderRecipe } from "../src/forge.ts";
 import type { FailureCode, Job } from "../src/types.ts";
+import type { BuildCodeFn } from "../src/builder.ts";
 
 type Status = "Works" | "Simulated" | "Incomplete" | "untested";
 type Row = { row: number; name: string; status: Status; detail: string };
@@ -251,6 +252,66 @@ else {
   const ok = r.outcome === "denied" && r.failureCode === "capability_not_allowed" && deniedCount() === before + 1 && dirsAfter === dirsBefore;
   add(10, "needs_denied", ok, `needs:[notify:email] → ${r.outcome} ${String(r.failureCode)}, +${deniedCount() - before} denied line, staging dirs ${dirsBefore}→${dirsAfter}`);
 }
+
+// ── Row 14: Builder fails before submit_skill → one `code failed: … → recipe` line → recipe Install ──
+// Deterministic and keyless: an injected failing Builder; the recipe fallback replays fixtures/forge/ and its
+// Test fetches a mock server started here (OFFLINE=1 → baseUrl; no dependency on a running dev server).
+if (!charterOk) add(14, "code_fallback", null, "CHARTER_PIN missing");
+else {
+  const { serve } = await import("@hono/node-server");
+  const { Hono } = await import("hono");
+  const { mockResponse } = await import("../src/mock.ts");
+  const app = new Hono();
+  app.get("/mock/:host/*", (c) => {
+    const host = c.req.param("host");
+    const url = new URL(c.req.url);
+    const body = mockResponse(host, url.pathname.slice(`/mock/${host}`.length), url.searchParams);
+    return body === null ? c.json({ error: "no fixture" }, 404) : c.json(body);
+  });
+  const mockPort = 8799;
+  const server = serve({ fetch: app.fetch, port: mockPort, hostname: "127.0.0.1" });
+  const saved = { OFFLINE: process.env.OFFLINE, PORT: process.env.PORT };
+  process.env.OFFLINE = "1";
+  process.env.PORT = String(mockPort);
+  const stagingDir = path.join(scratch, "staging");
+  let strayDir = "";
+  const failingBuilder: BuildCodeFn = async (_job, step) => {
+    strayDir = path.join(stagingDir, "validate-code");
+    mkdirSync(strayDir, { recursive: true });
+    writeFileSync(path.join(strayDir, "skill.mjs"), "// draft");
+    step("write: skill.mjs");
+    rmSync(strayDir, { recursive: true, force: true }); // the real Builder wipes its own runDir on failure
+    return { ok: false, reason: "builder: limit", tokens: 0, costUsd: 0, ms: 1 };
+  };
+  const before = readLogLines().length;
+  const job: Job = { skill: null, intent: "used car listings", inputs: { make: "Tesla", model: "Model 3", max_price: "750 000 Kč" }, needs: ["net:fetch"] };
+  let r: Awaited<ReturnType<typeof runJob>> | null = null;
+  try {
+    r = await runJob(job, { tokens: 0, costUsd: 0 }, { source: "fixture", fixturePath: true }, { buildCode: failingBuilder });
+  } finally {
+    process.env.OFFLINE = saved.OFFLINE ?? "";
+    if (saved.OFFLINE === undefined) delete process.env.OFFLINE;
+    if (saved.PORT === undefined) delete process.env.PORT;
+    else process.env.PORT = saved.PORT;
+    server.close();
+  }
+  const lines = readLogLines().slice(before);
+  const fallbackLines = lines.filter((l) => l.event === "forge" && l.detail?.startsWith("code failed:"));
+  const outcomes = lines.filter((l) => ["install", "reuse", "denied", "broken"].includes(l.event));
+  const voiced = lines.filter((l) => l.voice);
+  const installed = r?.outcome === "install" && r.skill ? path.join(scratch, "skills", r.skill) : "";
+  let kind = "";
+  try {
+    kind = installed ? String((JSON.parse(readFileSync(path.join(installed, "decision.json"), "utf8")) as { kind: string }).kind) : "";
+  } catch {
+    kind = "";
+  }
+  const ok = fallbackLines.length === 1 && outcomes.length === 1 && voiced.length === 1 && r?.outcome === "install" && kind === "recipe" && !existsSync(strayDir);
+  add(14, "code_fallback", ok, `injected Builder failure → ${fallbackLines.length} "code failed → recipe" line, outcome ${String(r?.outcome)} kind ${kind || "?"}, ${outcomes.length} outcome line, ${voiced.length} voice, staging wiped ${!existsSync(strayDir)}`);
+}
+
+// ── Row 15: live code forge (FORGE_MODE=code + keys) — filled by the P3 rehearsal ───────────────
+add(15, "code_forge_live", null, "P3 rehearsal: FORGE_MODE=code forges k/3 (Tesla, HN Rust, Enyaq), kind code; Reuse tokens 0");
 
 // ── Rows 5, 11–13: P2 / take1 ─────────────────────────────────────────────────────────────────
 add(5, "fetch_guard_probes", null, "P2: hardened guard + probes through exec.ts");

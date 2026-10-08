@@ -679,6 +679,8 @@ body.resizing{cursor:col-resize;user-select:none}
         if (d.startsWith("fixed template")) return { text: "Loaded the fixed email template (no LLM).", phase: "warden" };
         return { text: `Recipe ready${l.tokens ? ` (${l.tokens.toLocaleString("en-US")} tokens)` : ""}. Building the hand.`, phase: "warden" };
       case "precheck":
+        // A Builder in-loop deny (FORGE_MODE=code): no voice, not an outcome — the Builder rewrites and retries.
+        if (l.decision === "deny") return { text: `Warden rejected the draft: ${l.failureCode || "denied"}. The Builder retries.`, phase: "forging", bad: true };
         return { text: "Warden scanned the code: allowed.", phase: "testing" };
       case "test":
         return { text: `Test run passed: ${d || "ok"}.`, phase: "warden" };
