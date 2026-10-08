@@ -396,12 +396,12 @@ function systemPrompt(): string {
     "- http_get({url}): fetch one public https URL. JSON comes back pretty-printed (≤16 KB). An HTML page comes back as a DIGEST: \"data endpoints this page itself calls\" (the site's own JSON API URLs with their params and, when the page embeds it, the response shape: array path, length, first item's fields), \"link shapes\" (how the site links to item pages, {n} = digits), JSON-LD and a text excerpt. Every host you fetch successfully becomes an allowed host for the hand; the hand may only use hosts you fetched.",
     "- emit_recipe({...}): your final action, exactly once.",
     "",
-    "Procedure (budget: 6 turns and 60 seconds in total, no retry; aim for 4):",
-    "1. web_search which sites serve this kind of data in that region, e.g. \"most popular used car classifieds sites Czech Republic\". A well-known public JSON API you already know (e.g. a site's official search API) is a fine candidate too.",
-    "2. web_search the user's item on the best candidate, e.g. \"Tesla Model 3 <site>\", to get that site's listing page for it.",
-    "3. http_get the listing page. Pick the data endpoint that returns the item list (its response shape shows an array of items with names/prices), and the link shape of an item page.",
-    "4. Only if the endpoint's response shape is not shown in the digest: http_get the endpoint filled with the user's values and look at the items array.",
-    "5. emit_recipe. If a candidate shows no usable data endpoint, move to the next candidate. For free-text topics (news, current events) emit a news recipe right away without fetching.",
+    "Procedure (budget: 6 turns and 60 seconds in total, no retry; aim for 4 tool calls, one per turn):",
+    "1. web_search for the leading sites of this kind in that region, e.g. \"most popular used car classifieds sites Czech Republic\". Pick the primary national marketplace (where sellers post listings, usually the biggest one), not a meta-search aggregator or a foreign site. A well-known public JSON API you already know (e.g. a site's official search API) is a fine candidate too.",
+    "2. web_search the user's item together with that site's domain, e.g. \"Tesla Model 3 example.cz\". Take the listing page URL from the results. Never guess or construct page URLs yourself.",
+    "3. http_get that listing page. In its digest pick the data endpoint whose response is the item list (an array of items with names/prices), and the link shape of an item page.",
+    "4. Only if that endpoint's response shape is not shown in the digest: http_get the endpoint filled with the user's values.",
+    "5. emit_recipe. If the page shows no usable data endpoint, try the next marketplace. For free-text topics (news, current events) emit a news recipe right away without fetching.",
     "",
     "Recipe fields:",
     "- name: short generic snake_case name for the kind of task (e.g. find_used_cars, hn_stories); never the user's value.",
@@ -461,7 +461,7 @@ function describeUrl(rawUrl: string): string {
 }
 
 /** T2 recipe forge: Explorer session → recipe + visited hosts. Each tool call is reported through `step`. */
-export async function exploreRecipe(job: Job, step: StepLogger): Promise<ForgeResult> {
+export async function exploreRecipe(job: Job, step: StepLogger, request?: string): Promise<ForgeResult> {
   const t0 = Date.now();
   const limits = getCharter().forge;
   const visited: string[] = [];
@@ -570,7 +570,7 @@ export async function exploreRecipe(job: Job, step: StepLogger): Promise<ForgeRe
   });
   try {
     await session.prompt(
-      `Intent: ${JSON.stringify(job.intent)}\nUser values: ${JSON.stringify(job.inputs)}\n\nFind a source (English search queries), read its page digest, then call emit_recipe once.`,
+      `${request ? `User request: ${JSON.stringify(request.slice(0, 300))}\n` : ""}Intent: ${JSON.stringify(job.intent)}\nUser values: ${JSON.stringify(job.inputs)}\n\nFind a source (English search queries), read its page digest, then call emit_recipe once.`,
     );
   } catch {
     /* no recipe → forge_invalid below */

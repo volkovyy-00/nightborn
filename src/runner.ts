@@ -18,7 +18,7 @@ import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisional
 // Runner: tripwire + Runner rule (SPEC §9), deterministic, no LLM. Writes each log line when its step happens.
 
 type Source = "live" | "fixture";
-type Ctx = { source: Source; fixturePath: boolean };
+type Ctx = { source: Source; fixturePath: boolean; request?: string }; // request = the user's words, for the Explorer
 
 const BROKEN_VOICE = "voice/broken.wav";
 const ITEMS_MAX = 5;
@@ -119,7 +119,7 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
   // Explorer steps are `forge` lines without tokens; the session total lands on the pass/fail line below (SPEC §12).
   const step = (detail: string, ms?: number) =>
     line({ actor: "forge", event: "forge", skill: named, decision: "pass", detail, ...(ms !== undefined ? { ms } : {}) }, ctx);
-  const forge: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step);
+  const forge: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step, ctx.request);
   const fctx: Ctx = forge.source === "fixture" ? { ...ctx, source: "fixture" } : ctx;
   if (!forge.ok) {
     line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: forge.reason, tokens: forge.tokens, costUsd: forge.costUsd, ms: forge.ms }, fctx);
@@ -321,7 +321,7 @@ export async function handleTalk(text: string, fixture?: string): Promise<TalkRe
   // Live Talk
   const out = await talk(text, {
     snapshot: buildSnapshot,
-    runJob: (job, stats) => runJob(job, stats, { source: "live", fixturePath: false }),
+    runJob: (job, stats) => runJob(job, stats, { source: "live", fixturePath: false, request: text }),
   });
   if (out.kind === "chat") return { kind: "chat", text: out.text };
   if (out.kind === "fail") {
