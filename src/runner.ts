@@ -28,7 +28,7 @@ import { findJudgeFixture, loadTalkFixture, pushHistory, talkViaPi, type TalkFix
 import type { ForgeArtifact } from "./types.ts";
 import { runSkill } from "./exec.ts";
 import { validateHttpOutput } from "../templates/schemas.ts";
-import { clearProvisionalGrant, provisionalOr, searchEnvKey } from "./broker.ts";
+import { clearProvisionalGrant, grantKeysForCaps, provisionalOr } from "./broker.ts";
 
 function skillsRoot(): string {
   return dataPath("skills");
@@ -84,10 +84,13 @@ function chooseReuse(job: Job): { mode: "reuse"; skill: string; detail: string }
   return { mode: "create", detail: "no installed skill covers <intent> → create" };
 }
 
-function offlineBaseUrl(): string | undefined {
+function offlineBaseUrl(capsOrNeeds?: string[]): string | undefined {
   if (process.env.OFFLINE !== "1") return undefined;
   const port = process.env.PORT ?? "8787";
-  const provider = (process.env.SEARCH_PROVIDER ?? "brave").toLowerCase();
+  const provider =
+    capsOrNeeds?.includes("notify:phone")
+      ? "bland"
+      : (process.env.SEARCH_PROVIDER ?? "brave").toLowerCase();
   return `http://127.0.0.1:${port}/mock/${provider}`;
 }
 
@@ -143,7 +146,7 @@ async function runReuse(
   });
 
   const input: { query: string; baseUrl?: string } = { query: job.query };
-  const base = offlineBaseUrl();
+  const base = offlineBaseUrl(decision.capabilities);
   if (base) input.baseUrl = base;
 
   const result = await runSkill(path.join(dir, "skill.mjs"), dir, input, decision.env, 15_000);
@@ -233,7 +236,16 @@ async function runCreate(
         job.intent,
       );
     } else if (process.env.JUDGE_MODE === "1") {
-      const fx = loadForgeFixture("pull_company_news.json");
+      const candidates = [
+        job.skill ? `${job.skill}.json` : null,
+        job.needs.includes("notify:phone") ? "place_outbound_call.json" : null,
+        "pull_company_news.json",
+      ].filter((n): n is string => Boolean(n));
+      let fx: ForgeArtifact | null = null;
+      for (const name of candidates) {
+        fx = loadForgeFixture(name);
+        if (fx) break;
+      }
       artifact = fx
         ? ensureRunnableSkillSource(
             { ...fx, skillSource: fx.skillSource || defaultNewsSkillSource() },
@@ -309,7 +321,8 @@ async function runCreate(
     source,
   });
 
-  const pre = wardenPre(runDir, { ...job, needs: ["net:fetch"] }, skillName);
+  const needs = job.needs.length ? job.needs : ["net:fetch"];
+  const pre = wardenPre(runDir, { ...job, needs }, skillName);
   if (!pre.ok) {
     denyAndWipe(runDir, skillName, pre.failureCode, pre.caps, pre.detail);
     return {
@@ -323,14 +336,14 @@ async function runCreate(
   }
 
   const input: { query: string; baseUrl?: string } = { query: testQuery };
-  const base = offlineBaseUrl();
+  const base = offlineBaseUrl(pre.caps);
   if (base) input.baseUrl = base;
 
   const result = await runSkill(
     path.join(runDir, "skill.mjs"),
     runDir,
     input,
-    provisionalOr([searchEnvKey()]),
+    provisionalOr(grantKeysForCaps(pre.caps)),
     15_000,
   );
 

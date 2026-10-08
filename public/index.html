@@ -289,6 +289,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         <button type="button" class="chip" data-chip>News on OpenAI</button>
         <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
       </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span class="kicker" style="width:100%">VOICE NOTE BEAT</span>
+        <button type="button" class="chip" id="vnCreature">1 · Send note (Frankenstein voice)</button>
+        <button type="button" class="chip" data-chip>That does not sound like you, did you get a cold?</button>
+        <button type="button" class="chip" id="vnRecord">2 · Record my voice (~20s)</button>
+        <button type="button" class="chip" id="vnUpload">2b · Upload sample</button>
+        <button type="button" class="chip" id="vnLearned" disabled>3 · Send note again (learned voice)</button>
+        <input type="file" id="vnFile" accept="audio/*,.mp3,.wav,.webm,.m4a" hidden>
+        <span class="mono-muted" id="vnStatus">voice: creature only</span>
+      </div>
       <form id="talkForm" style="display:flex;gap:8px;flex-wrap:wrap">
         <label for="nbf-in" class="sr">Message Nightborn</label>
         <input id="nbf-in" class="inp" type="text" autocomplete="off" placeholder="Message Nightborn">
@@ -411,6 +421,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     if (!path || state.firstPoll) return;
     const src = path.startsWith("/") ? path : "/" + path;
     const a = new Audio(src);
+    voiceQueue.push(a);
+    pumpVoice();
+  }
+
+  function enqueueAudioEl(a) {
+    if (!a) return;
     voiceQueue.push(a);
     pumpVoice();
   }
@@ -816,6 +832,162 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   });
   document.addEventListener("pointerdown", unlockAudioOnce, { once: false });
   document.addEventListener("keydown", unlockAudioOnce, { once: false });
+
+  /* —— Voice-note beat: creature TTS → cold jab → IVC learn → learned TTS —— */
+  const vnCreature = document.getElementById("vnCreature");
+  const vnRecord = document.getElementById("vnRecord");
+  const vnUpload = document.getElementById("vnUpload");
+  const vnLearned = document.getElementById("vnLearned");
+  const vnFile = document.getElementById("vnFile");
+  const vnStatus = document.getElementById("vnStatus");
+  let mediaRec = null;
+  let recChunks = [];
+
+  function setVnStatus(t) {
+    if (vnStatus) vnStatus.textContent = t;
+  }
+
+  async function playVoiceNote(which) {
+    unlockAudioOnce();
+    setBusy(true);
+    state.msgs.push({
+      who: "nb",
+      text: which === "learned"
+        ? "Sending the note again — in the voice I just learned."
+        : "Sending a voice note… (creature / Frankenstein voice)",
+      plain: true,
+    });
+    renderMsgs();
+    try {
+      const res = await fetch("/api/voice/note", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ which }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || ("HTTP " + res.status));
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      const prevEnded = a.onended;
+      a.addEventListener("ended", () => URL.revokeObjectURL(url));
+      enqueueAudioEl(a);
+      state.msgs.push({
+        who: "nb",
+        text: which === "learned"
+          ? "Voice note sent · learned voice."
+          : "Voice note sent · Frankenstein voice.",
+        voice: true,
+      });
+    } catch (e) {
+      state.msgs.push({
+        who: "nb",
+        text: "Voice note failed: " + (e && e.message ? e.message : e),
+        plain: true,
+      });
+    } finally {
+      setBusy(false);
+      renderMsgs();
+    }
+  }
+
+  async function uploadVoiceSample(file) {
+    unlockAudioOnce();
+    setBusy(true);
+    state.msgs.push({ who: "user", text: "(voice sample for Instant Voice Clone)" });
+    state.msgs.push({ who: "nb", text: "Learning your voice via ElevenLabs…", plain: true });
+    renderMsgs();
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name || "sample.webm");
+      const res = await fetch("/api/voice/learn", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || ("HTTP " + res.status));
+      state.msgs.push({
+        who: "nb",
+        text: data.reply || "Voice taken. I can wear it now.",
+        plain: true,
+      });
+      if (vnLearned) vnLearned.disabled = false;
+      setVnStatus("voice: learned · " + String(data.voiceId || "").slice(0, 8));
+    } catch (e) {
+      state.msgs.push({
+        who: "nb",
+        text: "Learn failed: " + (e && e.message ? e.message : e),
+        plain: true,
+      });
+    } finally {
+      setBusy(false);
+      renderMsgs();
+    }
+  }
+
+  if (vnCreature) vnCreature.addEventListener("click", () => playVoiceNote("creature"));
+  if (vnLearned) vnLearned.addEventListener("click", () => playVoiceNote("learned"));
+  if (vnUpload && vnFile) {
+    vnUpload.addEventListener("click", () => vnFile.click());
+    vnFile.addEventListener("change", () => {
+      const f = vnFile.files && vnFile.files[0];
+      if (f) uploadVoiceSample(f);
+      vnFile.value = "";
+    });
+  }
+  if (vnRecord) {
+    vnRecord.addEventListener("click", async () => {
+      unlockAudioOnce();
+      if (mediaRec && mediaRec.state === "recording") {
+        mediaRec.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recChunks = [];
+        mediaRec = new MediaRecorder(stream);
+        mediaRec.ondataavailable = (ev) => {
+          if (ev.data && ev.data.size) recChunks.push(ev.data);
+        };
+        mediaRec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(recChunks, { type: mediaRec.mimeType || "audio/webm" });
+          const file = new File([blob], "nightborn-sample.webm", { type: blob.type });
+          vnRecord.textContent = "2 · Record my voice (~20s)";
+          uploadVoiceSample(file);
+          mediaRec = null;
+        };
+        mediaRec.start();
+        vnRecord.textContent = "⏹ Stop & learn";
+        setVnStatus("recording… speak clearly ~15–30s");
+        state.msgs.push({
+          who: "nb",
+          text: "Listening. Speak for ~20 seconds, then hit Stop & learn.",
+          plain: true,
+        });
+        renderMsgs();
+        setTimeout(() => {
+          if (mediaRec && mediaRec.state === "recording") mediaRec.stop();
+        }, 25_000);
+      } catch (e) {
+        state.msgs.push({
+          who: "nb",
+          text: "Mic blocked — use Upload sample instead.",
+          plain: true,
+        });
+        renderMsgs();
+      }
+    });
+  }
+
+  fetch("/api/voice/status")
+    .then((r) => r.json())
+    .then((s) => {
+      if (s.learned && vnLearned) {
+        vnLearned.disabled = false;
+        setVnStatus("voice: learned · " + String(s.learnedVoiceId || "").slice(0, 8));
+      }
+    })
+    .catch(() => {});
 
   fmtClock();
   setInterval(fmtClock, 15_000);

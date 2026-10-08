@@ -1,8 +1,16 @@
 import { readFileSync, existsSync } from "node:fs";
 import { repoPath } from "./paths.ts";
 
-/** OFFLINE provider mock — serves fixtures/http/news-<slug>.json in provider shape. */
+/** OFFLINE provider mock — search fixtures or Bland-shaped call response. */
 export function mockProviderResponse(provider: string, query: string): unknown {
+  if (provider === "bland") {
+    return {
+      status: "success",
+      call_id: "offline-bland-call-id",
+      detail: query.trim() || "outbound",
+    };
+  }
+
   const slug = query
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

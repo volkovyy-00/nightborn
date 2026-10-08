@@ -1,0 +1,328 @@
+{
+  "_meta": {
+    "source": "source.wav",
+    "license": "CC0 \u2014 freesound.org/people/marlonnnnnn/sounds/319140/",
+    "split": "silence-gate",
+    "count": 40
+  },
+  "01_grunt_0.82s": {
+    "file": "chunks/01_grunt_0.82s.wav",
+    "start_s": 0.02,
+    "end_s": 0.84,
+    "duration_s": 0.82,
+    "label": "grunt",
+    "notes": ""
+  },
+  "02_grunt_0.96s": {
+    "file": "chunks/02_grunt_0.96s.wav",
+    "start_s": 0.96,
+    "end_s": 1.92,
+    "duration_s": 0.96,
+    "label": "grunt",
+    "notes": ""
+  },
+  "03_grunt_0.52s": {
+    "file": "chunks/03_grunt_0.52s.wav",
+    "start_s": 2.04,
+    "end_s": 2.56,
+    "duration_s": 0.52,
+    "label": "grunt",
+    "notes": ""
+  },
+  "04_grunt_0.46s": {
+    "file": "chunks/04_grunt_0.46s.wav",
+    "start_s": 2.72,
+    "end_s": 3.18,
+    "duration_s": 0.46,
+    "label": "grunt",
+    "notes": ""
+  },
+  "05_hit_0.34s": {
+    "file": "chunks/05_hit_0.34s.wav",
+    "start_s": 4.54,
+    "end_s": 4.88,
+    "duration_s": 0.34,
+    "label": "hit",
+    "notes": ""
+  },
+  "06_hit_0.26s": {
+    "file": "chunks/06_hit_0.26s.wav",
+    "start_s": 5.02,
+    "end_s": 5.28,
+    "duration_s": 0.26,
+    "label": "hit",
+    "notes": ""
+  },
+  "07_grunt_0.38s": {
+    "file": "chunks/07_grunt_0.38s.wav",
+    "start_s": 5.36,
+    "end_s": 5.74,
+    "duration_s": 0.38,
+    "label": "grunt",
+    "notes": ""
+  },
+  "08_hit_0.34s": {
+    "file": "chunks/08_hit_0.34s.wav",
+    "start_s": 5.8,
+    "end_s": 6.14,
+    "duration_s": 0.34,
+    "label": "hit",
+    "notes": ""
+  },
+  "09_hit_0.30s": {
+    "file": "chunks/09_hit_0.30s.wav",
+    "start_s": 6.24,
+    "end_s": 6.54,
+    "duration_s": 0.3,
+    "label": "hit",
+    "notes": ""
+  },
+  "10_grunt_0.98s": {
+    "file": "chunks/10_grunt_0.98s.wav",
+    "start_s": 7.94,
+    "end_s": 8.92,
+    "duration_s": 0.98,
+    "label": "grunt",
+    "notes": ""
+  },
+  "11_grunt_0.64s": {
+    "file": "chunks/11_grunt_0.64s.wav",
+    "start_s": 9.72,
+    "end_s": 10.36,
+    "duration_s": 0.64,
+    "label": "grunt",
+    "notes": ""
+  },
+  "12_hit_0.16s": {
+    "file": "chunks/12_hit_0.16s.wav",
+    "start_s": 10.96,
+    "end_s": 11.12,
+    "duration_s": 0.16,
+    "label": "hit",
+    "notes": ""
+  },
+  "13_growl_1.20s": {
+    "file": "chunks/13_growl_1.20s.wav",
+    "start_s": 12.94,
+    "end_s": 14.14,
+    "duration_s": 1.2,
+    "label": "growl",
+    "notes": ""
+  },
+  "14_growl_1.48s": {
+    "file": "chunks/14_growl_1.48s.wav",
+    "start_s": 14.36,
+    "end_s": 15.84,
+    "duration_s": 1.48,
+    "label": "growl",
+    "notes": ""
+  },
+  "15_hit_0.32s": {
+    "file": "chunks/15_hit_0.32s.wav",
+    "start_s": 16.3,
+    "end_s": 16.62,
+    "duration_s": 0.32,
+    "label": "hit",
+    "notes": ""
+  },
+  "16_grunt_0.38s": {
+    "file": "chunks/16_grunt_0.38s.wav",
+    "start_s": 16.76,
+    "end_s": 17.14,
+    "duration_s": 0.38,
+    "label": "grunt",
+    "notes": ""
+  },
+  "17_hit_0.24s": {
+    "file": "chunks/17_hit_0.24s.wav",
+    "start_s": 17.4,
+    "end_s": 17.64,
+    "duration_s": 0.24,
+    "label": "hit",
+    "notes": ""
+  },
+  "18_grunt_0.42s": {
+    "file": "chunks/18_grunt_0.42s.wav",
+    "start_s": 17.92,
+    "end_s": 18.34,
+    "duration_s": 0.42,
+    "label": "grunt",
+    "notes": ""
+  },
+  "19_grunt_0.54s": {
+    "file": "chunks/19_grunt_0.54s.wav",
+    "start_s": 18.6,
+    "end_s": 19.14,
+    "duration_s": 0.54,
+    "label": "grunt",
+    "notes": ""
+  },
+  "20_grunt_0.46s": {
+    "file": "chunks/20_grunt_0.46s.wav",
+    "start_s": 19.34,
+    "end_s": 19.8,
+    "duration_s": 0.46,
+    "label": "grunt",
+    "notes": ""
+  },
+  "21_hit_0.24s": {
+    "file": "chunks/21_hit_0.24s.wav",
+    "start_s": 19.94,
+    "end_s": 20.18,
+    "duration_s": 0.24,
+    "label": "hit",
+    "notes": ""
+  },
+  "22_hit_0.22s": {
+    "file": "chunks/22_hit_0.22s.wav",
+    "start_s": 20.22,
+    "end_s": 20.44,
+    "duration_s": 0.22,
+    "label": "hit",
+    "notes": ""
+  },
+  "23_hit_0.20s": {
+    "file": "chunks/23_hit_0.20s.wav",
+    "start_s": 20.54,
+    "end_s": 20.74,
+    "duration_s": 0.2,
+    "label": "hit",
+    "notes": ""
+  },
+  "24_hit_0.22s": {
+    "file": "chunks/24_hit_0.22s.wav",
+    "start_s": 20.86,
+    "end_s": 21.08,
+    "duration_s": 0.22,
+    "label": "hit",
+    "notes": ""
+  },
+  "25_grunt_0.40s": {
+    "file": "chunks/25_grunt_0.40s.wav",
+    "start_s": 21.76,
+    "end_s": 22.16,
+    "duration_s": 0.4,
+    "label": "grunt",
+    "notes": ""
+  },
+  "26_hit_0.24s": {
+    "file": "chunks/26_hit_0.24s.wav",
+    "start_s": 22.4,
+    "end_s": 22.64,
+    "duration_s": 0.24,
+    "label": "hit",
+    "notes": ""
+  },
+  "27_hit_0.20s": {
+    "file": "chunks/27_hit_0.20s.wav",
+    "start_s": 22.7,
+    "end_s": 22.9,
+    "duration_s": 0.2,
+    "label": "hit",
+    "notes": ""
+  },
+  "28_hit_0.22s": {
+    "file": "chunks/28_hit_0.22s.wav",
+    "start_s": 22.98,
+    "end_s": 23.2,
+    "duration_s": 0.22,
+    "label": "hit",
+    "notes": ""
+  },
+  "29_grunt_0.62s": {
+    "file": "chunks/29_grunt_0.62s.wav",
+    "start_s": 23.52,
+    "end_s": 24.14,
+    "duration_s": 0.62,
+    "label": "grunt",
+    "notes": ""
+  },
+  "30_grunt_0.52s": {
+    "file": "chunks/30_grunt_0.52s.wav",
+    "start_s": 25.24,
+    "end_s": 25.76,
+    "duration_s": 0.52,
+    "label": "grunt",
+    "notes": ""
+  },
+  "31_grunt_0.72s": {
+    "file": "chunks/31_grunt_0.72s.wav",
+    "start_s": 27.54,
+    "end_s": 28.26,
+    "duration_s": 0.72,
+    "label": "grunt",
+    "notes": ""
+  },
+  "32_hit_0.16s": {
+    "file": "chunks/32_hit_0.16s.wav",
+    "start_s": 28.3,
+    "end_s": 28.46,
+    "duration_s": 0.16,
+    "label": "hit",
+    "notes": ""
+  },
+  "33_hit_0.26s": {
+    "file": "chunks/33_hit_0.26s.wav",
+    "start_s": 28.5,
+    "end_s": 28.76,
+    "duration_s": 0.26,
+    "label": "hit",
+    "notes": ""
+  },
+  "34_hit_0.26s": {
+    "file": "chunks/34_hit_0.26s.wav",
+    "start_s": 28.94,
+    "end_s": 29.2,
+    "duration_s": 0.26,
+    "label": "hit",
+    "notes": ""
+  },
+  "35_hit_0.20s": {
+    "file": "chunks/35_hit_0.20s.wav",
+    "start_s": 30.8,
+    "end_s": 31.0,
+    "duration_s": 0.2,
+    "label": "hit",
+    "notes": ""
+  },
+  "36_grunt_0.68s": {
+    "file": "chunks/36_grunt_0.68s.wav",
+    "start_s": 33.06,
+    "end_s": 33.74,
+    "duration_s": 0.68,
+    "label": "grunt",
+    "notes": ""
+  },
+  "37_grunt_0.42s": {
+    "file": "chunks/37_grunt_0.42s.wav",
+    "start_s": 33.92,
+    "end_s": 34.34,
+    "duration_s": 0.42,
+    "label": "grunt",
+    "notes": ""
+  },
+  "38_grunt_0.60s": {
+    "file": "chunks/38_grunt_0.60s.wav",
+    "start_s": 35.0,
+    "end_s": 35.6,
+    "duration_s": 0.6,
+    "label": "grunt",
+    "notes": ""
+  },
+  "39_growl_1.38s": {
+    "file": "chunks/39_growl_1.38s.wav",
+    "start_s": 35.66,
+    "end_s": 37.04,
+    "duration_s": 1.38,
+    "label": "growl",
+    "notes": ""
+  },
+  "40_grunt_1.06s": {
+    "file": "chunks/40_grunt_1.06s.wav",
+    "start_s": 37.3,
+    "end_s": 38.36,
+    "duration_s": 1.06,
+    "label": "grunt",
+    "notes": ""
+  }
+}

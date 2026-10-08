@@ -10,6 +10,7 @@ Only capabilities listed in the fenced block below may be granted.
 net:fetch
 llm:call
 fs:read_own
+notify:phone
 ```
 
 ## Denied

@@ -1,0 +1,25 @@
+{
+  "match": "Call +15555550100 about the used car listing",
+  "talk": {
+    "kind": "job",
+    "text": "No hands for that yet. Growing a call arm.",
+    "job": {
+      "skill": "place_outbound_call",
+      "intent": "outbound call",
+      "query": "+15555550100|||Used-car listing follow-up. Learn if still available, then asking price, condition, and mileage — one question at a time. Do not pitch other products.",
+      "needs": [
+        "notify:phone"
+      ]
+    }
+  },
+  "forge": {
+    "name": "place_outbound_call",
+    "purpose": "Place an outbound AI phone call via Bland REST (conversational, one question at a time).",
+    "query": "+15555550100|||Used-car listing follow-up. Learn if still available, then asking price, condition, and mileage — one question at a time. Do not pitch other products.",
+    "capabilities": [
+      "net:fetch",
+      "notify:phone"
+    ],
+    "skillSource": "// Nightborn free-form Bland outbound skill — stdin query, stdout items\nasync function readStdin() {\n  const chunks = [];\n  for await (const c of process.stdin) chunks.push(c);\n  return Buffer.concat(chunks).toString(\"utf8\");\n}\nconst SLASH = String.fromCharCode(47);\nfunction joinBase(baseUrl, fallbackOrigin, relPath) {\n  const base = baseUrl ?? fallbackOrigin;\n  const root = base.endsWith(SLASH) ? base : `${base}${SLASH}`;\n  const rel = relPath.startsWith(SLASH) ? relPath.slice(1) : relPath;\n  return new URL(rel, root);\n}\nfunction parseQuery(query) {\n  const sep = \"|||\";\n  if (query.includes(sep)) {\n    const i = query.indexOf(sep);\n    return { phone: query.slice(0, i).trim(), task: query.slice(i + sep.length).trim() };\n  }\n  try {\n    const j = JSON.parse(query);\n    if (j.phone_number && j.task) return { phone: String(j.phone_number), task: String(j.task) };\n  } catch { /* fall through */ }\n  return { phone: query.trim(), task: \"Confirm the line works with one short greeting.\" };\n}\n/** Force Bland to stay conversational even if the briefing lists many fields. */\nfunction conversationalTask(briefing) {\n  return [\n    \"You are on a live phone call. Be warm, brief, and human.\",\n    \"Ask exactly ONE question per turn. Wait for their answer before asking anything else.\",\n    \"Never stack multiple questions in one sentence or turn.\",\n    \"For a used-car / listing follow-up, open with: \\\"Hi, I saw a listing of a used car online with this number mentioned — is it still available?\\\"\",\n    \"For other goals, open with one natural question that fits the briefing.\",\n    \"After they answer, follow up one topic at a time (e.g. price, then condition, then mileage).\",\n    \"Keep the call short. Thank them and end when you have enough.\",\n    \"Briefing / goal for this call:\",\n    String(briefing || \"\").trim() || \"Have a short polite conversation and learn why they listed.\",\n  ].join(\"\\n\");\n}\nconst raw = await readStdin();\nconst input = JSON.parse(raw || \"{}\");\nconst { phone, task } = parseQuery(input.query ?? \"\");\nconst key = process.env.BLAND_API_KEY;\nif (!key) { console.error(\"missing BLAND_API_KEY\"); process.exit(1); }\nconst url = joinBase(input.baseUrl, \"https://api.bland.ai\", \"v1/calls\").href;\nconst res = await fetch(url, {\n  method: \"POST\",\n  headers: {\n    Authorization: `Bearer ${key}`,\n    \"Content-Type\": \"application/json\",\n  },\n  body: JSON.stringify({ phone_number: phone, task: conversationalTask(task) }),\n  signal: AbortSignal.timeout(6000),\n});\nif (!res.ok) { console.error(\"bland\", res.status); process.exit(1); }\nconst data = await res.json();\nconst callId = data.call_id ?? \"unknown\";\nprocess.stdout.write(JSON.stringify({\n  items: [{\n    title: data.status === \"success\" ? \"Outbound call started\" : \"Outbound call response\",\n    url: \"bland:call/\" + callId,\n  }],\n}));\n"
+  }
+}

@@ -1,7 +1,7 @@
 # BOARD — Nightborn
 Single writer: Yevhenii (exception: during C2.5 Max updates only his own NOW line). Agents: read only.
-Source of truth: `SPEC.md`. Status truth: `git tag -l` + SPEC §14 "Checkpoints". This board is the plan.
-Card = ID · owner · `files:` · § · after · done-when. `files:` = the card's exclusive write-set: agents
+`SPEC.md` is gone. Status: `git tag -l` + this board + the code / `AGENTS.md`. Historical § refs below are archive.
+Card = ID · owner · `files:` · after · done-when. `files:` = the card's exclusive write-set: agents
 write nothing outside it (need more → stop, ask the human); no two NOW cards share a path.
 A card never authorises an edit `AGENTS.md` forbids. WIP 1 per person; Blocked doesn't count.
 Sync: `git pull --rebase` before a card, before every push, and right after "tag pushed".

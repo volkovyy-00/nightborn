@@ -5,7 +5,7 @@ import type { DecisionJson, FailureCode, Job, Manifest } from "./types.ts";
 import { folderHash } from "./hash.ts";
 import { getCharterHash, isAllowedCap } from "./charter.ts";
 import { appendLog } from "./log.ts";
-import { searchEnvKey, setProvisionalGrant, clearProvisionalGrant } from "./broker.ts";
+import { grantKeysForCaps, setProvisionalGrant, clearProvisionalGrant } from "./broker.ts";
 
 export type WardenResult =
   | { ok: true; caps: string[]; folderHash: string }
@@ -44,6 +44,7 @@ function scanCapabilities(src: string): { caps: Set<string>; hardFail?: FailureC
 
   if (/\bfetch\s*\(|\bhttps?:\/\/|\bundici\b|\baxios\b/.test(src)) caps.add("net:fetch");
   if (/process\.env\.(TAVILY_API_KEY|BRAVE_API_KEY|APIFY_TOKEN)/.test(src)) caps.add("net:fetch");
+  if (/process\.env\.BLAND_API_KEY/.test(src)) caps.add("notify:phone");
   if (/process\.env\.OPENAI_API_KEY|\bfrom\s+['"]openai['"]|require\(['"]openai['"]\)/.test(src)) {
     caps.add("llm:call");
   }
@@ -54,7 +55,13 @@ function scanCapabilities(src: string): { caps: Set<string>; hardFail?: FailureC
   if (/\breadFile|\bcreateReadStream|\breaddir/.test(src)) caps.add("fs:read_own");
 
   const envAccess = [...src.matchAll(/process\.env\.([A-Z0-9_]+)/g)].map((m) => m[1]);
-  const known = new Set(["TAVILY_API_KEY", "BRAVE_API_KEY", "APIFY_TOKEN", "OPENAI_API_KEY"]);
+  const known = new Set([
+    "TAVILY_API_KEY",
+    "BRAVE_API_KEY",
+    "APIFY_TOKEN",
+    "BLAND_API_KEY",
+    "OPENAI_API_KEY",
+  ]);
   for (const k of envAccess) {
     if (!known.has(k)) caps.add("secrets:read");
   }
@@ -134,7 +141,7 @@ export function wardenPre(
     });
   }
 
-  setProvisionalGrant([searchEnvKey()]);
+  setProvisionalGrant(grantKeysForCaps(caps));
   return { ok: true, caps, folderHash: h1 };
 }
 
@@ -194,15 +201,17 @@ export function installSkill(
   if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
   cpSync(runDir, dest, { recursive: true });
 
+  const isCall = caps.includes("notify:phone");
   const provider = (process.env.SEARCH_PROVIDER ?? "brave").toLowerCase() as "brave" | "tavily";
+  const allowedCaps = [...new Set(caps.filter((c) => isAllowedCap(c)))];
   const decision: DecisionJson = {
     skill: skillName,
-    template: "http",
-    provider: provider === "tavily" ? "tavily" : "brave",
+    template: isCall ? "call" : "http",
+    provider: isCall ? null : provider === "tavily" ? "tavily" : "brave",
     folderHash: folderH,
     charterHash: getCharterHash(),
-    capabilities: caps.includes("net:fetch") ? ["net:fetch"] : caps,
-    env: [searchEnvKey()],
+    capabilities: allowedCaps,
+    env: grantKeysForCaps(allowedCaps),
     decidedAt: new Date().toISOString(),
   };
   writeFileSync(path.join(dest, "decision.json"), `${JSON.stringify(decision, null, 2)}\n`, "utf8");

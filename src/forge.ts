@@ -100,10 +100,13 @@ export function writeForgedSkill(
     writeFileSync(path.join(runDir, "notes.md"), `# ${skillName}\n\n${purpose}\n`, "utf8");
 
     // Charter allow-list only — LLM often invents labels like "web search"
+    const wantsPhone =
+      artifact.capabilities.includes("notify:phone") || /BLAND_API_KEY/.test(src);
+    const capabilities = wantsPhone ? ["net:fetch", "notify:phone"] : ["net:fetch"];
     const manifest = {
       name: skillName,
-      template: "http",
-      capabilities: ["net:fetch"],
+      template: wantsPhone ? "call" : "http",
+      capabilities,
       outputSchema: {
         type: "object",
         properties: {
@@ -141,10 +144,11 @@ const FORGE_SYSTEM = [
   "- No imports. No require. No node-fetch. No export default. Use global fetch.",
   "- Read ALL of process.stdin as JSON: { query, baseUrl? }",
   "- Write ONE JSON object to process.stdout: { items:[{title,url,date?}] }",
-  "- process.env.BRAVE_API_KEY (or TAVILY_API_KEY). AbortSignal.timeout(6000).",
-  "- NEVER string literals starting with / — use relative paths \"res/v1/web/search\".",
-  "- Use String.fromCharCode(47) + joinBase(baseUrl, \"https://api.search.brave.com\", \"res/v1/...\") as in the example.",
-  "- Forums/deals → web search endpoint; company news → news search endpoint.",
+  "- process.env.BRAVE_API_KEY (or TAVILY_API_KEY), or BLAND_API_KEY when capabilities include notify:phone. AbortSignal.timeout(6000).",
+  "- NEVER string literals starting with / — use relative paths \"res/v1/web/search\" or \"v1/calls\".",
+  "- Use String.fromCharCode(47) + joinBase(baseUrl, origin, \"res/v1/...\") as in the example.",
+  "- Forums/deals → web search endpoint; company news → news search endpoint; outbound call → Bland POST v1/calls.",
+  "- Bland: query is +E164|||task; POST {phone_number,task}; map call_id to items url bland:call/<id>; capabilities [\"net:fetch\",\"notify:phone\"]. Task text must tell the agent to ask ONE question at a time (conversational), never a stacked list.",
   "- Shape q= for the job (e.g. append forum OR reddit for forum asks).",
   "EXAMPLE shape (adapt endpoint/query; keep stdin/stdout):",
   "async function readStdin(){const c=[];for await(const x of process.stdin)c.push(x);return Buffer.concat(c).toString('utf8')}",
@@ -310,7 +314,9 @@ export function skillSourcePassesContract(src: string): boolean {
   if (lower.includes("require(")) return false;
   if (!src.includes("process.stdin") && !src.includes("readStdin")) return false;
   if (!src.includes("process.stdout")) return false;
-  if (!src.includes("BRAVE_API_KEY") && !src.includes("TAVILY_API_KEY")) return false;
+  const hasSearchKey = src.includes("BRAVE_API_KEY") || src.includes("TAVILY_API_KEY");
+  const hasBlandKey = src.includes("BLAND_API_KEY");
+  if (!hasSearchKey && !hasBlandKey) return false;
   if (!src.includes("items")) return false;
   return true;
 }
@@ -320,11 +326,92 @@ function preferWebScaffold(intent: string, query: string): boolean {
   return /forum|reddit|deal|listing|used car|craigslist|marketplace|web search/.test(t);
 }
 
+function preferCallScaffold(intent: string, query: string, caps: string[]): boolean {
+  if (caps.includes("notify:phone")) return true;
+  const t = `${intent} ${query}`.toLowerCase();
+  return /\b(call|phone|outbound|bland)\b/.test(t) || /^\+\d/.test(query.trim());
+}
+
+/** Proven Bland outbound skill — stdin query +E164|||task, stdout items. */
+export function defaultBlandSkillSource(): string {
+  return `// Nightborn free-form Bland outbound skill — stdin query, stdout items
+async function readStdin() {
+  const chunks = [];
+  for await (const c of process.stdin) chunks.push(c);
+  return Buffer.concat(chunks).toString("utf8");
+}
+const SLASH = String.fromCharCode(47);
+function joinBase(baseUrl, fallbackOrigin, relPath) {
+  const base = baseUrl ?? fallbackOrigin;
+  const root = base.endsWith(SLASH) ? base : \`\${base}\${SLASH}\`;
+  const rel = relPath.startsWith(SLASH) ? relPath.slice(1) : relPath;
+  return new URL(rel, root);
+}
+function parseQuery(query) {
+  const sep = "|||";
+  if (query.includes(sep)) {
+    const i = query.indexOf(sep);
+    return { phone: query.slice(0, i).trim(), task: query.slice(i + sep.length).trim() };
+  }
+  try {
+    const j = JSON.parse(query);
+    if (j.phone_number && j.task) return { phone: String(j.phone_number), task: String(j.task) };
+  } catch { /* fall through */ }
+  return { phone: query.trim(), task: "Confirm the line works with one short greeting." };
+}
+/** Force Bland to stay conversational even if the briefing lists many fields. */
+function conversationalTask(briefing) {
+  return [
+    "You are on a live phone call. Be warm, brief, and human.",
+    "Ask exactly ONE question per turn. Wait for their answer before asking anything else.",
+    "Never stack multiple questions in one sentence or turn.",
+    "For a used-car / listing follow-up, open with: \\"Hi, I saw a listing of a used car online with this number mentioned — is it still available?\\"",
+    "For other goals, open with one natural question that fits the briefing.",
+    "After they answer, follow up one topic at a time (e.g. price, then condition, then mileage).",
+    "Keep the call short. Thank them and end when you have enough.",
+    "Briefing / goal for this call:",
+    String(briefing || "").trim() || "Have a short polite conversation and learn why they listed.",
+  ].join("\\n");
+}
+const raw = await readStdin();
+const input = JSON.parse(raw || "{}");
+const { phone, task } = parseQuery(input.query ?? "");
+const key = process.env.BLAND_API_KEY;
+if (!key) { console.error("missing BLAND_API_KEY"); process.exit(1); }
+const url = joinBase(input.baseUrl, "https://api.bland.ai", "v1/calls").href;
+const res = await fetch(url, {
+  method: "POST",
+  headers: {
+    Authorization: \`Bearer \${key}\`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ phone_number: phone, task: conversationalTask(task) }),
+  signal: AbortSignal.timeout(6000),
+});
+if (!res.ok) { console.error("bland", res.status); process.exit(1); }
+const data = await res.json();
+const callId = data.call_id ?? "unknown";
+process.stdout.write(JSON.stringify({
+  items: [{
+    title: data.status === "success" ? "Outbound call started" : "Outbound call response",
+    url: "bland:call/" + callId,
+  }],
+}));
+`;
+}
+
 /** Ensure artifact.skillSource is runnable; scaffold if LLM missed the host contract. */
 export function ensureRunnableSkillSource(artifact: ForgeArtifact, intent: string): ForgeArtifact {
   let src = artifact.skillSource ? sanitizeSkillSource(artifact.skillSource) : "";
   if (src && skillSourcePassesContract(src)) {
     return { ...artifact, skillSource: src };
+  }
+  if (preferCallScaffold(intent, artifact.query, artifact.capabilities ?? [])) {
+    return {
+      ...artifact,
+      capabilities: ["net:fetch", "notify:phone"],
+      skillSource: defaultBlandSkillSource(),
+    };
   }
   const scaffold = preferWebScaffold(intent, artifact.query)
     ? defaultWebSkillSource("forum OR discussion OR reddit")

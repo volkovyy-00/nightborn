@@ -82,7 +82,7 @@ export type ForgeParams = ForgeArtifact;
 
 export type DecisionJson = {
   skill: string;
-  template: "http" | "hand";
+  template: "http" | "hand" | "call";
   provider: "tavily" | "brave" | "apify" | null;
   folderHash: string;
   charterHash: string;

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { charterHashFromBytes, shortHash } from "./hash.ts";
 import { dataPath } from "./paths.ts";
 
-export const ALLOWED_CAPS = ["net:fetch", "llm:call", "fs:read_own"] as const;
+export const ALLOWED_CAPS = ["net:fetch", "llm:call", "fs:read_own", "notify:phone"] as const;
 export const DENIED_CAPS = [
   "notify:email",
   "budget:write",

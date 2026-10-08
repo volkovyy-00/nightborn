@@ -1,0 +1,15 @@
+{
+  "match": "Call +15555550199 about the used car listing",
+  "talk": {
+    "kind": "job",
+    "text": "Reusing the call arm.",
+    "job": {
+      "skill": "place_outbound_call",
+      "intent": "outbound call",
+      "query": "+15555550199|||Used-car listing follow-up. Learn if still available, then asking price, condition, and mileage — one question at a time. Do not pitch other products.",
+      "needs": [
+        "notify:phone"
+      ]
+    }
+  }
+}

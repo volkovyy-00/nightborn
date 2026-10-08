@@ -8,6 +8,13 @@ import { loadAndPinCharter, getCharterHash } from "./charter.ts";
 import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
 import { handleTalk } from "./runner.ts";
 import { mockProviderResponse } from "./mock.ts";
+import {
+  DEFAULT_NOTE,
+  getLearnedVoiceId,
+  learnVoiceFromSample,
+  synthesizeNote,
+  voiceStatus,
+} from "./eleven.ts";
 
 // Load .env from repo root (not cwd)
 const envFile = path.join(REPO_ROOT, ".env");
@@ -67,6 +74,82 @@ app.post("/api/talk", async (c) => {
   }
 });
 
+/** Voice-note demo: status of creature vs learned ElevenLabs voice. */
+app.get("/api/voice/status", (c) => c.json(voiceStatus()));
+
+/** TTS a short note as creature (Frankenstein) or learned (your) voice. */
+app.post("/api/voice/note", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as {
+    which?: "creature" | "learned";
+    text?: string;
+  };
+  const which = body.which === "learned" ? "learned" : "creature";
+  const text = (body.text ?? DEFAULT_NOTE).trim() || DEFAULT_NOTE;
+  try {
+    const { bytes, contentType, voiceId } = await synthesizeNote(which, text);
+    appendLog({
+      actor: "talk",
+      event: "job",
+      skill: null,
+      decision: "allow",
+      charterHash: getCharterHash(),
+      detail: `voice_note:${which}:${voiceId.slice(0, 8)}`,
+      source: process.env.OFFLINE === "1" ? "fixture" : "live",
+    });
+    return new Response(new Uint8Array(bytes), {
+      headers: {
+        "Content-Type": contentType,
+        "X-Nightborn-Voice": which,
+        "X-Nightborn-Voice-Id": voiceId,
+      },
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/voice/note failed:", e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
+/** Instant Voice Clone from an uploaded sample — Frankenstein learns "your" voice. */
+app.post("/api/voice/learn", async (c) => {
+  try {
+    const form = await c.req.formData();
+    const file = form.get("file") ?? form.get("files");
+    if (!file || typeof file === "string") {
+      return c.json({ ok: false, error: "multipart field file required" }, 400);
+    }
+    const f = file as File;
+    const data = Buffer.from(await f.arrayBuffer());
+    if (data.length < 1000) {
+      return c.json({ ok: false, error: "sample too short — speak ~15–30s" }, 400);
+    }
+    const { voiceId } = await learnVoiceFromSample({
+      data,
+      filename: f.name || "sample.webm",
+      type: f.type || "audio/webm",
+    });
+    appendLog({
+      actor: "forge",
+      event: "forge",
+      skill: null,
+      decision: "allow",
+      charterHash: getCharterHash(),
+      detail: `voice_learn:${voiceId.slice(0, 8)}`,
+      source: process.env.OFFLINE === "1" ? "fixture" : "live",
+    });
+    return c.json({
+      ok: true,
+      voiceId,
+      learned: true,
+      reply: "Voice taken. I can wear it now.",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("POST /api/voice/learn failed:", e);
+    return c.json({ ok: false, error: msg }, 500);
+  }
+});
+
 if (process.env.OFFLINE === "1") {
   app.get("/mock/:provider", (c) => {
     const provider = c.req.param("provider");
@@ -77,8 +160,25 @@ if (process.env.OFFLINE === "1") {
     const provider = c.req.param("provider");
     let q = "news";
     try {
-      const body = (await c.req.json()) as { query?: string };
+      const body = (await c.req.json()) as {
+        query?: string;
+        phone_number?: string;
+        task?: string;
+      };
       if (body.query) q = body.query;
+      else if (body.phone_number) q = `${body.phone_number}|||${body.task ?? ""}`;
+    } catch {
+      /* ignore */
+    }
+    return c.json(mockProviderResponse(provider, q));
+  });
+  // Bland Send Call
+  app.post("/mock/:provider/v1/calls", async (c) => {
+    const provider = c.req.param("provider");
+    let q = "outbound";
+    try {
+      const body = (await c.req.json()) as { phone_number?: string; task?: string };
+      if (body.phone_number) q = `${body.phone_number}|||${body.task ?? ""}`;
     } catch {
       /* ignore */
     }
