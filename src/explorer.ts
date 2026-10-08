@@ -396,7 +396,7 @@ function systemPrompt(): string {
     "- http_get({url}): fetch one public https URL. JSON comes back pretty-printed (≤16 KB). An HTML page comes back as a DIGEST: \"data endpoints this page itself calls\" (the site's own JSON API URLs with their params and, when the page embeds it, the response shape: array path, length, first item's fields), \"link shapes\" (how the site links to item pages, {n} = digits), JSON-LD and a text excerpt. Every host you fetch successfully becomes an allowed host for the hand; the hand may only use hosts you fetched.",
     "- emit_recipe({...}): your final action, exactly once.",
     "",
-    "Procedure (budget: 6 turns and 60 seconds in total, no retry; aim for 4 tool calls, one per turn):",
+    "Procedure (budget: 10 turns and 90 seconds in total, no retry; aim for 4–6 tool calls, one per turn):",
     "1. web_search for the leading sites of this kind in that region, e.g. \"most popular used car classifieds sites Czech Republic\". Pick the primary national marketplace (where sellers post listings, usually the biggest one), not a meta-search aggregator or a foreign site. A well-known public JSON API you already know (e.g. a site's official search API) is a fine candidate too.",
     "2. web_search the user's item together with that site's domain, e.g. \"Tesla Model 3 example.cz\". Take the listing page URL from the results. Never guess or construct page URLs yourself.",
     "3. http_get that listing page. In its digest pick the data endpoint whose response is the item list (an array of items with names/prices), and the link shape of an item page.",
