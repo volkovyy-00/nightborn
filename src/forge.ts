@@ -181,8 +181,14 @@ export function coerceInputs(inputs: Input[], values: InputValues): InputValues 
       continue;
     }
     if (inp.type === "number") {
+      if (typeof raw === "number") {
+        if (!Number.isFinite(raw)) return null;
+        out[inp.name] = raw;
+        continue;
+      }
       // "1 000 000 Kč" → 1000000 (spaces, currency, thousands separators stripped)
       const digits = String(raw).replace(/[\s  ]/g, "").replace(/[^0-9.,-]/g, "").replace(/[.,](?=\d{3}(\D|$))/g, "");
+      if (!/\d/.test(digits)) return null; // "abc", "Kč", "unlimited" → invalid, never 0
       const n = Number(digits.replace(",", "."));
       if (!Number.isFinite(n)) return null;
       out[inp.name] = n;

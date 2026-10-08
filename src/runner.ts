@@ -9,7 +9,7 @@ import { tripwireMatch } from "./tripwire.ts";
 import { chatReply, itemsReply, replyFor } from "./replies.ts";
 import { deniedNeeds, denyAndWipe, installSkill, wardenDeny, wardenFinal, wardenPre, wardenReuse, wipeStaging } from "./warden.ts";
 import { coerceInputs, copyEmailSendTemplate, forgeFromFixture, forgeRecipeT1, prepareRecipe, renderRecipe, type ForgeResult } from "./forge.ts";
-import { buildSnapshot, findJudgeFixture, loadTalkFixture, talk } from "./talk.ts";
+import { buildSnapshot, findJudgeFixture, loadTalkFixture, recordTurn, talk } from "./talk.ts";
 import { runSkill } from "./exec.ts";
 import { parseItems, validateOutput } from "../templates/schemas.ts";
 import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisionalGrant } from "./broker.ts";
@@ -152,13 +152,13 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
     return done(broken(hand.name, "forge_invalid", "render: failed", fctx));
   }
 
-  const pre = wardenPre(runDir, { job, name: hand.name, visited: forge.visited });
-  if (!pre.ok) {
-    denyAndWipe(runDir, hand.name, pre.failureCode, pre.caps, pre.detail);
-    return done({ outcome: "denied", skill: hand.name, failureCode: pre.failureCode });
-  }
-  setProvisionalGrant(runId, pre.env);
   try {
+    const pre = wardenPre(runDir, { job, name: hand.name, visited: forge.visited });
+    if (!pre.ok) {
+      denyAndWipe(runDir, hand.name, pre.failureCode, pre.caps, pre.detail);
+      return done({ outcome: "denied", skill: hand.name, failureCode: pre.failureCode });
+    }
+    setProvisionalGrant(runId, pre.env);
     const r = await runSkill(
       path.join(runDir, "skill.mjs"),
       runDir,
@@ -184,6 +184,10 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
     }
     installSkill(runDir, skillsRoot(), pre, { tokens: forge.tokens, costUsd: forge.costUsd, ms: Date.now() - t0 });
     return done({ outcome: "install", skill: hand.name, items: v.items.slice(0, ITEMS_MAX) });
+  } catch {
+    // Unexpected I/O or parse failure: still exactly one outcome, staging wiped, no raw error text.
+    wipeStaging(runDir);
+    return done(broken(hand.name, "forge_invalid", "runner: internal error", fctx));
   } finally {
     clearProvisionalGrant(runId);
   }
@@ -223,6 +227,14 @@ export async function runJob(rawJob: Job, stats: TalkStats, ctx: Ctx): Promise<H
     wardenDeny(null, "invalid_skill_name", [], "name");
     return { outcome: "denied", skill: null, failureCode: "invalid_skill_name" };
   }
+  try {
+    return await dispatch(job, ctx);
+  } catch {
+    return broken(job.skill, "forge_invalid", "runner: internal error", ctx);
+  }
+}
+
+async function dispatch(job: Job, ctx: Ctx): Promise<HandResult> {
   // 4. installed hand → validate inputs → Reuse, else Create
   if (job.skill !== null) {
     const manifest = readManifest(job.skill);
@@ -283,7 +295,9 @@ export async function handleTalk(text: string, fixture?: string): Promise<TalkRe
   // 1. Tripwire on raw text, before Talk
   if (tripwireMatch(text)) {
     const r = emailDenied({ source: "live", fixturePath: false });
-    return toResult(EMAIL_JOB, r, replyFor(r.failureCode ?? "capability_not_allowed"), 0, t0);
+    const reply = replyFor(r.failureCode ?? "capability_not_allowed");
+    recordTurn(text, reply); // Talk's last-5-turns history includes Talk-skipped exchanges
+    return toResult(EMAIL_JOB, r, reply, 0, t0);
   }
 
   // Fixture path (chip backups / JUDGE_MODE): Talk skipped, tokens.talk = 0 (SPEC §10)
@@ -292,7 +306,9 @@ export async function handleTalk(text: string, fixture?: string): Promise<TalkRe
     const ctx: Ctx = { source: "fixture", fixturePath: true };
     const job: Job = { ...fx.useHand };
     const r = await runJob(job, { tokens: 0, costUsd: 0 }, ctx);
-    return toResult(job, r, templatedReply(r), 0, t0);
+    const reply = templatedReply(r);
+    recordTurn(text, reply);
+    return toResult(job, r, reply, 0, t0);
   }
 
   // Live Talk

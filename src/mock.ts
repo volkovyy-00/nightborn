@@ -24,6 +24,7 @@ function firstExisting(names: string[]): unknown | null {
 }
 
 export function mockResponse(host: string, pathname: string, params: URLSearchParams): unknown | null {
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(host)) return null; // plain hostnames only (no ../ via %2F)
   if (host === "api.search.brave.com") {
     const kind = pathname.includes("/web/") ? "web" : "news";
     const q = params.get("q") ?? "";
