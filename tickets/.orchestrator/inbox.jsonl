@@ -1,0 +1,2 @@
+{"ts":"2026-10-08T21:50:00Z","ticket":"T07","level":"info","msg":"Done: getDoctor()+worker processNext/kick; needs_secret parks in wip; forge via writeForgedSkill/warden/test/install; events+audit wired."}
+{"ts":"2026-10-08T21:56:00Z","ticket":"T09","level":"info","msg":"T09 done: loop wired (doctor submit+kick, park/wait, sequential run_skill, resume on events, MAX_CONTINUE_STEPS default 64)"}

@@ -4,6 +4,12 @@ No `SPEC.md`. Truth is the running code, `charter.md`, and what the human asks f
 Grow new skills freely. Prefer small diffs. Ask only when a change would trash demo outcomes
 or reshape the whole package.
 
+Runtime vision: `docs/AGENT_RUNTIME_VISION.md`. Parallel tickets: `tickets/README.md`
+(honor each ticket `files:` write-set; do not land on `pi` unless asked).
+
+Doctor is in-process and async: capability briefs enqueue; Forge/Warden does not block the agent turn.
+Agent parks on `wait` and resumes on events. Secrets: `.env` + reload.
+
 ## Commands
 - `npm start` · `npm run validate` · `OFFLINE=1` · `JUDGE_MODE=1`
 - `npm run fresh` is destructive (rotates log, wipes forged skills) — only when asked

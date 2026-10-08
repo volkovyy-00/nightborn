@@ -6,7 +6,7 @@ import { Hono } from "hono";
 import { REPO_ROOT, repoPath } from "./paths.ts";
 import { loadAndPinCharter, getCharterHash } from "./charter.ts";
 import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
-import { handleTalk } from "./runner.ts";
+import { handleTalk, startAgentRuntime } from "./runner.ts";
 import { mockProviderResponse } from "./mock.ts";
 import {
   DEFAULT_NOTE,
@@ -15,6 +15,7 @@ import {
   synthesizeNote,
   voiceStatus,
 } from "./eleven.ts";
+import { startScheduler } from "./schedule.ts";
 
 // Load .env from repo root (not cwd)
 const envFile = path.join(REPO_ROOT, ".env");
@@ -53,6 +54,11 @@ try {
   console.error("charter_pin_mismatch", computed);
   process.exit(1);
 }
+
+// Agent runtime: event bridge + resume-on-capability.ready (no user re-prompt).
+// Scheduler: once/cron wakes (T11); call site owned by T09.
+startAgentRuntime();
+startScheduler();
 
 const app = new Hono();
 
