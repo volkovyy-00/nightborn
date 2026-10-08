@@ -134,6 +134,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .nb-result .li{padding-left:1.1em;text-indent:-1.1em}
 .nb-result .li::first-letter{color:var(--cyan)}
 .nb-voice{color:#FF8A8A}
+.res{display:flex;flex-direction:column;gap:8px}
+.res-head{display:flex;align-items:center;gap:8px;font:600 11.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.res-head .res-tag{padding:3px 8px;border-radius:999px;border:1px solid #1F5A50;color:var(--cyan)}
+.res-head .res-tag-build{border-color:#5A4320;color:var(--amber)}
+.card{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0B0F12;transition:border-color .15s}
+.card:hover{border-color:#3A4A52}
+.card a{color:var(--ink);text-decoration:none;font:500 14px/1.35 'Geist',sans-serif}
+.card a:hover{color:var(--cyan)}
+.card .pill{font:600 12.5px 'Geist Mono',monospace;color:var(--cyan);background:#0F1F1C;border:1px solid #1F5A50;border-radius:999px;padding:3px 9px;white-space:nowrap;align-self:center}
+.card .meta{grid-column:1/-1;font:500 11px 'Geist Mono',monospace;color:var(--mute);letter-spacing:.04em}
+.card .meta span+span::before{content:" · ";color:#3A4A52}
 .nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
 .chip{font:500 13px/1.25 'Geist',sans-serif;color:var(--ink);background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
 .chip:hover{border-color:var(--cyan)}
@@ -159,6 +170,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .dstamp.on{display:inline-block}
 .conn{font:500 12px 'Geist Mono',monospace;color:var(--mute)}
 .conn.err{color:var(--red)}
+.tok{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 10px;margin-top:6px;font:500 12.5px/1.3 'Geist Mono',monospace;letter-spacing:.04em;color:var(--mute);white-space:nowrap}
+.tok b{font-weight:600}
+.tok-first b{color:var(--cyan)}
+.tok-reuse b{color:var(--violet)}
+.tok-hand b{color:#7CE38B}
+.tok-sep{color:#6E7880}
 @keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes blink{50%{opacity:.2}}
@@ -200,6 +217,11 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   <div style="text-align:right">
     <div style="font-size:24px;font-weight:800;letter-spacing:0.03em">
       <span style="color:var(--cyan)" id="forged">+0 FORGED</span><span style="color:#6E7880"> · </span><span id="authority">+0 AUTHORITY</span>
+    </div>
+    <div class="tok" id="tokStrip" title="FIRST ASK = Talk + forge tokens of the latest install · REUSE = Talk tokens of the latest reuse · HAND = tokens the hand itself used">
+      <span class="tok-first">FIRST ASK <b id="tokFirst">—</b></span><span class="tok-sep">·</span>
+      <span class="tok-reuse">REUSE <b id="tokReuse">—</b> (Talk only)</span><span class="tok-sep">·</span>
+      <span class="tok-hand">HAND <b id="tokHand">0 tok</b></span>
     </div>
     <div class="dstamp" id="lastDenied"></div>
   </div>
@@ -291,8 +313,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       </div>
       <div class="msgs" id="msgs"></div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        <button type="button" class="chip" data-chip>News on Anthropic</button>
-        <button type="button" class="chip" data-chip>News on OpenAI</button>
+        <button type="button" class="chip" data-chip>Find a used Tesla Model 3 under 750 000 Kč on Sauto</button>
+        <button type="button" class="chip" data-chip>Find a used BMW i4 under 1 000 000 Kč on Sauto</button>
         <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
       </div>
       <form id="talkForm" style="display:flex;gap:8px;flex-wrap:wrap">
@@ -342,6 +364,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     forged: document.getElementById("forged"),
     authority: document.getElementById("authority"),
     lastDenied: document.getElementById("lastDenied"),
+    tokFirst: document.getElementById("tokFirst"),
+    tokReuse: document.getElementById("tokReuse"),
+    tokHand: document.getElementById("tokHand"),
     modePill: document.getElementById("modePill"),
     stations: document.getElementById("stations"),
     slots: document.getElementById("slots"),
@@ -380,6 +405,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     busy: false,
     audioUnlocked: false,
     bootHash: null,
+    // Fuller counts from the last /api/talk job response (talk incl. summary); log-derived values are the fallback.
+    talkTok: { first: null, firstMs: null, reuse: null },
     msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
   };
 
@@ -524,6 +551,51 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     return out;
   }
 
+  /** Token counter (SPEC §13 "Should"): requests = runs of lines from each `job` line to the next.
+   *  FIRST ASK = latest request ending in `install`: job.tokens + install.tokens (+ install.ms).
+   *  REUSE = latest request ending in `reuse`: job.tokens. HAND = that reuse line's tokens (0 by construction). */
+  function deriveTokens(log) {
+    const out = { first: null, firstMs: null, reuse: null, hand: 0 };
+    let job = null;
+    const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    for (const l of log) {
+      if (l.event === "job") { job = l; continue; }
+      if (!job) continue;
+      if (l.event === "install") {
+        out.first = num(job.tokens) + num(l.tokens);
+        out.firstMs = typeof l.ms === "number" ? l.ms : null;
+      } else if (l.event === "reuse") {
+        out.reuse = num(job.tokens);
+        out.hand = num(l.tokens);
+      }
+    }
+    return out;
+  }
+
+  function fmtTok(n) {
+    if (n === null || n === undefined) return "—";
+    return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " tok";
+  }
+
+  function fmtMs(ms) {
+    if (typeof ms !== "number" || !Number.isFinite(ms)) return "";
+    return ms < 1000 ? Math.round(ms) + " ms" : (Math.round(ms / 100) / 10) + " s";
+  }
+
+  function renderTokens(log) {
+    const d = deriveTokens(log);
+    const o = state.talkTok;
+    // The /api/talk override only applies once the board has shown the matching outcome line.
+    const useFirst = d.first !== null && o.first !== null;
+    const first = useFirst ? o.first : d.first;
+    const firstMs = useFirst ? o.firstMs : d.firstMs;
+    const reuse = d.reuse !== null && o.reuse !== null ? o.reuse : d.reuse;
+    const msTxt = fmtMs(firstMs);
+    el.tokFirst.textContent = fmtTok(first) + (first !== null && msTxt ? " · " + msTxt : "");
+    el.tokReuse.textContent = fmtTok(reuse);
+    el.tokHand.textContent = fmtTok(d.hand);
+  }
+
   function lineDetail(l) {
     const parts = [];
     if (l.skill) parts.push(l.skill);
@@ -546,6 +618,17 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     }
   }
 
+  /** "598000 Kč" → "598 000 Kč"; long snippets are cut. */
+  function fmtSnippet(sn) {
+    const s = String(sn).trim();
+    const m = s.match(/^(\d{4,})(\s*\S*)$/);
+    if (m) return m[1].replace(/\B(?=(\d{3})+(?!\d))/g, "\u2009") + m[2];
+    return s.length > 60 ? s.slice(0, 57) + "…" : s;
+  }
+  function hostOf(u) {
+    try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; }
+  }
+
   function renderMsgs() {
     el.msgs.innerHTML = "";
     state.msgs.slice(-40).forEach((m) => {
@@ -560,7 +643,38 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         const b = document.createElement("div");
         b.className = "bubble-n";
         const t = document.createElement("div");
-        if (m.result) {
+        if (m.items && m.items.length) {
+          t.className = "res";
+          const head = document.createElement("div");
+          head.className = "res-head";
+          const tag = document.createElement("span");
+          tag.className = m.outcome === "install" ? "res-tag res-tag-build" : "res-tag";
+          tag.textContent = m.outcome === "install" ? "forged" : "reused";
+          head.appendChild(tag);
+          head.appendChild(document.createTextNode(`${m.skill || "hand"} · ${m.items.length} result${m.items.length === 1 ? "" : "s"}`));
+          t.appendChild(head);
+          m.items.forEach((it) => {
+            const c = document.createElement("div");
+            c.className = "card";
+            const a = document.createElement("a");
+            a.textContent = it.title || it.url;
+            if (/^https?:\/\//.test(it.url || "")) { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
+            c.appendChild(a);
+            if (it.snippet) {
+              const pill = document.createElement("span");
+              pill.className = "pill";
+              pill.textContent = fmtSnippet(it.snippet);
+              c.appendChild(pill);
+            }
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            const host = hostOf(it.url);
+            if (host) { const h = document.createElement("span"); h.textContent = host; meta.appendChild(h); }
+            if (it.date) { const d = document.createElement("span"); d.textContent = String(it.date).slice(0, 10); meta.appendChild(d); }
+            if (meta.childNodes.length) c.appendChild(meta);
+            t.appendChild(c);
+          });
+        } else if (m.result) {
           t.className = "nb-result";
           String(m.text).split("\n").map((s) => s.trim()).filter(Boolean).forEach((s) => {
             const li = document.createElement("div");
@@ -653,6 +767,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     const extra = [...granted].filter((c) => !ALLOW.has(c));
     el.authority.textContent = (extra.length ? "+" + extra.length : "+0") + " AUTHORITY";
     el.authority.style.color = extra.length ? "var(--red)" : "";
+
+    renderTokens(log);
 
     const denied = [...log].reverse().find((l) => l.event === "denied");
     if (denied) {
@@ -809,6 +925,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         state.since = 0;
         state.firstPoll = true;
         state.bootHash = null;
+        state.talkTok = { first: null, firstMs: null, reuse: null };
       }
 
       if (state.firstPoll) {
@@ -852,7 +969,18 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
-      if (data.kind === "job") await boardSettled(Date.now());
+      if (data.kind === "job") {
+        const tk = data.tokens && typeof data.tokens === "object" ? data.tokens : null;
+        const talk = tk && typeof tk.talk === "number" ? tk.talk : null;
+        const forge = tk && typeof tk.forge === "number" ? tk.forge : 0;
+        if (talk !== null && data.outcome === "install") {
+          state.talkTok.first = talk + forge;
+          state.talkTok.firstMs = typeof data.ms === "number" ? data.ms : null;
+        } else if (talk !== null && data.outcome === "reuse") {
+          state.talkTok.reuse = talk;
+        }
+        await boardSettled(Date.now());
+      }
       if (data.kind === "chat") {
         state.msgs.push({ who: "nb", text: data.text || "", plain: true });
       } else if (data.kind === "job") {
@@ -863,6 +991,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           voice: voiceish,
           plain: data.outcome === "broken",
           result: !voiceish,
+          items: !voiceish && Array.isArray(data.items) ? data.items.slice(0, 5) : null,
+          outcome: data.outcome,
+          skill: data.skill,
         });
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
