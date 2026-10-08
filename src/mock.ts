@@ -35,5 +35,8 @@ export function mockResponse(host: string, pathname: string, params: URLSearchPa
       `${kind}-default.json`,
     ]);
   }
-  return firstExisting([`${host}.json`]);
+  // Any other host: `<host>-<slug(param value)>.json` for each query value (e.g. www.sauto.cz-tesla-model-3.json
+  // from manufacturer_model_seo=tesla:model-3; hn.algolia.com-rust.json from query=rust), then `<host>.json`.
+  const byValue = [...params.values()].map((v) => slug(v)).filter(Boolean).map((v) => `${host}-${v}.json`);
+  return firstExisting([...byValue, `${host}.json`]);
 }

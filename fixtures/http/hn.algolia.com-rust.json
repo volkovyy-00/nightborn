@@ -1,0 +1,45 @@
+{
+ "hits": [
+  {
+   "title": "Why Discord is switching from Go to Rust",
+   "url": "https://blog.discordapp.com/why-discord-is-switching-from-go-to-rust-a190bbca2b1f",
+   "created_at": "2020-02-04T17:30:40Z",
+   "points": 1582,
+   "author": "Sikul",
+   "objectID": "22238335"
+  },
+  {
+   "title": "Leaving Rust gamedev after 3 years",
+   "url": "https://loglog.games/blog/leaving-rust-gamedev/",
+   "created_at": "2024-04-26T17:33:56Z",
+   "points": 1484,
+   "author": "darthdeus",
+   "objectID": "40172033"
+  },
+  {
+   "title": "A half-hour to learn Rust",
+   "url": "https://fasterthanli.me/articles/a-half-hour-to-learn-rust",
+   "created_at": "2021-01-02T05:50:39Z",
+   "points": 1444,
+   "author": "selvan",
+   "objectID": "25610741"
+  },
+  {
+   "title": "Announcing Rust 1.0",
+   "url": "http://blog.rust-lang.org/2015/05/15/Rust-1.0.html",
+   "created_at": "2015-05-15T17:02:09Z",
+   "points": 1363,
+   "author": "jhund",
+   "objectID": "9551937"
+  },
+  {
+   "title": "CityBound – An open source city simulation game in Rust",
+   "url": "https://github.com/citybound/citybound",
+   "created_at": "2019-04-05T15:18:45Z",
+   "points": 1340,
+   "author": "formalsystem",
+   "objectID": "19583384"
+  }
+ ],
+ "nbHits": 60578
+}

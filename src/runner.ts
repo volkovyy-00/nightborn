@@ -135,7 +135,10 @@ async function create(job: Job, gapDetail: string, ctx: Ctx): Promise<HandResult
       event: "forge",
       skill: hand.name,
       decision: "pass",
-      detail: `recipe: ${hand.manifest.recipe?.endpoint} "${hand.manifest.recipe?.queryPattern}"`,
+      detail:
+        hand.manifest.recipe?.endpoint === "json"
+          ? `recipe: json ${hand.manifest.hosts.join(", ")}`
+          : `recipe: ${hand.manifest.recipe?.endpoint} "${hand.manifest.recipe?.queryPattern}"`,
       tokens: forge.tokens,
       costUsd: forge.costUsd,
       ms: forge.ms,

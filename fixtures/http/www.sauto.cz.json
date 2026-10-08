@@ -1,0 +1,154 @@
+{
+ "pagination": {
+  "limit": 5,
+  "offset": 0,
+  "total": 89
+ },
+ "results": [
+  {
+   "name": "Tesla Model 3, LFP, tepelné čerpadlo",
+   "price": 598000,
+   "id": 211231566,
+   "manufacturer_cb": {
+    "name": "Tesla",
+    "seo_name": "tesla",
+    "value": 951
+   },
+   "model_cb": {
+    "name": "Model 3",
+    "seo_name": "model-3",
+    "value": 8190
+   },
+   "create_date": "2026-10-07T10:55:50",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 139000,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "56177450-EBM"
+  },
+  {
+   "name": "Tesla Model 3, Long Range AWD | Dual Motor",
+   "price": 698000,
+   "id": 211015599,
+   "manufacturer_cb": {
+    "name": "Tesla",
+    "seo_name": "tesla",
+    "value": 951
+   },
+   "model_cb": {
+    "name": "Model 3",
+    "seo_name": "model-3",
+    "value": 8190
+   },
+   "create_date": "2026-08-30T09:01:05",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 117000,
+   "manufacturing_date": "2022-01-01",
+   "custom_id": "56177448-EBM"
+  },
+  {
+   "name": "Tesla Model 3, Šedá metalíza, Tažné zařízení",
+   "price": 648000,
+   "id": 211013982,
+   "manufacturer_cb": {
+    "name": "Tesla",
+    "seo_name": "tesla",
+    "value": 951
+   },
+   "model_cb": {
+    "name": "Model 3",
+    "seo_name": "model-3",
+    "value": 8190
+   },
+   "create_date": "2026-08-29T12:16:26",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 129004,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "56177396-EBM"
+  },
+  {
+   "name": "Tesla Model 3, Long Range AWD sOH 89,3% DPH",
+   "price": 679999,
+   "id": 211085949,
+   "manufacturer_cb": {
+    "name": "Tesla",
+    "seo_name": "tesla",
+    "value": 951
+   },
+   "model_cb": {
+    "name": "Model 3",
+    "seo_name": "model-3",
+    "value": 8190
+   },
+   "create_date": "2026-09-11T08:59:04",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 138219,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "VA263317"
+  },
+  {
+   "name": "Tesla Model 3, LR 79kWh AWD sOH 90,3%",
+   "price": 744999,
+   "id": 211018467,
+   "manufacturer_cb": {
+    "name": "Tesla",
+    "seo_name": "tesla",
+    "value": 951
+   },
+   "model_cb": {
+    "name": "Model 3",
+    "seo_name": "model-3",
+    "value": 8190
+   },
+   "create_date": "2026-08-31T09:19:47",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 79436,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "VA262869"
+  }
+ ]
+}

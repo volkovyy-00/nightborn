@@ -1,0 +1,26 @@
+{
+  "match": ["sauto", "used car", "used cars", "ojet"],
+  "visited": ["www.sauto.cz"],
+  "recipe": {
+    "name": "find_used_cars",
+    "purpose": "Used car listings on sauto.cz for a make and model under a maximum price in Kč.",
+    "endpoint": "json",
+    "queryPattern": null,
+    "site": null,
+    "urlPattern": "https://www.sauto.cz/api/v1/items/search?category_id=838&manufacturer_model_seo={make}:{model}&price_to={max_price}&limit=5",
+    "itemsPath": "results",
+    "matchInput": "model",
+    "map": {
+      "title": "{name}",
+      "url": "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}",
+      "snippet": "{price} Kč",
+      "date": "{create_date}"
+    },
+    "inputs": [
+      { "name": "make", "type": "string", "format": "slug", "required": true, "description": "Car make as the user wrote it, e.g. Tesla, BMW, Škoda" },
+      { "name": "model", "type": "string", "format": "slug", "required": true, "description": "Model name as the user wrote it, e.g. Model 3, i4, Enyaq" },
+      { "name": "max_price", "type": "number", "format": "text", "required": true, "description": "Maximum price in Kč as a number" }
+    ],
+    "example": { "make": "Tesla", "model": "Model 3", "max_price": 750000 }
+  }
+}

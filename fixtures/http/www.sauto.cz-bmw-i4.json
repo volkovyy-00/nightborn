@@ -1,0 +1,137 @@
+{
+ "pagination": {
+  "limit": 5,
+  "offset": 0,
+  "total": 13
+ },
+ "results": [
+  {
+   "name": "BMW i4, M50 LASER H/K HEAD-UP",
+   "price": 948000,
+   "id": 211243555,
+   "manufacturer_cb": {
+    "name": "BMW",
+    "seo_name": "bmw",
+    "value": 5
+   },
+   "model_cb": {
+    "name": "i4",
+    "seo_name": "i4",
+    "value": 9076
+   },
+   "create_date": "2026-10-08T16:42:35",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "tachometer": 62638,
+   "custom_id": "19337206-EBM"
+  },
+  {
+   "name": "BMW i4, eDrive 40 Tažné Keyless SoH 94",
+   "price": 799000,
+   "id": 210792656,
+   "manufacturer_cb": {
+    "name": "BMW",
+    "seo_name": "bmw",
+    "value": 5
+   },
+   "model_cb": {
+    "name": "i4",
+    "seo_name": "i4",
+    "value": 9076
+   },
+   "create_date": "2026-07-18T16:35:18",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 118500,
+   "custom_id": "55659324-EBM"
+  },
+  {
+   "name": "BMW i4, BMW I4 Facelift eDrive 40",
+   "price": 960000,
+   "id": 210521951,
+   "manufacturer_cb": {
+    "name": "BMW",
+    "seo_name": "bmw",
+    "value": 5
+   },
+   "model_cb": {
+    "name": "i4",
+    "seo_name": "i4",
+    "value": 9076
+   },
+   "create_date": "2026-05-31T11:13:12",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 17000,
+   "manufacturing_date": "2024-09-01",
+   "custom_id": null
+  },
+  {
+   "name": "BMW i4, BMW i4 eDrive40 elektro",
+   "price": 880000,
+   "id": 211209342,
+   "manufacturer_cb": {
+    "name": "BMW",
+    "seo_name": "bmw",
+    "value": 5
+   },
+   "model_cb": {
+    "name": "i4",
+    "seo_name": "i4",
+    "value": 9076
+   },
+   "create_date": "2026-10-02T19:33:11",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "tachometer": 54300,
+   "manufacturing_date": "2023-03-01",
+   "custom_id": null
+  },
+  {
+   "name": "BMW i4, xDrive M50, 83,9kWh, SoH 95%",
+   "price": 919000,
+   "id": 211117182,
+   "manufacturer_cb": {
+    "name": "BMW",
+    "seo_name": "bmw",
+    "value": 5
+   },
+   "model_cb": {
+    "name": "i4",
+    "seo_name": "i4",
+    "value": 9076
+   },
+   "create_date": "2026-09-16T15:56:56",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "tachometer": 159000,
+   "manufacturing_date": "2023-05-01",
+   "custom_id": null
+  }
+ ]
+}

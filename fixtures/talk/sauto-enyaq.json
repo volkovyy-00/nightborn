@@ -1,0 +1,4 @@
+{
+  "match": "Find a used Škoda Enyaq under 900 000 Kč on Sauto",
+  "useHand": { "skill": "find_used_cars", "intent": "used car listings on sauto", "inputs": { "make": "Škoda", "model": "Enyaq", "max_price": "900 000 Kč" }, "needs": ["net:fetch"] }
+}

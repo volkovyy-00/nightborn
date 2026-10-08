@@ -1,0 +1,4 @@
+{
+  "match": "Find Hacker News stories about Rust",
+  "useHand": { "skill": null, "intent": "hacker news stories", "inputs": { "query": "Rust" }, "needs": ["net:fetch"] }
+}

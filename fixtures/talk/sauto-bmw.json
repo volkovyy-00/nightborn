@@ -1,0 +1,4 @@
+{
+  "match": "Find a used BMW i4 under 1 000 000 Kč on Sauto",
+  "useHand": { "skill": "find_used_cars", "intent": "used car listings on sauto", "inputs": { "make": "BMW", "model": "i4", "max_price": "1 000 000 Kč" }, "needs": ["net:fetch"] }
+}

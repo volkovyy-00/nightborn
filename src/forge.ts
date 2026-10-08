@@ -6,6 +6,7 @@ import type { ForgeFixture, Input, InputValues, Job, Manifest, Recipe, RenderedR
 import { repoPath } from "./paths.ts";
 import { listSkillDirs } from "./hash.ts";
 import { getCharter } from "./charter.ts";
+import { PROTECTED, SECRET } from "./warden.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
 
 const BRAVE_HOST = "api.search.brave.com";
@@ -207,25 +208,47 @@ export function prepareRecipe(
 ): { ok: true; hand: PreparedHand } | { ok: false; reason: string } {
   const fail = (reason: string) => ({ ok: false as const, reason });
   if (!["news", "web", "json"].includes(recipe.endpoint)) return fail("recipe: bad endpoint");
-  if (recipe.endpoint === "json") return fail("recipe: json endpoint not in T1");
+  const json = recipe.endpoint === "json";
   if (!Array.isArray(recipe.inputs) || recipe.inputs.length === 0 || recipe.inputs.length > 6) return fail("recipe: inputs");
   for (const i of recipe.inputs) {
     if (!INPUT_NAME_RE.test(i.name)) return fail("recipe: input name");
     if (!["string", "number"].includes(i.type) || !["text", "slug"].includes(i.format)) return fail("recipe: input type");
   }
   const names = new Set(recipe.inputs.map((i) => i.name));
+  if (json) {
+    // json: urlPattern (absolute https) + itemsPath ("" = root, leading "/" stripped) + map{title,url}
+    recipe = { ...recipe, queryPattern: null, site: null, itemsPath: String(recipe.itemsPath ?? "").replace(/^\/+/, "") };
+    if (!recipe.urlPattern || !hostOf(recipe.urlPattern)) return fail("recipe: urlPattern");
+    if (!recipe.map || typeof recipe.map.title !== "string" || typeof recipe.map.url !== "string") return fail("recipe: map");
+    recipe.map = { title: recipe.map.title, url: recipe.map.url, snippet: recipe.map.snippet || null, date: recipe.map.date || null };
+  } else {
+    recipe = { ...recipe, urlPattern: null, itemsPath: null, map: null, site: recipe.endpoint === "web" ? recipe.site : null };
+    if (!recipe.queryPattern) return fail("recipe: no queryPattern");
+  }
   const used = [...placeholders(recipe.queryPattern), ...placeholders(recipe.urlPattern)];
   for (const p of used) if (!names.has(p)) return fail(`recipe: unknown placeholder {${p}}`);
   for (const i of recipe.inputs) if (i.required && !used.includes(i.name)) return fail(`recipe: unused input ${i.name}`);
-  if (!recipe.queryPattern) return fail("recipe: no queryPattern");
   if (recipe.matchInput && !names.has(recipe.matchInput)) return fail("recipe: matchInput");
   const example = coerceInputs(recipe.inputs, recipe.example ?? {});
   if (!example) return fail("recipe: example");
 
-  const hosts = [BRAVE_HOST];
+  // Forge-time literal check (SPEC §9, §18 #13): every string rendered into skill.mjs vs the Warden's frozen regexes.
+  const rendered = [
+    recipe.queryPattern, recipe.site, recipe.urlPattern, recipe.itemsPath, recipe.matchInput,
+    ...(recipe.map ? [recipe.map.title, recipe.map.url, recipe.map.snippet, recipe.map.date] : []),
+    ...recipe.inputs.map((i) => i.name),
+  ].filter((s): s is string => typeof s === "string");
+  if (rendered.some((s) => PROTECTED.test(s))) return fail("recipe: protected literal");
+  if (rendered.some((s) => SECRET.test(s))) return fail("recipe: key-like literal");
+
+  // hosts: Brave for news/web; urlPattern + map.url hosts for json (SPEC §9). Non-Brave hosts must be visited.
+  const hosts = json
+    ? [...new Set([hostOf(recipe.urlPattern!), hostOf(recipe.map!.url)].filter((h): h is string => !!h))]
+    : [BRAVE_HOST];
   const never = getCharter().neverHosts;
   if (hosts.some((h) => never.includes(h))) return fail("recipe: never-host");
-  void visited; // json hosts must be visited (P2); Brave is exempt (SPEC §6).
+  const unvisited = hosts.find((h) => h !== BRAVE_HOST && !visited.includes(h));
+  if (unvisited) return fail(`recipe: host not visited ${unvisited}`);
 
   const base = slugifyName(job.skill && job.skill.trim() ? job.skill : recipe.name);
   const name = uniqueName(base, skillsRoot);

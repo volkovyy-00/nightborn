@@ -1,0 +1,154 @@
+{
+ "pagination": {
+  "limit": 5,
+  "offset": 0,
+  "total": 105
+ },
+ "results": [
+  {
+   "name": "Škoda Enyaq, 80, SOH: 89%, tazny, el.kufr",
+   "price": 515000,
+   "id": 211244685,
+   "manufacturer_cb": {
+    "name": "Škoda",
+    "seo_name": "skoda",
+    "value": 93
+   },
+   "model_cb": {
+    "name": "Enyaq",
+    "seo_name": "enyaq",
+    "value": 9523
+   },
+   "create_date": "2026-10-08T23:09:49",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 203300,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "57337062-EBM"
+  },
+  {
+   "name": "Škoda Enyaq, IV 80x,195KW,2023,4X4,1.M, DPH",
+   "price": 629000,
+   "id": 211244651,
+   "manufacturer_cb": {
+    "name": "Škoda",
+    "seo_name": "skoda",
+    "value": 93
+   },
+   "model_cb": {
+    "name": "Enyaq",
+    "seo_name": "enyaq",
+    "value": 9523
+   },
+   "create_date": "2026-10-08T22:29:17",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 180,
+   "manufacturing_date": "2023-01-01",
+   "custom_id": null
+  },
+  {
+   "name": "Škoda Enyaq, iV 80 195kW 4x4 SoH 89% Záruka",
+   "price": 768000,
+   "id": 210956994,
+   "manufacturer_cb": {
+    "name": "Škoda",
+    "seo_name": "skoda",
+    "value": 93
+   },
+   "model_cb": {
+    "name": "Enyaq",
+    "seo_name": "enyaq",
+    "value": 9523
+   },
+   "create_date": "2026-08-19T10:06:33",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 90080,
+   "manufacturing_date": "2022-01-01",
+   "custom_id": "V260617"
+  },
+  {
+   "name": "Škoda Enyaq, iV 60 132kW SportPlus SOH 87%",
+   "price": 598000,
+   "id": 211214373,
+   "manufacturer_cb": {
+    "name": "Škoda",
+    "seo_name": "skoda",
+    "value": 93
+   },
+   "model_cb": {
+    "name": "Enyaq",
+    "seo_name": "enyaq",
+    "value": 9523
+   },
+   "create_date": "2026-10-04T19:22:08",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 147104,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "V260727"
+  },
+  {
+   "name": "Škoda Enyaq, iV 60 132kW Sportline SOH 91%",
+   "price": 598000,
+   "id": 211211595,
+   "manufacturer_cb": {
+    "name": "Škoda",
+    "seo_name": "skoda",
+    "value": 93
+   },
+   "model_cb": {
+    "name": "Enyaq",
+    "seo_name": "enyaq",
+    "value": 9523
+   },
+   "create_date": "2026-10-03T15:48:02",
+   "fuel_cb": {
+    "name": "Elektro",
+    "seo_name": "elektro",
+    "value": 4
+   },
+   "gearbox_cb": {
+    "name": "Automatická",
+    "seo_name": "automaticka",
+    "value": 3
+   },
+   "tachometer": 146031,
+   "manufacturing_date": "2021-01-01",
+   "custom_id": "V260729"
+  }
+ ]
+}
