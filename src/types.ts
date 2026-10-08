@@ -70,6 +70,8 @@ export type Recipe = {
   urlPattern: string | null;
   itemsPath: string | null;
   matchInput: string | null;
+  /** json, optional: drop raw items whose number at `field` exceeds the number input `input` (SPEC §9). */
+  maxFilter?: { field: string; input: string } | null;
   map: { title: string; url: string; snippet: string | null; date: string | null } | null;
   inputs: Input[];
   example: InputValues;
@@ -78,7 +80,7 @@ export type Recipe = {
 /** The only recipe fields rendered into skill.mjs (`__RECIPE_JSON__`), SPEC §9. */
 export type RenderedRecipe = Pick<
   Recipe,
-  "endpoint" | "queryPattern" | "site" | "urlPattern" | "itemsPath" | "map" | "matchInput"
+  "endpoint" | "queryPattern" | "site" | "urlPattern" | "itemsPath" | "map" | "matchInput" | "maxFilter"
 > & { inputs: Array<Pick<Input, "name" | "type" | "format">> };
 
 export type HandKind = "recipe" | "code" | "hand" | "email_send";

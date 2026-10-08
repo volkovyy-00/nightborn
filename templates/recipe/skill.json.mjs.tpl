@@ -46,6 +46,27 @@ function fillItem(template, item) {
   });
 }
 
+// A link with a placeholder that has no value is no link: return "" so a wrong template fails the Test.
+function fillLink(template, item) {
+  let missing = false;
+  const out = String(template).replace(/\{([a-zA-Z0-9_.]+)\}/g, (_, p) => {
+    const v = dot(item, p);
+    if (v === undefined || v === null || String(v) === "") missing = true;
+    return v === undefined || v === null ? "" : String(v);
+  });
+  return missing ? "" : out;
+}
+
+// Numbers as they are; strings only when they hold a digit ("1 234 Kč" → 1234, "1 234,50" → 1234.5).
+function num(v) {
+  if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+  if (typeof v !== "string" || !/\d/.test(v)) return NaN;
+  let s = v.replace(/[\s\u00a0]/g, "");
+  if (/,\d{1,2}$/.test(s)) s = s.replace(/,(\d{1,2})$/, ".$1");
+  s = s.replace(/[^\d.]/g, "");
+  return s ? Number(s) : NaN;
+}
+
 let raw = "";
 for await (const c of process.stdin) raw += c;
 let input;
@@ -67,11 +88,20 @@ const res = await fetch(target, { headers: { Accept: "application/json" }, signa
 if (!res.ok) fail("http " + res.status);
 const data = await res.json();
 
-const arr = R.itemsPath === "" || R.itemsPath === null ? data : dot(data, R.itemsPath);
+let arr = R.itemsPath === "" || R.itemsPath === null ? data : dot(data, R.itemsPath);
 if (!Array.isArray(arr)) fail("itemsPath is not an array");
 
+if (R.maxFilter) {
+  const limit = Number(inputs[R.maxFilter.input]);
+  if (Number.isFinite(limit)) {
+    const values = arr.map((it) => num(dot(it, R.maxFilter.field)));
+    if (arr.length && !values.some(Number.isFinite)) fail("maxFilter: no numeric field");
+    arr = arr.filter((_, i) => Number.isFinite(values[i]) && values[i] <= limit);
+  }
+}
+
 let items = arr.map((it) => {
-  const o = { title: fillItem(R.map.title, it), url: fillItem(R.map.url, it) };
+  const o = { title: fillItem(R.map.title, it), url: fillLink(R.map.url, it) };
   if (R.map.snippet) {
     const s = fillItem(R.map.snippet, it);
     if (s.trim()) o.snippet = s;

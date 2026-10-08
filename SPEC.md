@@ -35,13 +35,19 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 1. Forge-time literal check: `prepareRecipe` rejects recipe strings that would trip the Warden's `protected_path` / `secret_in_file` regexes → Broken `forge_invalid`; the Warden scan remains the backstop (§9, §18 #13).
 2. `dns` (and `dns/promises`) join the Warden's forbidden modules and the fetch guard's `getBuiltinModule` stub: a hand could otherwise exfiltrate the Brave key through DNS lookups (§8, §9).
 
+### v4.3 → v4.4 (human call: real discovery, no hints, 2026-10-09 ~01:00)
+1. Explorer without hints: `sources.md` removed; `web_search` queries are in English and name the region; `http_get` on HTML returns a page digest (the page's own data endpoints + response shape, link shapes) so the Explorer can find a site's JSON API itself (§5, §7, §9, §14, §17).
+2. Chips and the reference use case no longer name the site ("… on Sauto" dropped): the Explorer has to find it (§1, §13).
+3. Recipe `maxFilter`: the hand itself drops items above a numeric input (e.g. `max_price`) when the site's API can't take it; a `map.url` with a missing placeholder value yields an empty `url` (§9, §17).
+4. Charter forge budget for the Explorer: `recipe_max_turns` 6 → 10, `recipe_max_seconds` 60 → 90 (re-pin `6e4aa8f0`, new `hand_probe` seed): hint-free discovery needs room to try a second site (§6, §9).
+
 ---
 
 ## 1. Product
 
 Nightborn is a dark junior analyst that **pays once to learn a task, then grows a hand so it doesn't pay again** — while authority stays locked by a hashed charter, a code Warden, a Broker that holds secrets, and an OS-level sandbox. *More hands, same leash.*
 
-**Reference use case (from a judge):** "Find a used Tesla Model 3 under 750 000 Kč on Sauto" → Nightborn explores (search + a few page/API fetches), then forges a deterministic, parameterised hand `find_used_cars(make, model, max_price)` that calls the site's JSON API directly. After a restart, "Find a used BMW i4 under 1 000 000 Kč on Sauto" reuses that hand: **the hand runs with 0 LLM tokens**; only Talk's routing + summary cost tokens.
+**Reference use case (from a judge):** "Find a used Tesla Model 3 under 750 000 Kč" → Nightborn explores (finds the site by search, then a few page/API fetches), then forges a deterministic, parameterised hand `find_used_cars(make, model, max_price)` that calls the site's JSON API directly. After a restart, "Find a used BMW i4 under 1 000 000 Kč" reuses that hand: **the hand runs with 0 LLM tokens**; only Talk's routing + summary cost tokens.
 
 ---
 
@@ -124,7 +130,7 @@ USER text
 T2 (P2) · T3 (P3) · UI token counter · stage tint · graft slots
 
 ### Cut first → last when behind
-T3 (stay `FORGE_MODE=recipe`) → T2 `web` endpoint (keep `json` + `news`) → UI token counter (keep log fields) → `http_get` DNS/private-IP checks (keep https-only + never-hosts; disclose) → graft slots / stage animation → T2 exploration (Explorer one-shot with `sources.md` only)
+T3 (stay `FORGE_MODE=recipe`) → T2 `web` endpoint (keep `json` + `news`) → UI token counter (keep log fields) → `http_get` DNS/private-IP checks (keep https-only + never-hosts; disclose) → graft slots / stage animation → T2 exploration (Explorer one-shot, no exploration)
 
 ---
 
@@ -157,8 +163,8 @@ openrouter.ai
 ```
 ```forge
 recipe_tools: web_search http_get emit_recipe
-recipe_max_turns: 6
-recipe_max_seconds: 60
+recipe_max_turns: 10
+recipe_max_seconds: 90
 code_tools: web_search http_get write_skill run_test submit_skill
 code_max_turns: 16
 code_max_seconds: 150
@@ -204,7 +210,7 @@ nightborn/                       # "type":"module" · Hono + tsx
   validation/results.json
   docs/UI_CONTRACT.md            # UI handoff; must match §13
   docs/ui-ref/  artifacts/       # UI design references (read-only)
-  charter.md  soul.md  sources.md  surgery.log  BOARD.md  README.md
+  charter.md  soul.md  surgery.log  BOARD.md  README.md
   AGENTS.md  CLAUDE.md  SPEC.md  tsconfig.json
   .env.example  .gitattributes  .gitignore  package.json  package-lock.json
 ```
@@ -215,9 +221,8 @@ nightborn/                       # "type":"module" · Hono + tsx
 
 **`.gitignore`:** `.env` · `node_modules/` · `staging/` · `video/` · `*.mp4` · `*.mov` · `.DS_Store`. Never ignore WAVs, `surgery*.log`, `validation/`.
 
-**Paths:** `.env`, `public/`, `templates/`, `fixtures/`, `soul.md`, `sources.md` resolve from the repo root; `charter.md`, `surgery.log`, `skills/`, `staging/` resolve from `process.cwd()` (lets `validate.ts` and dev servers run isolated copies under `staging/`).
+**Paths:** `.env`, `public/`, `templates/`, `fixtures/`, `soul.md` resolve from the repo root; `charter.md`, `surgery.log`, `skills/`, `staging/` resolve from `process.cwd()` (lets `validate.ts` and dev servers run isolated copies under `staging/`).
 
-**`sources.md`:** human-curated short list of open, keyless JSON sources (e.g. sauto.cz search API) given to the Explorer as hints. Disclosed as Simulated (§17).
 
 **`BOARD.md`:** the phase checklist (§14). The human ticks gates; agents tick a task box only after its check ran green in their session.
 
@@ -293,7 +298,7 @@ User values arrive **only** at runtime on stdin — never rendered into `skill.m
 
 ### Recipe forge (T1/T2, `FORGE_MODE=recipe`, default)
 - **T1:** one-shot Pi call, terminating tool `emit_recipe`; `endpoint` forced to `news`, single input `{query}`.
-- **T2:** the **Explorer** Pi session with `recipe_tools` (§6): `web_search({q, endpoint:"news"|"web"})` (host-side Brave call, ≤5 `{title,url,snippet}`), `http_get({url})` (host-side GET, 6 s, response text ≤16 KB, JSON pretty-printed / HTML tags stripped; public `https` only; DNS-resolved private, loopback and link-local addresses rejected; redirects followed manually and every hop re-checked; host ∉ `never-hosts`), then terminating `emit_recipe`. Its prompt includes `sources.md`. Every successful `http_get` host is recorded as *visited*.
+- **T2:** the **Explorer** Pi session with `recipe_tools` (§6): `web_search({q, endpoint:"news"|"web"})` (host-side Brave call, ≤5 `{title,url,snippet}`; queries in English, naming the region the request implies, e.g. "Czechia"), `http_get({url})` (host-side GET, 6 s, response text ≤16 KB, JSON pretty-printed; HTML (read ≤1 MiB) returned as a **page digest**: title, the data endpoints the page itself calls (absolute or root-relative `/api/`, `/graphql`, `/_next/data/`, `.json` URLs found anywhere in the page, incl. inline scripts; dotless hosts, timestamp-like params and `limit=0` samples dropped) with their params and, when the page embeds the cached response, its shape (array path, length, first item's keys), link shapes (same-host hrefs grouped by path, digit runs as `{n}`), JSON-LD types, a short text excerpt; public `https` only; DNS-resolved private, loopback and link-local addresses rejected; redirects followed manually and every hop re-checked; host ∉ `never-hosts`), then terminating `emit_recipe`. Its prompt names no sources: it finds candidates by search (or a well-known public API it knows) and verifies them by fetching. Every successful `http_get` host is recorded as *visited*.
 - `emit_recipe` params:
 ```ts
 { name, purpose, endpoint: "news" | "web" | "json",
@@ -302,11 +307,14 @@ User values arrive **only** at runtime on stdin — never rendered into `skill.m
   urlPattern: string | null,       // json: absolute https URL with {input} placeholders (values URL-encoded at runtime)
   itemsPath: string | null,        // json: dot path to the array, e.g. "results"; "" = the response is the array; a leading "/" is stripped
   matchInput: string | null,       // optional input name whose (normalised) value must appear in an item title; other items are dropped
+  maxFilter?: { field: string, input: string } | null,
+                                   // json, optional: item-field dot path (raw item) whose number must be ≤ the number input; items without a number are dropped;
+                                   // no item with a number at all → the hand exits non-zero; a missing limit value skips the filter; applied before matchInput and max
   map: { title: string, url: string, snippet: string | null, date: string | null } | null,
                                    // json: templates over item fields, e.g. url "https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}"
   inputs: Input[], example: Record<string, string | number> }
 ```
-- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (`map` placeholders are item-field dot paths) · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · checks every string rendered into `skill.mjs` (`queryPattern`, `site`, `urlPattern`, `itemsPath`, `map.*`, `matchInput`, input names) against the Warden's `protected_path` / `secret_in_file` regexes (same frozen literals, imported from the Warden; fires before the scan, which remains the backstop) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
+- Code then: slugifies `name` (Talk's `job.skill`, when set, overrides it; `_2` suffix if taken) · checks every placeholder in `queryPattern` / `urlPattern` is an input name and every required input is used (in a pattern, `matchInput` or `maxFilter.input`; `map` placeholders are item-field dot paths) · `maxFilter.input` is a `number` input · checks `example` against `inputs` · json: `urlPattern` host must be *visited* (this forge-time check fires before the Warden's `host_not_allowed`, which remains the backstop for code mode) · checks every string rendered into `skill.mjs` (`queryPattern`, `site`, `urlPattern`, `itemsPath`, `map.*`, `matchInput`, `maxFilter.*`, input names) against the Warden's `protected_path` / `secret_in_file` regexes (same frozen literals, imported from the Warden; fires before the scan, which remains the backstop) · renders `templates/recipe/skill.<search|json>.mjs.tpl` (+ `notes.md.tpl`, `manifest.json.tpl`) via `JSON.stringify` only — `skill.mjs` gets only `endpoint`, `queryPattern`, `site`, `urlPattern`, `itemsPath`, `map`, `matchInput`, `maxFilter` and the input names/types/formats (so `purpose`, `example` etc. never become scanned literals); only the search variant contains Brave URL literals and `process.env.BRAVE_API_KEY`; the json variant contains no URL literal except the stringified recipe · sets `capabilities:["net:fetch"]` · `hosts` = Brave for news/web; the `urlPattern` and `map.url` hosts for json. Any check fails → Broken `forge_invalid`. No retry.
 - **Keys:** news/web hands read literal `process.env.BRAVE_API_KEY`; json hands use no key, so the Broker grants none.
 
 ### Code forge (T3, `FORGE_MODE=code`, stretch)
@@ -355,7 +363,7 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 - **Brave news:** `GET https://api.search.brave.com/res/v1/news/search?q=…&count=5&freshness=pw` → `results[].{title, url, description→snippet, page_age→date}`
 - **Brave web:** `GET https://api.search.brave.com/res/v1/web/search?q=…&count=5` → `web.results[].{title, url, description→snippet, page_age?→date}` (`page_age` may be absent)
 - Brave headers: `X-Subscription-Token`, `Accept: application/json`. Every skill `fetch` uses `AbortSignal.timeout(6000)`.
-- **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, mapped by `map`; `max` (default 5) items.
+- **json:** `GET <urlPattern filled>` with `Accept: application/json`; items from `itemsPath`, filtered by `maxFilter`, mapped by `map` (a `map.url` placeholder without a value → `url:""`); `max` (default 5) items.
 - **Demo source (checked 2026-10-08, keyless, ~60 ms, `robots.txt` allows `/api/*`):** `https://www.sauto.cz/api/v1/items/search?category_id=838&manufacturer_model_seo={make}:{model}&price_to={max_price}&limit=5` → `results[].{name, price, id, manufacturer_cb.seo_name, model_cb.seo_name, …}`; detail page `https://www.sauto.cz/osobni/detail/{manufacturer_cb.seo_name}/{model_cb.seo_name}/{id}`. Undocumented API: fixtures saved for OFFLINE.
 - **Second source (keyless, gate-only + jury backup):** `https://hn.algolia.com/api/v1/search?query={query}&tags=story&hitsPerPage=5` → `hits[].{title, url, created_at}`; `map` `{title:"{title}", url:"{url}", date:"{created_at}"}` (no `news.ycombinator.com` link: that host would be unvisited → `host_not_allowed`). Hits without `url` (Ask HN) map to an empty `url`; the Test needs ≥1 non-empty.
 
@@ -368,8 +376,8 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 | skill `fetch` | 6 s |
 | skill process | 15 s |
 | Talk | 45 s of LLM time per request; the timer pauses while `use_hand` runs the Runner; expiry → `void session.abort()` → `talk_timeout` |
-| T1 recipe forge (one-shot) | `recipe_max_seconds` (60 s) → Broken `forge_invalid` |
-| Explorer | `recipe_max_seconds` (60 s) / `recipe_max_turns` → Broken `forge_invalid` |
+| T1 recipe forge (one-shot) | `recipe_max_seconds` (90 s) → Broken `forge_invalid` |
+| Explorer | `recipe_max_seconds` (90 s) / `recipe_max_turns` → Broken `forge_invalid` |
 | Builder | `code_max_seconds` (150 s) / `code_max_turns` → fallback to recipe |
 | `POST /api/talk` | ≤ 300 s; server `requestTimeout` 310 s |
 
@@ -477,18 +485,18 @@ Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted �
 **Should:** counter `FIRST ASK n tok · REUSE m tok (Talk only) · HAND 0 tok` from `install` / `reuse` / `job` lines · pipeline stage tint · graft slots from `install` lines.
 
 ### Chips (final)
-1. `Find a used Tesla Model 3 under 750 000 Kč on Sauto` (Forge beat)
-2. `Find a used BMW i4 under 1 000 000 Kč on Sauto` (Reuse beat — standalone, survives the restart; same hand, new inputs)
+1. `Find a used Tesla Model 3 under 750 000 Kč` (Forge beat)
+2. `Find a used BMW i4 under 1 000 000 Kč` (Reuse beat — standalone, survives the restart; same hand, new inputs)
 3. `Email this news digest to my boss every morning.` (DENIED, byte-exact)
 
-Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč on Sauto` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
+Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
 
 ---
 
 ## 14. Plan
 
 ### Roles
-**Human (Yevhenii):** Go/No-Go, gate smoke checks, `soul.md`, `sources.md`, recording, slides, upload. **Agent (Claude Code):** all code and docs; parallel subagents in worktrees with disjoint write sets; writes `validate.ts` rows while the human records.
+**Human (Yevhenii):** Go/No-Go, gate smoke checks, `soul.md`, recording, slides, upload. **Agent (Claude Code):** all code and docs; parallel subagents in worktrees with disjoint write sets; writes `validate.ts` rows while the human records.
 
 ### Phases
 | Phase | Clock | Deliverable | Gate (human smoke, ≤5 min) | Tag |
@@ -509,7 +517,7 @@ Schedule risk (second-opinion estimate): P1 realistically ends ≈01:30 and P2 �
 | Haiku misroutes ≥3 of 10 rehearsal prompts | P1 gate | `PI_MODEL` → Sonnet 4.6 |
 | P1 gate red | 00:45 | record take0 on chip fixtures; disclose; continue P1 into P2 time |
 | Brave or sauto down / rate-limited | any | `OFFLINE=1` fixtures; disclose |
-| Explorer can't find a usable source in rehearsal | P2 gate | Explorer one-shot from `sources.md` only; disclose |
+| Explorer can't find a usable source in rehearsal | P2 gate | chip backups `fixtures/talk` + forge fixture; disclose |
 | P2 gate red | 03:30 | stay on T1; skip P3; P4 starts early |
 | P3 gate red | 05:30 | `FORGE_MODE=recipe`; T3 listed as Incomplete |
 | fetch guard breaks runs | 30 min | drop guard; disclose the network limit (§17) |
@@ -561,10 +569,10 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | Works | Simulated | Incomplete |
 |---|---|---|
 | Charter pin + hash on every line | Anything `source:"fixture"` (OFFLINE, chip backups, judge mode) | Hands = one HTTP GET + dot-path map (no headers, POST or pagination); JS-heavy or bot-protected sites end Broken |
-| Warden code DENIED; fs/process sandbox (Node permission model) | Explorer gets curated `sources.md` hints | Hand choice is Talk's (LLM); the Runner only validates inputs |
+| Warden code DENIED; fs/process sandbox (Node permission model) | | Hand choice is Talk's (LLM); the Runner only validates inputs |
 | Explore → Forge → Test → FINAL = PRE → Install → Reuse after restart; hand runs with 0 LLM tokens | Forge latency jump-cut on video | Keyword tripwire; non-keyword asks depend on Talk (k/5) |
 | Broker: ungranted key = `undefined`; json hands get no key | `hand_probe` seeded `decision.json` | Network: in-process guard + scan rules, no OS-level network jail |
-| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error |
+| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error; a `maxFilter` limit is applied by the hand over the first page of results (~20), not by the site |
 
 ---
 

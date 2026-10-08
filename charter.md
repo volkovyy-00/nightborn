@@ -43,8 +43,8 @@ never install. The host enforces the limits.
 
 ```forge
 recipe_tools: web_search http_get emit_recipe
-recipe_max_turns: 6
-recipe_max_seconds: 60
+recipe_max_turns: 10
+recipe_max_seconds: 90
 code_tools: web_search http_get write_skill run_test submit_skill
 code_max_turns: 16
 code_max_seconds: 150
