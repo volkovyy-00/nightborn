@@ -14,7 +14,7 @@ const NAME_RE = /^[a-z0-9_]{1,40}$/;
 const PROTECTED = /charter\.md|\.\.\/|\.env|broker|^\//;
 const SECRET = /sk-[A-Za-z0-9_-]{16,}|BSA[A-Za-z0-9_-]{20,}/;
 const FORBIDDEN_MODULES = new Set([
-  "child_process", "vm", "worker_threads", "net", "tls", "http", "https", "http2", "dgram", "module", "undici",
+  "child_process", "vm", "worker_threads", "net", "tls", "http", "https", "http2", "dgram", "dns", "dns/promises", "module", "undici",
 ]);
 const FORBIDDEN_IDENTS = new Set([
   "getBuiltinModule", "createRequire", "WebSocket", "getOwnPropertySymbols", "Reflect", "dlopen", "binding",
