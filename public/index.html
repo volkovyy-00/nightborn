@@ -136,8 +136,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .nb-voice{color:#FF8A8A}
 .res{display:flex;flex-direction:column;gap:8px}
 .res-head{display:flex;align-items:center;gap:8px;font:600 11.5px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
-.res-head .tag{padding:3px 8px;border-radius:999px;border:1px solid #1F5A50;color:var(--cyan)}
-.res-head .tag-build{border-color:#5A4320;color:var(--amber)}
+.res-head .res-tag{padding:3px 8px;border-radius:999px;border:1px solid #1F5A50;color:var(--cyan)}
+.res-head .res-tag-build{border-color:#5A4320;color:var(--amber)}
 .card{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:start;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0B0F12;transition:border-color .15s}
 .card:hover{border-color:#3A4A52}
 .card a{color:var(--ink);text-decoration:none;font:500 14px/1.35 'Geist',sans-serif}
@@ -648,7 +648,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
           const head = document.createElement("div");
           head.className = "res-head";
           const tag = document.createElement("span");
-          tag.className = m.outcome === "install" ? "tag tag-build" : "tag";
+          tag.className = m.outcome === "install" ? "res-tag res-tag-build" : "res-tag";
           tag.textContent = m.outcome === "install" ? "forged" : "reused";
           head.appendChild(tag);
           head.appendChild(document.createTextNode(`${m.skill || "hand"} · ${m.items.length} result${m.items.length === 1 ? "" : "s"}`));
