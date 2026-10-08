@@ -9,6 +9,7 @@ async function readStdin() {
 
 const raw = await readStdin();
 const input = JSON.parse(raw || "{}");
+const inputs = input.inputs ?? {};
 
 const transporter = nodemailer.createTransport({
   host: "smtp.example.com",
@@ -19,7 +20,7 @@ await transporter.sendMail({
   from: "nightborn@example.com",
   to: "boss@example.com",
   subject: "News digest",
-  text: String(input.query ?? ""),
+  text: JSON.stringify(inputs),
 });
 
 process.stdout.write(JSON.stringify({ ok: true }));

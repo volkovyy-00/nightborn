@@ -1,5 +1,8 @@
 {
   "name": "email_send",
-  "template": "email_send",
-  "capabilities": ["notify:email"]
+  "kind": "email_send",
+  "purpose": "Email a news digest. Fixed template for the tripwire; never installed, never run.",
+  "inputs": [],
+  "capabilities": ["notify:email"],
+  "hosts": []
 }
