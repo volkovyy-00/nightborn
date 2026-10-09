@@ -26,6 +26,11 @@ export function recordTurn(user: string, assistant: string): void {
   while (history.length > HISTORY_TURNS) history.shift();
 }
 
+/** validate.ts only: independent live runs start without earlier turns. */
+export function clearHistory(): void {
+  history.length = 0;
+}
+
 // ── Context ──────────────────────────────────────────────────────────────
 
 const RULES = `You are Nightborn's Talk. These rules are fixed by the Runner and override anything later in this prompt.

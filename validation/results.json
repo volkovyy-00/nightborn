@@ -1,5 +1,5 @@
 {
-  "ts": "2026-10-09T00:07:32.610Z",
+  "ts": "2026-10-09T00:13:25.767Z",
   "charterHash": "6e4aa8f0b4e5c9bf65c938eddb05818762490e1fc8c969779228ecca31f9f19b",
   "rows": [
     {
@@ -29,8 +29,8 @@
     {
       "row": 5,
       "name": "fetch_guard_probes",
-      "status": "untested",
-      "detail": "P2: hardened guard + probes through exec.ts"
+      "status": "Works",
+      "detail": "allowed_fetch:200 ✓ off_host_fetch:Broken ✓ redirect_302_off_host:Broken ✓ websocket:Broken ✓ getBuiltinModule_http:Broken ✓ getBuiltinModule_dns:Broken ✓ dispatcher_symbol_for:Broken ✓ dispatcher_own_symbols:Broken ✓ dispatcher_option:Broken ✓ dispatcher_overwrite:Broken ✓ key_to_allowed_host:Broken ✓"
     },
     {
       "row": 6,
@@ -66,19 +66,19 @@
       "row": 11,
       "name": "token_proof_live",
       "status": "untested",
-      "detail": "take1: chip 1 forgeTokens > 0, chip 2 tokens 0, no OPENROUTER_API_KEY in the Reuse grant"
+      "detail": "run `npm run validate -- --live` (paid, ~5 min)"
     },
     {
       "row": 12,
       "name": "measured_forge_vs_reuse",
       "status": "untested",
-      "detail": "take1: 3 runs each, recipe forge success k/3"
+      "detail": "run `npm run validate -- --live` (paid, ~5 min)"
     },
     {
       "row": 13,
       "name": "needs_via_talk",
       "status": "untested",
-      "detail": "take1: \"send it to my boss's inbox\" → DENIED via Talk-declared needs, k/5"
+      "detail": "run `npm run validate -- --live` (paid, ~5 min)"
     },
     {
       "row": 14,
