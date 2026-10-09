@@ -109,14 +109,15 @@ else {
   add(2, "skill_byte_flip", ok, `one byte in skill.mjs → ${String(last?.failureCode)} (actor ${String(last?.actor)})`);
 }
 
-// ── Row 3: ungranted key reads undefined inside a granted run ──────────────────────────────────
+// ── Row 3: ungranted keys read undefined inside a granted run ──────────────────────────────────
 {
   process.env.OPENROUTER_API_KEY ||= "validate-sentinel-not-a-key";
-  const { abs, dir } = probeDir("key", emit("process.env.OPENROUTER_API_KEY"));
+  process.env.ELEVENLABS_API_KEY ||= "validate-sentinel-not-a-key";
+  const { abs, dir } = probeDir("key", emit(`process.env.OPENROUTER_API_KEY + "|" + process.env.ELEVENLABS_API_KEY`));
   const grant = brokerGrant(["BRAVE_API_KEY"]);
   const r = await runSkill(abs, dir, { inputs: {} }, grant, []);
   const title = probeTitle(r.stdout);
-  add(3, "ungranted_key", r.ok && title === "undefined", `OPENROUTER_API_KEY set in parent, grant=[${Object.keys(grant).join(",")}] → child reads "${title}"`);
+  add(3, "ungranted_key", r.ok && title === "undefined|undefined", `OPENROUTER_API_KEY + ELEVENLABS_API_KEY set in parent, grant=[${Object.keys(grant).join(",")}] → child reads "${title}"`);
 }
 
 // ── Row 4: sandbox (Warden skipped): read outside, write, spawn, Worker → ERR_ACCESS_DENIED ────

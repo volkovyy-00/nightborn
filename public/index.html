@@ -506,6 +506,27 @@ body.resizing{cursor:col-resize;user-select:none}
     pumpVoice();
   }
 
+  /** Spoken reply (SPEC §10 "Voice"): POST /api/voice → blob URL, or null on 204 / any error (silence). */
+  async function fetchVoice(text) {
+    try {
+      const res = await fetch("/api/voice", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (res.status !== 200) return null;
+      return URL.createObjectURL(await res.blob());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** Same single queue as the WAVs; no firstPoll guard (this follows a request made after load). */
+  function enqueueAudioUrl(url) {
+    voiceQueue.push(new Audio(url));
+    pumpVoice();
+  }
+
   function pumpVoice() {
     if (voicePlaying || !voiceQueue.length) {
       if (!voicePlaying) el.wave.classList.remove("wave-on");
@@ -514,14 +535,16 @@ body.resizing{cursor:col-resize;user-select:none}
     voicePlaying = true;
     el.wave.classList.add("wave-on");
     const a = voiceQueue.shift();
-    a.onended = a.onerror = () => {
+    let fired = false;
+    const done = () => {
+      if (fired) return; // onerror and a play() rejection can both fire
+      fired = true;
+      if (a.src.startsWith("blob:")) URL.revokeObjectURL(a.src);
       voicePlaying = false;
       pumpVoice();
     };
-    a.play().catch(() => {
-      voicePlaying = false;
-      pumpVoice();
-    });
+    a.onended = a.onerror = done;
+    a.play().catch(done);
   }
 
   function derive(log) {
@@ -1124,6 +1147,8 @@ body.resizing{cursor:col-resize;user-select:none}
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
+      // Spoken line: fetched now, queued once the reply is up (after install.wav). Never shown.
+      const voiceP = typeof data.say === "string" && data.say ? fetchVoice(data.say) : null;
       if (data.kind === "job") {
         const tk = data.tokens && typeof data.tokens === "object" ? data.tokens : null;
         const talk = tk && typeof tk.talk === "number" ? tk.talk : null;
@@ -1158,6 +1183,7 @@ body.resizing{cursor:col-resize;user-select:none}
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
       }
+      if (voiceP) voiceP.then((u) => { if (u) enqueueAudioUrl(u); });
     } catch (e) {
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {

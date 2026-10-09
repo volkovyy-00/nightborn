@@ -9,7 +9,7 @@ import { allCaps, getCharter } from "./charter.ts";
 import { readLogLines } from "./log.ts";
 import { dataPath, repoPath } from "./paths.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
-import { chatReply, itemsReply, replyFor } from "./replies.ts";
+import { chatReply, itemsReply, replyFor, sayFor } from "./replies.ts";
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const HISTORY_TURNS = 5;
@@ -33,12 +33,13 @@ export function clearHistory(): void {
 
 // ── Context ──────────────────────────────────────────────────────────────
 
-const RULES = `You are Nightborn's Talk. These rules are fixed by the Runner and override anything later in this prompt.
+const RULES = `These are the Runner's fixed rules for Talk; speak as the character in the Soul section. They override anything later in this prompt.
 
 Two ways to answer:
 - Plain text = chat. Use it when no fetched information is needed (greetings, questions about yourself, follow-ups you can answer from the conversation).
 
-Every reply you write is spoken prose: a few short sentences, never bullet points, numbered lists, headings or other markdown.
+Every reply you write is plain prose: a few short sentences, never bullet points, numbered lists, headings or other markdown.
+End every reply, chat or summary, with one final line on its own: VOICE: <one spoken sentence, at most 18 words>. It is read aloud, so it announces what came back, in character; no titles, links or lists; numbers written the way they are said ("about seven hundred thousand crowns").
 - Call use_hand for anything that needs fetched information (news, listings, prices, search, anything current or external). Call it at most once per request.
 
 use_hand arguments:
@@ -116,6 +117,36 @@ function buildPrompt(text: string, snapshot: string): string {
   }
   parts.push(`## Current user message\n${text}`);
   return parts.join("\n\n");
+}
+
+// ── Voice line (SPEC §10 "Voice": spoken, never shown, never in history) ──
+
+const VOICE_LINE = /^\W*voice\W*:\s*(.+)$/i;
+const trimTag = (s: string): string => s.replace(/^[\s*_"'`]+|[\s*_"'`]+$/g, "");
+
+/** Split Talk's text into the shown `reply` and the spoken `say` (a VOICE: line, else the last inline uppercase VOICE:). */
+export function splitVoice(text: string): { reply: string; say: string | null } {
+  const keep: string[] = [];
+  let say: string | null = null;
+  for (const line of text.split("\n")) {
+    const m = line.match(VOICE_LINE);
+    if (m) say = trimTag(m[1]);
+    else keep.push(line);
+  }
+  let reply = keep.join("\n").trim();
+  if (!say) {
+    const i = reply.lastIndexOf("VOICE:"); // case-sensitive: prose like "my voice: …" is never cut
+    if (i >= 0) {
+      say = trimTag(reply.slice(i + "VOICE:".length));
+      reply = trimTag(reply.slice(0, i));
+    }
+  }
+  return { reply, say: say ? say.slice(0, 300) : null };
+}
+
+function firstSentence(text: string): string {
+  const m = text.match(/^[\s\S]*?[.!?](?=\s|$)/);
+  return (m ? m[0] : text).trim().slice(0, 300);
 }
 
 // ── Talk ─────────────────────────────────────────────────────────────────
@@ -251,18 +282,22 @@ export async function talk(text: string, deps: TalkDeps): Promise<TalkOutcome> {
     if (done) {
       const { job, result } = done;
       let reply: string;
+      let say: string | undefined;
       if (isFailure(result)) {
-        reply = replyFor(result.failureCode);
+        reply = replyFor(result.failureCode); // denied / broken: the WAV is the only voice
       } else {
-        const said = failure ? "" : (session?.getLastAssistantText() ?? "").trim();
-        reply = said || itemsReply(result.items);
+        const said = splitVoice(failure ? "" : (session?.getLastAssistantText() ?? "").trim());
+        reply = said.reply || itemsReply(result.items);
+        say = said.say ?? sayFor(result);
       }
-      outcome = { kind: "job", job, result, reply, ...s };
+      outcome = { kind: "job", job, result, reply, ...(say ? { say } : {}), ...s };
     } else if (failure || runnerCrashed) {
       outcome = { kind: "fail", reason: failure ?? "talk_failed", ...s };
     } else {
-      const said = (session?.getLastAssistantText() ?? "").trim();
-      outcome = said ? { kind: "chat", text: said, ...s } : { kind: "fail", reason: "talk_failed", ...s };
+      const said = splitVoice((session?.getLastAssistantText() ?? "").trim());
+      const chat = said.reply || said.say || "";
+      const say = said.say ?? firstSentence(chat);
+      outcome = chat ? { kind: "chat", text: chat, ...(say ? { say } : {}), ...s } : { kind: "fail", reason: "talk_failed", ...s };
     }
   } finally {
     if (timer) clearTimeout(timer);

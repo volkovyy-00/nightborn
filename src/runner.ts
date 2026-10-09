@@ -7,7 +7,7 @@ import { getCharterHash } from "./charter.ts";
 import { appendLog } from "./log.ts";
 import { dataPath } from "./paths.ts";
 import { tripwireMatch } from "./tripwire.ts";
-import { chatReply, itemsReply, replyFor } from "./replies.ts";
+import { chatReply, itemsReply, replyFor, sayFor } from "./replies.ts";
 import { deniedNeeds, denyAndWipe, installSkill, wardenDeny, wardenFinal, wardenPre, wardenReuse, wipeStaging } from "./warden.ts";
 import { coerceInputs, copyEmailSendTemplate, forgeFromFixture, prepareRecipe, renderRecipe, type ForgeResult } from "./forge.ts";
 import { exploreRecipe } from "./explorer.ts";
@@ -302,7 +302,7 @@ function emailDenied(ctx: Ctx): HandResult {
 
 // ── POST /api/talk ───────────────────────────────────────────────────────
 
-function toResult(job: Job, r: HandResult, reply: string, talkTokens: number, t0: number): TalkResult {
+function toResult(job: Job, r: HandResult, reply: string, talkTokens: number, t0: number, say?: string): TalkResult {
   return {
     kind: "job",
     job,
@@ -313,6 +313,7 @@ function toResult(job: Job, r: HandResult, reply: string, talkTokens: number, t0
     ...(r.items ? { items: r.items.map((i: Item) => ({ title: i.title, url: i.url, ...(i.snippet ? { snippet: i.snippet } : {}), ...(i.date ? { date: i.date } : {}) })) } : {}),
     tokens: { talk: talkTokens, forge: r.forgeTokens ?? 0 },
     ms: Date.now() - t0,
+    ...(say ? { say } : {}),
   };
 }
 
@@ -339,7 +340,7 @@ export async function handleTalk(text: string, fixture?: string): Promise<TalkRe
     const r = await runJob(job, { tokens: 0, costUsd: 0 }, ctx);
     const reply = templatedReply(r);
     recordTurn(text, reply);
-    return toResult(job, r, reply, 0, t0);
+    return toResult(job, r, reply, 0, t0, sayFor(r));
   }
 
   // Live Talk
@@ -347,10 +348,10 @@ export async function handleTalk(text: string, fixture?: string): Promise<TalkRe
     snapshot: buildSnapshot,
     runJob: (job, stats) => runJob(job, stats, { source: "live", fixturePath: false, request: text }),
   });
-  if (out.kind === "chat") return { kind: "chat", text: out.text };
+  if (out.kind === "chat") return { kind: "chat", text: out.text, ...(out.say ? { say: out.say } : {}) };
   if (out.kind === "fail") {
     appendLog({ actor: "talk", event: "job", skill: null, decision: "fail", charterHash: getCharterHash(), detail: out.reason, tokens: out.tokens, costUsd: out.costUsd });
     return { kind: "chat", text: chatReply(out.reason) };
   }
-  return toResult(out.job, out.result, out.reply, out.tokens, t0);
+  return toResult(out.job, out.result, out.reply, out.tokens, t0, out.say);
 }

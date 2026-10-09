@@ -9,6 +9,7 @@ import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
 import { handleTalk } from "./runner.ts";
 import { mountMock } from "./mock.ts";
 import { chatReply } from "./replies.ts";
+import { speak } from "./voice.ts";
 
 // Load .env from repo root (not cwd)
 const envFile = path.join(REPO_ROOT, ".env");
@@ -71,6 +72,19 @@ app.post("/api/talk", async (c) => {
     console.error("POST /api/talk failed:", e); // server console only; never in the reply or log
     return c.json({ kind: "chat", text: chatReply("talk_failed") }, 500);
   }
+});
+
+// Spoken replies (SPEC §13 endpoint 3): audio/mpeg, or 204 = stay silent.
+app.post("/api/voice", async (c) => {
+  let text = "";
+  try {
+    const body = (await c.req.json()) as { text?: unknown };
+    text = typeof body.text === "string" ? body.text : "";
+  } catch {
+    /* empty body → silence */
+  }
+  const audio = await speak(text);
+  return audio ? c.body(audio, 200, { "content-type": "audio/mpeg", "cache-control": "no-store" }) : c.body(null, 204);
 });
 
 // OFFLINE: skills request `new URL(u.host + u.pathname + u.search, baseUrl)` → /mock/<host>/<path>?<query>

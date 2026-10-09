@@ -143,7 +143,7 @@ export type TalkTokens = { talk: number; forge: number };
 
 /** POST /api/talk response (SPEC §13). */
 export type TalkResult =
-  | { kind: "chat"; text: string }
+  | { kind: "chat"; text: string; say?: string }
   | {
       kind: "job";
       job: Job;
@@ -154,6 +154,8 @@ export type TalkResult =
       items?: Item[];
       tokens?: TalkTokens;
       ms?: number;
+      /** Spoken line (SPEC §10 "Voice"); never on denied / broken. */
+      say?: string;
     };
 
 /** fixtures/talk/*.json: Talk's `use_hand` call, replayed with Talk skipped (SPEC §10). */
@@ -208,13 +210,15 @@ export type TalkDeps = {
 };
 
 export type TalkOutcome =
-  | { kind: "chat"; text: string; tokens: number; costUsd: number }
+  | { kind: "chat"; text: string; say?: string; tokens: number; costUsd: number }
   | {
       kind: "job";
       job: Job;
       result: HandResult;
       /** Model-written summary (install/reuse) or the replies.ts template (denied/broken/summary failure). */
       reply: string;
+      /** Spoken line: Talk's VOICE: line or the sayFor template; absent on denied / broken. */
+      say?: string;
       tokens: number;
       costUsd: number;
     }

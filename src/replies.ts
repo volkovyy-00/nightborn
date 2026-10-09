@@ -1,5 +1,5 @@
 // Templated replies (SPEC §10 "Replies"). No raw error text or local paths ever reach a reply.
-import type { FailureCode, Item } from "./types.ts";
+import type { FailureCode, HandResult, Item } from "./types.ts";
 
 /** One template per failureCode (SPEC §12). */
 const FAILURE_REPLIES: Record<FailureCode, string> = {
@@ -31,6 +31,22 @@ export function itemsReply(items: Item[] | undefined): string {
   const named = titles.slice(0, 2).join(" and ");
   const rest = titles.length - 2;
   return `I found ${titles.length}. ${rest > 0 ? `Top of the pile: ${named}, and ${rest} more.` : `${named}.`}`;
+}
+
+const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const count = (n: number, noun: string): string => `${WORDS[n] ?? String(n)} ${noun}${n === 1 ? "" : "s"}`;
+
+/** Spoken-line fallback (SPEC §10 "Voice"): no LLM; counts as words (Flash v2.5 doesn't normalise digits). */
+export function sayFor(r: HandResult): string | undefined {
+  const n = (r.items ?? []).length;
+  if (r.outcome === "install") {
+    return n ? `Another hand is stitched on. It brought back ${count(n, "result")}.` : "The new hand found nothing this time.";
+  }
+  if (r.outcome === "reuse") {
+    const c = count(n, "result");
+    return n ? `An old hand served again, without a thought. ${c[0].toUpperCase()}${c.slice(1)}.` : "An old hand served again, and found nothing.";
+  }
+  return undefined; // denied / broken: the WAV is the only voice
 }
 
 const CHAT_REPLIES = {
