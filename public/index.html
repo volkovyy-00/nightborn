@@ -525,6 +525,72 @@ body.resizing{cursor:col-resize;user-select:none}
     pumpVoice();
   }
 
+  // Electric crackle under the build arc (SPEC §13 "Client rules"): synthesized, no file, not in the voice queue.
+  let sfxCtx = null;
+  let crackle = null;
+  function setCrackle(on) {
+    if (on === !!crackle) return;
+    if (!on) { crackle.stop(); crackle = null; return; }
+    try {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return;
+      const c = sfxCtx || (sfxCtx = new C());
+      if (c.state !== "running") c.resume();
+      const t0 = c.currentTime;
+      const master = c.createGain();
+      master.gain.setValueAtTime(0, t0);
+      master.gain.linearRampToValueAtTime(0.15, t0 + 0.1);
+      master.connect(c.destination);
+      // Crackle: band-passed white noise, gated by short random pops.
+      const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const noise = c.createBufferSource();
+      noise.buffer = buf;
+      noise.loop = true;
+      const band = c.createBiquadFilter();
+      band.type = "bandpass";
+      band.frequency.value = 3200;
+      band.Q.value = 0.7;
+      const pops = c.createGain();
+      pops.gain.value = 0;
+      noise.connect(band).connect(pops).connect(master);
+      // Hum: low-passed 50 Hz sawtooth (mains buzz).
+      const hum = c.createOscillator();
+      hum.type = "sawtooth";
+      hum.frequency.value = 50;
+      const humLow = c.createBiquadFilter();
+      humLow.type = "lowpass";
+      humLow.frequency.value = 220;
+      const humGain = c.createGain();
+      humGain.gain.value = 0.25;
+      hum.connect(humLow).connect(humGain).connect(master);
+      noise.start();
+      hum.start();
+      const timer = setInterval(() => {
+        if (Math.random() > 0.45) return;
+        const t = c.currentTime;
+        pops.gain.cancelScheduledValues(t);
+        pops.gain.setValueAtTime(0.3 + Math.random() * 0.7, t);
+        pops.gain.exponentialRampToValueAtTime(0.001, t + 0.02 + Math.random() * 0.06);
+      }, 45);
+      crackle = {
+        stop() {
+          clearInterval(timer);
+          const t = c.currentTime;
+          master.gain.cancelScheduledValues(t);
+          master.gain.setValueAtTime(master.gain.value, t);
+          master.gain.linearRampToValueAtTime(0, t + 0.15);
+          noise.stop(t + 0.2);
+          hum.stop(t + 0.2);
+          setTimeout(() => master.disconnect(), 300);
+        },
+      };
+    } catch (_) {
+      crackle = null;
+    }
+  }
+
   function pumpVoice() {
     if (voicePlaying || !voiceQueue.length) {
       if (!voicePlaying) el.wave.classList.remove("wave-on");
@@ -1057,6 +1123,8 @@ body.resizing{cursor:col-resize;user-select:none}
     el.emailCap.className = isDeny ? "cap cap-no cap-pulse" : "cap cap-no";
     el.arc1.setAttribute("class", isDeny ? "arc arc-deny" : (building ? "arc arc-on" : "arc"));
     el.arc2.setAttribute("class", isDeny ? "arc arc-deny" : (building ? "arc arc-on2" : "arc"));
+    // Only this page's request; DENIED stays silent, incl. the tripwire's fixed email_send template step.
+    setCrackle(building && !isDeny && state.busy && d.skill !== "email_send");
     el.ring.setAttribute("class", isDeny ? "ring-line ring-cinch" : "ring-line");
     el.ringTxt.setAttribute("class", isDeny ? "ring-txt ring-deny" : "ring-txt");
     el.orb.setAttribute("class", isDeny ? "orb orb-frozen" : "orb");
