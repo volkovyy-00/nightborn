@@ -95,7 +95,9 @@ if (process.env.OFFLINE === "1") {
 app.use("/*", serveStatic({ root: repoPath("public") }));
 
 const port = Number(process.env.PORT ?? "8787");
-console.log(`Nightborn listening on http://127.0.0.1:${port} · charter ${getCharterHash().slice(0, 8)}`);
-const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+// HOST=0.0.0.0 only on a host such as Render; local default stays loopback.
+const hostname = process.env.HOST || "127.0.0.1";
+console.log(`Nightborn listening on http://${hostname}:${port} · charter ${getCharterHash().slice(0, 8)}`);
+const server = serve({ fetch: app.fetch, port, hostname });
 // POST /api/talk may take ≤300 s (forge); SPEC §9 "Timeouts": server requestTimeout 310 s.
 (server as unknown as { requestTimeout: number }).requestTimeout = 310_000;
