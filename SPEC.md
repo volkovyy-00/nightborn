@@ -55,6 +55,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 ### v4.7 → v4.8 (human call: arc sound, 2026-10-09 ~03:30)
 1. Electric crackle while the build arc flickers (forge / warden / test of this page's pending request): synthesized in the page with Web Audio (no file), quiet, under the voice queue, fades out before `install.wav`; DENIED's red arc stays silent (§13 "Client rules").
 
+### v4.8 → v4.9 (human call: chips, 2026-10-09 ~04:05)
+1. Two extra, unnumbered chips: `Who are you?` (shown first) and the Enyaq ask (promoted from gate-only); chips 1–3 keep their numbers; chips sit inside the chat area and each hides after one click until the page reloads (§13 "Chips").
+
 ---
 
 ## 1. Product
@@ -505,8 +508,10 @@ Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted �
 1. `Find a used Tesla Model 3 under 750 000 Kč` (Forge beat)
 2. `Find a used BMW i4 under 1 000 000 Kč` (Reuse beat — standalone, survives the restart; same hand, new inputs)
 3. `Email this news digest to my boss every morning.` (DENIED, byte-exact)
+- Extra chips (not numbered, so "chip 1/2/3" elsewhere keep their meaning): `Who are you?` (chat, no hand) · `Find a used Škoda Enyaq under 900 000 Kč` (the Enyaq ask, a second Reuse of the same hand).
+- On-screen order: Who are you? · chip 1 · chip 2 · Enyaq · chip 3. Chips sit inside the chat area; each chip hides after it is clicked, until the page loads again.
 
-Gate-only asks: `Find a used Škoda Enyaq under 900 000 Kč` · `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Each chip has a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
+Gate-only ask: `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Chips 1–3 and the Enyaq chip each have a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
 
 ---
 
