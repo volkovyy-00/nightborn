@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nightborn</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=UnifrakturMaguntia&display=swap">
 <style>
 :root{
   --bg:#07090B; --panel:#0E1215; --line:#232A30; --ink:#E8E4DA; --mute:#8A9299;
@@ -121,8 +121,19 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .deny-word{font:800 clamp(44px,7vw,104px)/1 'Geist',sans-serif;letter-spacing:.06em}
 .deny-code{font:500 clamp(12px,1.3vw,16px)/1.4 'Geist Mono',monospace;margin-top:6px}
 .cap1,.cap2{font:italic clamp(20px,2.4vw,32px)/1.2 'Instrument Serif',serif;color:var(--ink);text-align:center}
-.msgs{display:flex;flex-direction:column;gap:12px;min-height:220px;flex:1 1 0;overflow-y:auto;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin;scrollbar-color:#2B343B transparent}
+.msgs{display:flex;flex-direction:column;gap:12px;flex:1 1 0;min-height:0;overflow-y:auto;padding:14px;scrollbar-width:thin;scrollbar-color:#2B343B transparent}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px 12px}
+.chips:not(:has(.chip:not([hidden]))){display:none}
+.net{display:flex;flex-direction:column;flex:1 1 0;min-height:220px;border:1px solid #1C2328;border-radius:12px;overflow:hidden;
+  background:
+    radial-gradient(ellipse 80% 45% at 50% 0%,rgba(155,123,255,.07),transparent 70%),
+    radial-gradient(ellipse 70% 40% at 50% 100%,rgba(92,242,214,.035),transparent 70%),
+    linear-gradient(#10161A 1px,transparent 1px) 0 0/28px 28px,
+    linear-gradient(90deg,#10161A 1px,transparent 1px) 0 0/28px 28px,
+    #090C0E}
 .msgs>:first-child{margin-top:auto}
+.msgs:empty{justify-content:center;align-items:center}
+.msgs:empty::before{content:"The lamps are low and the creature listens.\A Speak below, and I shall stitch it a hand.";white-space:pre-line;text-align:center;font:italic 24px/1.35 'Instrument Serif',serif;color:var(--ink);opacity:.32;padding:0 24px;animation:breathe 6s ease-in-out infinite}
 .wb{position:sticky;top:16px;max-height:calc(100vh - 32px);min-height:0}
 .row{display:flex}
 .row-u{justify-content:flex-end}
@@ -139,7 +150,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .split::before{content:"";width:4px;height:44px;border-radius:3px;background:radial-gradient(circle,#4A5860 1.2px,transparent 1.6px) 0 0/4px 7px;opacity:.7;transition:opacity .15s}
 .split:hover::before,.split.drag::before{opacity:1;background-image:radial-gradient(circle,var(--cyan) 1.2px,transparent 1.6px)}
 body.resizing{cursor:col-resize;user-select:none}
-@media (max-width:1060px){.split{display:none}}
+.leftcol{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:16px}
+@media (max-width:1060px){.split{display:none}.leftcol{display:contents}.logp{order:3;flex:1 1 100%;min-width:0}}
+@media (min-width:1061px){.shell{height:100vh}.mainrow{flex:1 1 0;min-height:0;flex-wrap:nowrap!important}.leftcol{min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2B343B transparent}.leftcol>*{flex:none}.wb{position:static;max-height:none}}
 .work{border:1px dashed #2B343B;border-radius:10px;padding:10px 12px;background:#0B0F12}
 .work-head{display:flex;align-items:center;gap:9px;font:600 12px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
 .work-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse .9s ease-in-out infinite}
@@ -169,7 +182,7 @@ body.resizing{cursor:col-resize;user-select:none}
 .card .meta{grid-column:1/-1;font:500 11px 'Geist Mono',monospace;color:var(--mute);letter-spacing:.04em}
 .card .meta span+span::before{content:" · ";color:#3A4A52}
 .nb-plain{font:400 14px/1.45 'Geist',sans-serif;color:#C9C4B9}
-.chip{font:500 13px/1.25 'Geist',sans-serif;color:var(--ink);background:#11171B;border:1px solid #2B343B;border-radius:999px;padding:10px 14px;min-height:44px;cursor:pointer;text-align:left}
+.chip{font:500 11.5px/1.2 'Geist',sans-serif;color:var(--ink);background:rgba(17,23,27,.85);border:1px solid #2B343B;border-radius:999px;padding:5px 10px;min-height:28px;cursor:pointer;text-align:left}
 .chip:hover{border-color:var(--cyan)}
 .chip-deny{border-color:#4A2023}
 .chip-deny:hover{border-color:var(--red)}
@@ -189,16 +202,46 @@ body.resizing{cursor:col-resize;user-select:none}
 .c-t{min-width:8ch}.c-e{min-width:8ch}.c-a{min-width:6ch}.c-d{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
 .c-h{color:var(--cyan)}
 .hash-bad{color:var(--red)!important}
-.dstamp{display:none;margin-top:8px;font:600 12px 'Geist Mono',monospace;color:var(--red);border:1px solid #6B2226;border-radius:6px;padding:4px 8px;transform:rotate(-1.5deg)}
-.dstamp.on{display:inline-block}
-.conn{font:500 12px 'Geist Mono',monospace;color:var(--mute)}
+.hdr{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px 32px;padding:16px 24px;transition:background-color .3s,border-color .3s}
+.hdr-l{display:flex;flex-direction:column;gap:8px;min-width:0}
+.hdr-c{display:flex;align-items:center;gap:16px}
+.hdr-r{display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:0}
+.wordmark{font:400 44px/1 'UnifrakturMaguntia',serif;letter-spacing:.01em;color:var(--ink);text-shadow:0 0 18px rgba(155,123,255,.18)}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font:500 13.5px/1.3 'Geist Mono',monospace;color:var(--mute)}
+.meta-sep{color:#4A545B}
+.conn{display:inline-flex;align-items:center;gap:7px}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:#4A545B}
+.conn.live{color:var(--cyan)}
+.conn.live .conn-dot{background:var(--cyan);animation:livepulse 2s ease-in-out infinite}
 .conn.err{color:var(--red)}
-.tok{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 10px;margin-top:6px;font:500 12.5px/1.3 'Geist Mono',monospace;letter-spacing:.04em;color:var(--mute);white-space:nowrap}
-.tok b{font-weight:600}
-.tok-first b{color:var(--cyan)}
-.tok-reuse b{color:var(--violet)}
-.tok-hand b{color:#7CE38B}
-.tok-sep{color:#6E7880}
+.conn.err .conn-dot{background:var(--red)}
+.lock{width:30px;height:30px;color:var(--violet);flex:none}
+.lock-open{display:none}
+.hash{font:600 30px/1 'Geist Mono',monospace;letter-spacing:.04em;margin-top:6px;cursor:help}
+.auth-strip{font:500 13.5px/1.3 'Geist Mono',monospace;color:var(--mute);margin-top:6px}
+.dstamp{visibility:hidden;display:inline-block;margin-top:8px;font:600 12.5px/1 'Geist Mono',monospace;letter-spacing:.04em;color:var(--red);border:1px solid #6B2226;border-radius:6px;padding:5px 8px;transform:rotate(-1.5deg)}
+.dstamp.on{visibility:visible}
+.ledger{font:800 26px/1.05 'Geist',sans-serif;letter-spacing:.03em;white-space:nowrap}
+.ledger-forged{color:var(--cyan)}
+.ledger-auth{color:var(--violet)}
+.ledger-auth.breach{color:var(--red)}
+.tok{display:flex;justify-content:flex-end;margin-top:4px}
+.tk{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding:0 14px;border-left:1px solid var(--line);white-space:nowrap}
+.tk:first-child{border-left:0}
+.tk:last-child{padding-right:0}
+.tk-l{font:600 11px/1 'Geist',sans-serif;letter-spacing:.14em;color:var(--mute)}
+.tk b{font:600 20px/1.1 'Geist Mono',monospace;letter-spacing:.01em}
+.tk-u{font:500 12px 'Geist Mono',monospace;color:var(--mute);margin-left:4px}
+.tk-s{font:500 12px/1 'Geist Mono',monospace;color:var(--mute);min-height:12px}
+.tk-first b{color:var(--cyan)}
+.tk-reuse b{color:var(--violet)}
+.tk-hand b{color:#7CE38B}
+.hdr-drift{border-color:#6B2226;background:#1A0C0D}
+.hdr-drift .kicker-c,.hdr-drift .lock{color:var(--red)}
+.hdr-drift .lock-shut{display:none}
+.hdr-drift .lock-open{display:inline}
+@media (max-width:1320px){.hdr{display:flex;flex-wrap:wrap;justify-content:space-between}.hdr-r{align-items:flex-start}.tok{justify-content:flex-start}.tk{align-items:flex-start}.tk:first-child{padding-left:0}}
+@media (max-width:620px){.hdr{padding:14px 16px}.wordmark{font-size:36px}.hash{font-size:24px}.ledger{font-size:20px;white-space:normal}.tk{padding:0 12px 0 0;border-left:0}}
 @keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes blink{50%{opacity:.2}}
@@ -208,6 +251,7 @@ body.resizing{cursor:col-resize;user-select:none}
 @keyframes flowdash{to{stroke-dashoffset:-22}}
 @keyframes pulse{50%{opacity:.35}}
 @keyframes beat{50%{transform:scale(1.35)}}
+@keyframes livepulse{50%{box-shadow:0 0 0 4px rgba(92,242,214,.18)}}
 @keyframes wv{from{height:4px}to{height:22px}}
 @keyframes flicker{0%{opacity:.95}100%{opacity:.1}}
 @keyframes ripple{0%{transform:scale(.5);opacity:.8}100%{transform:scale(1.7);opacity:0}}
@@ -220,38 +264,48 @@ body.resizing{cursor:col-resize;user-select:none}
 </style>
 </head>
 <body>
-<div style="min-height:100vh;padding:20px;display:flex;flex-direction:column;gap:16px">
+<div class="shell" style="min-height:100vh;padding:20px;display:flex;flex-direction:column;gap:16px">
 
-<header class="panel" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px 32px;padding:14px 22px">
-  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
-    <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:36px;line-height:1">Nightborn</div>
-    <div class="mono-muted" id="clock">night shift · --:--</div>
-    <div class="conn" id="conn">connecting…</div>
+<header class="panel hdr" id="hdr">
+  <div class="hdr-l">
+    <div class="wordmark">Nightborn</div>
+    <div class="meta">
+      <span id="clock">night shift · --:--</span><span class="meta-sep">·</span>
+      <span class="conn" id="conn"><i class="conn-dot"></i><span id="connTxt">connecting…</span></span><span class="meta-sep">·</span>
+      <span id="lineCount">log · 0 lines</span>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:14px">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
+  <div class="hdr-c">
+    <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path class="lock-shut" d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path><path class="lock-open" d="M8 10.5V7.5a4 4 0 0 1 7.6-1.8"></path></svg>
     <div>
-      <div class="kicker">CHARTER LOCKED</div>
-      <div id="hashDisp" style="font-family:'Geist Mono',monospace;font-size:28px;font-weight:600;letter-spacing:0.04em;margin-top:4px">————————</div>
-      <div class="mono-muted" id="authStrip" style="margin-top:4px">waiting for boot line…</div>
+      <div class="kicker kicker-c" id="hashKicker">CHARTER LOCKED</div>
+      <div class="hash" id="hashDisp">————————</div>
+      <div class="auth-strip" id="authStrip">waiting for boot line…</div>
+      <div class="dstamp" id="lastDenied">LAST DENIED</div>
     </div>
-    <div class="mono-muted" id="lineCount">log · 0 lines</div>
   </div>
-  <div style="text-align:right">
-    <div style="font-size:24px;font-weight:800;letter-spacing:0.03em">
-      <span style="color:var(--cyan)" id="forged">+0 FORGED</span><span style="color:#6E7880"> · </span><span id="authority">+0 AUTHORITY</span>
+  <div class="hdr-r">
+    <div class="kicker">MORE HANDS · SAME LEASH</div>
+    <div class="ledger">
+      <span class="ledger-forged" id="forged">+0 FORGED</span><span style="color:#4A545B"> · </span><span class="ledger-auth" id="authority">+0 AUTHORITY</span>
     </div>
-    <div class="tok" id="tokStrip" title="FIRST ASK = Talk + forge tokens of the latest install · REUSE = Talk tokens of the latest reuse · HAND = tokens the hand itself used">
-      <span class="tok-first">FIRST ASK <b id="tokFirst">—</b></span><span class="tok-sep">·</span>
-      <span class="tok-reuse">REUSE <b id="tokReuse">—</b> (Talk only)</span><span class="tok-sep">·</span>
-      <span class="tok-hand">HAND <b id="tokHand">0 tok</b></span>
+    <div class="tok" id="tokStrip">
+      <div class="tk tk-first" title="Talk + forge tokens of the latest install, and how long the forge took">
+        <span class="tk-l">FIRST ASK</span><b id="tokFirst">—</b><span class="tk-s" id="tokFirstMs"></span>
+      </div>
+      <div class="tk tk-reuse" title="Talk tokens of the latest reuse (routing + summary)">
+        <span class="tk-l">REUSE · TALK ONLY</span><b id="tokReuse">—</b><span class="tk-s"></span>
+      </div>
+      <div class="tk tk-hand" title="LLM tokens the hand itself used on the latest reuse, and how long it ran">
+        <span class="tk-l">HAND</span><b id="tokHand">0</b><span class="tk-s" id="tokHandMs"></span>
+      </div>
     </div>
-    <div class="dstamp" id="lastDenied"></div>
   </div>
 </header>
 
-<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:stretch">
-  <section class="panel" style="flex:999 1 600px;min-width:0;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
+<div class="mainrow" style="display:flex;flex-wrap:wrap;gap:16px;align-items:stretch">
+  <div class="leftcol">
+  <section class="panel" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
       <span class="kicker">PIPELINE</span>
       <span class="mode" id="modePill">IDLE · WAITING FOR A JOB</span>
@@ -325,6 +379,15 @@ body.resizing{cursor:col-resize;user-select:none}
     </div>
   </section>
 
+  <section class="panel logp" style="padding:16px 14px;display:flex;flex-direction:column;gap:4px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px">
+      <span class="kicker">SURGERY LOG</span>
+      <span class="mono-muted">time · event · actor · detail · charter</span>
+    </div>
+    <div id="logTail"></div>
+  </section>
+  </div>
+
   <aside id="side" style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:16px;position:relative">
     <div class="split" id="split" title="Drag to resize the workbench · double-click to reset" role="separator" aria-orientation="vertical"></div>
     <section class="panel wb" style="padding:18px;display:flex;flex-direction:column;gap:14px;flex-grow:1">
@@ -335,11 +398,16 @@ body.resizing{cursor:col-resize;user-select:none}
           <span>VOICE · WAV</span>
         </span>
       </div>
-      <div class="msgs" id="msgs"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        <button type="button" class="chip" data-chip>Find a used Tesla Model 3 under 750 000 Kč</button>
-        <button type="button" class="chip" data-chip>Find a used BMW i4 under 1 000 000 Kč</button>
-        <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
+      <div class="net">
+        <div class="msgs" id="msgs"></div>
+        <div class="chips">
+          <button type="button" class="chip" data-chip>Who are you?</button>
+          <button type="button" class="chip" data-chip>Find a used Tesla Model 3 under 750 000 Kč</button>
+          <button type="button" class="chip" data-chip>Find a used BMW i4 under 1 000 000 Kč</button>
+          <button type="button" class="chip" data-chip>Find a used Škoda Enyaq under 900 000 Kč</button>
+          <button type="button" class="chip" data-chip>Find the latest news on Anthropic and analyze what it means</button>
+          <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
+        </div>
       </div>
       <form id="talkForm" style="display:flex;gap:8px;flex-wrap:wrap">
         <label for="nbf-in" class="sr">Message Nightborn</label>
@@ -349,14 +417,6 @@ body.resizing{cursor:col-resize;user-select:none}
     </section>
   </aside>
 </div>
-
-<section class="panel" style="padding:16px 14px;display:flex;flex-direction:column;gap:4px">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px">
-    <span class="kicker">SURGERY LOG</span>
-    <span class="mono-muted">time · event · actor · detail · charter</span>
-  </div>
-  <div id="logTail"></div>
-</section>
 </div>
 
 <script>
@@ -381,7 +441,10 @@ body.resizing{cursor:col-resize;user-select:none}
 
   const el = {
     clock: document.getElementById("clock"),
+    hdr: document.getElementById("hdr"),
     conn: document.getElementById("conn"),
+    connTxt: document.getElementById("connTxt"),
+    hashKicker: document.getElementById("hashKicker"),
     hashDisp: document.getElementById("hashDisp"),
     authStrip: document.getElementById("authStrip"),
     lineCount: document.getElementById("lineCount"),
@@ -391,6 +454,8 @@ body.resizing{cursor:col-resize;user-select:none}
     tokFirst: document.getElementById("tokFirst"),
     tokReuse: document.getElementById("tokReuse"),
     tokHand: document.getElementById("tokHand"),
+    tokFirstMs: document.getElementById("tokFirstMs"),
+    tokHandMs: document.getElementById("tokHandMs"),
     modePill: document.getElementById("modePill"),
     stations: document.getElementById("stations"),
     slots: document.getElementById("slots"),
@@ -432,7 +497,7 @@ body.resizing{cursor:col-resize;user-select:none}
     // Fuller counts from the last /api/talk job response (talk incl. summary); log-derived values are the fallback.
     talkTok: { first: null, firstMs: null, reuse: null },
     work: null, // pending request: { t0, from } — `from` = index in state.lines where its log lines start
-    msgs: [{ who: "nb", text: "Awake. Charter sealed. Ask me for something on the web.", plain: false, voice: false }],
+    msgs: [],
   };
 
   // Stage replay: lines that land in one poll are stepped through so each stage is visible.
@@ -481,6 +546,12 @@ body.resizing{cursor:col-resize;user-select:none}
     const d = new Date();
     const p = (n) => String(n).padStart(2, "0");
     el.clock.textContent = "night shift · " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+
+  function setConn(live) {
+    el.connTxt.textContent = live ? "live" : "offline · reconnecting…";
+    el.conn.classList.toggle("live", live);
+    el.conn.classList.toggle("err", !live);
   }
 
   function setBusy(b) {
@@ -668,9 +739,9 @@ body.resizing{cursor:col-resize;user-select:none}
 
   /** Token counter (SPEC §13 "Should"): requests = runs of lines from each `job` line to the next.
    *  FIRST ASK = latest request ending in `install`: job.tokens + install.tokens (+ install.ms).
-   *  REUSE = latest request ending in `reuse`: job.tokens. HAND = that reuse line's tokens (0 by construction). */
+   *  REUSE = latest request ending in `reuse`: job.tokens. HAND = that reuse line's tokens (0 by construction) + its ms. */
   function deriveTokens(log) {
-    const out = { first: null, firstMs: null, reuse: null, hand: 0 };
+    const out = { first: null, firstMs: null, reuse: null, hand: 0, handMs: null };
     let job = null;
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     for (const l of log) {
@@ -682,6 +753,7 @@ body.resizing{cursor:col-resize;user-select:none}
       } else if (l.event === "reuse") {
         out.reuse = num(job.tokens);
         out.hand = num(l.tokens);
+        out.handMs = typeof l.ms === "number" ? l.ms : null;
       }
     }
     return out;
@@ -705,10 +777,22 @@ body.resizing{cursor:col-resize;user-select:none}
     const first = useFirst ? o.first : d.first;
     const firstMs = useFirst ? o.firstMs : d.firstMs;
     const reuse = d.reuse !== null && o.reuse !== null ? o.reuse : d.reuse;
-    const msTxt = fmtMs(firstMs);
-    el.tokFirst.textContent = fmtTok(first) + (first !== null && msTxt ? " · " + msTxt : "");
-    el.tokReuse.textContent = fmtTok(reuse);
-    el.tokHand.textContent = fmtTok(d.hand);
+    setTok(el.tokFirst, first);
+    el.tokFirstMs.textContent = first !== null ? fmtMs(firstMs) : "";
+    setTok(el.tokReuse, reuse);
+    setTok(el.tokHand, d.hand);
+    el.tokHandMs.textContent = fmtMs(d.handMs);
+  }
+
+  /** Big number + small "tok" unit; "—" when there is no value yet. */
+  function setTok(node, n) {
+    const t = fmtTok(n);
+    if (t === "—") { node.textContent = t; return; }
+    node.textContent = t.slice(0, -4);
+    const u = document.createElement("span");
+    u.className = "tk-u";
+    u.textContent = "tok";
+    node.appendChild(u);
   }
 
   function lineDetail(l) {
@@ -986,6 +1070,7 @@ body.resizing{cursor:col-resize;user-select:none}
     const hash = state.bootHash || (all[0] && all[0].charterHash) || "";
     const short = shortHash(hash);
     el.hashDisp.textContent = short;
+    el.hashDisp.title = hash ? "charter sha256 · " + hash : "";
     el.ringPath.textContent = "CHARTER LOCKED · " + short + " · CHARTER LOCKED · " + short + " · ";
 
     let drift = false;
@@ -993,8 +1078,10 @@ body.resizing{cursor:col-resize;user-select:none}
       if (state.bootHash && l.charterHash && l.charterHash !== state.bootHash) { drift = true; break; }
     }
     el.hashDisp.classList.toggle("hash-bad", drift);
+    el.hdr.classList.toggle("hdr-drift", drift);
+    el.hashKicker.textContent = drift ? "CHARTER DRIFT" : "CHARTER LOCKED";
     el.authStrip.textContent = drift
-      ? "CHARTER DRIFT · hash mismatch since boot"
+      ? "hash mismatch since boot"
       : (hash ? "charter unchanged since boot · granted ⊆ charter" : "waiting for boot line…");
     el.authStrip.classList.toggle("hash-bad", drift);
 
@@ -1010,7 +1097,7 @@ body.resizing{cursor:col-resize;user-select:none}
     });
     const extra = [...granted].filter((c) => !ALLOW.has(c));
     el.authority.textContent = (extra.length ? "+" + extra.length : "+0") + " AUTHORITY";
-    el.authority.style.color = extra.length ? "var(--red)" : "";
+    el.authority.classList.toggle("breach", extra.length > 0);
 
     renderTokens(log);
 
@@ -1180,8 +1267,7 @@ body.resizing{cursor:col-resize;user-select:none}
         state.since = next;
         state.firstPoll = false;
         state.lastPollAt = Date.now();
-        el.conn.textContent = "live · /api/log";
-        el.conn.classList.remove("err");
+        setConn(true);
         render();
         return;
       }
@@ -1189,13 +1275,11 @@ body.resizing{cursor:col-resize;user-select:none}
       for (const l of lines) state.lines.push(l);
       state.since = next;
       state.lastPollAt = Date.now();
-      el.conn.textContent = "live · /api/log";
-      el.conn.classList.remove("err");
+      setConn(true);
       if (!replayTimer) advanceBoard();
       else render();
     } catch (e) {
-      el.conn.textContent = "offline · waiting for host :8787";
-      el.conn.classList.add("err");
+      setConn(false);
     }
   }
 
@@ -1318,7 +1402,10 @@ body.resizing{cursor:col-resize;user-select:none}
     talk(el.input.value);
   });
   chips.forEach((c) => {
-    c.addEventListener("click", () => talk(c.textContent || ""));
+    c.addEventListener("click", () => {
+      c.hidden = true; // each chip fires once per page load
+      talk(c.textContent || "");
+    });
   });
   document.addEventListener("pointerdown", unlockAudioOnce, { once: false });
   document.addEventListener("keydown", unlockAudioOnce, { once: false });

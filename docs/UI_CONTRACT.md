@@ -109,11 +109,15 @@ type LogLine = {
 
 | Chip text | Beat |
 |-----------|------|
+| `Who are you?` | Chat: Victor answers in plain text, no hand |
 | `Find a used Tesla Model 3 under 750 000 Kč` | Forge: the Explorer finds the site itself (SPEC §13) |
 | `Find a used BMW i4 under 1 000 000 Kč` | Reuse by name after a restart (same hand, new inputs) |
+| `Find a used Škoda Enyaq under 900 000 Kč` | Second Reuse of the same hand |
+| `Find the latest news on Anthropic and analyze what it means` | Forge (or Reuse) of a news hand; Talk's summary is the analysis |
 | `Email this news digest to my boss every morning.` | DENIED (tripwire; **exact** string) |
 
-Gate-only asks (typed, no chip): `Find a used Škoda Enyaq under 900 000 Kč` · `Find Hacker News stories about Rust`.
+Chips sit inside the chat area (`.net`, under the messages); each chip hides after it is clicked, until the page loads again.
+Gate-only ask (typed, no chip): `Find Hacker News stories about Rust`.
 
 Placeholder input: `Message Nightborn`.
 
@@ -123,10 +127,12 @@ Placeholder input: `Message Nightborn`.
 
 | Region | Source |
 |--------|--------|
-| CHARTER LOCKED + short hash | Every log line's `charterHash` (first 8 hex). Compare to boot line — red if drift. |
+| CHARTER LOCKED + short hash | Every log line's `charterHash` (first 8 hex; full hash in the tooltip). Compare to boot line — on drift the kicker reads CHARTER DRIFT, the lock opens and the header turns red. |
+| LAST DENIED stamp | Latest `denied` line: `failureCode` + time. Its slot is reserved, so the header never changes height. |
 | Strip: `charter unchanged since boot · granted ⊆ charter` | Same hash check + union of `caps` on install/reuse ⊆ charter allow-list → `+0 AUTHORITY` |
+| `● live` / `offline · reconnecting…` | Whether the last `/api/log` poll succeeded |
 | `log · N lines` | Total lines seen (or `next`) |
-| FORGED | Count of `event === "install"` |
+| `+N FORGED · +0 AUTHORITY` (kicker `MORE HANDS · SAME LEASH`) | FORGED = count of `event === "install"`; AUTHORITY violet at +0, red above |
 | PIPELINE stages GAP→FORGE→WARDEN→TEST→INSTALL | Events since last `job` (see below) |
 | GRAFT 01–04 | Filled by successive `install` lines (`skill` + caps detail) |
 | CHARTER GRANTS / NEVER | Static copy of charter `caps-allow` / `caps-deny` (refreshed at every re-pin; `llm:call` is NEVER) |
@@ -137,7 +143,7 @@ Artifact **frame tabs** (Boot…Broken) are mock storyboard only — do not requ
 
 ### Token counter (SPEC §13 "Should")
 
-Header strip `FIRST ASK n tok · REUSE m tok (Talk only) · HAND 0 tok`, derived only from `/api/log` lines plus the `/api/talk` response. Lines are grouped into requests: a request starts at each `job` line and runs until the next one. **FIRST ASK** = latest request that ended in `install`: `job.tokens` (Talk up to `use_hand`) + `install.tokens` (forge total), with `install.ms` shown after it (`—` before any install). **REUSE** = latest request that ended in `reuse`: `job.tokens`. **HAND** = that `reuse` line's `tokens` (always `0`; `0` before any reuse too). When `POST /api/talk` returns `kind:"job"` with `tokens:{talk, forge}`, the matching slot takes the fuller numbers (talk includes the summary): `install` → `talk + forge` (+ response `ms`), `reuse` → `talk`. The override applies only once the matching outcome line has reached the board; the log-derived values are the fallback that survives a reload or a log rotation. Numbers use thin thousands spaces (`4 200 tok`).
+Header strip of three stat blocks — `FIRST ASK n tok` · `REUSE · TALK ONLY m tok` · `HAND 0 tok` (label above, number below) — derived only from `/api/log` lines plus the `/api/talk` response. Lines are grouped into requests: a request starts at each `job` line and runs until the next one. **FIRST ASK** = latest request that ended in `install`: `job.tokens` (Talk up to `use_hand`) + `install.tokens` (forge total), with `install.ms` shown after it (`—` before any install). **REUSE** = latest request that ended in `reuse`: `job.tokens`. **HAND** = that `reuse` line's `tokens` (always `0`; `0` before any reuse too), with that line's `ms` (the hand's own run time) shown under it. When `POST /api/talk` returns `kind:"job"` with `tokens:{talk, forge}`, the matching slot takes the fuller numbers (talk includes the summary): `install` → `talk + forge` (+ response `ms`), `reuse` → `talk`. The override applies only once the matching outcome line has reached the board; the log-derived values are the fallback that survives a reload or a log rotation. Numbers use thin thousands spaces (`4 200 tok`).
 
 ### Working bubble + trail
 
