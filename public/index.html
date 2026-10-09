@@ -468,6 +468,7 @@ body.resizing{cursor:col-resize;user-select:none}
   /** @type {HTMLAudioElement[]} */
   const voiceQueue = [];
   let voicePlaying = false;
+  let voiceSeq = 0; // spoken-reply request counter
   /** @type {HTMLAudioElement|null} */
   let unlockAudio = null;
 
@@ -533,9 +534,12 @@ body.resizing{cursor:col-resize;user-select:none}
     el.wave.classList.add("wave-on");
     const a = voiceQueue.shift();
     let fired = false;
+    // Backstop: a play() that never settles (stuck audio device) must not block later clips, e.g. denied.wav.
+    const stuck = setTimeout(() => { a.pause(); done(); }, 15000);
     const done = () => {
       if (fired) return; // onerror and a play() rejection can both fire
       fired = true;
+      clearTimeout(stuck);
       if (a.src.startsWith("blob:")) URL.revokeObjectURL(a.src);
       voicePlaying = false;
       pumpVoice();
@@ -1146,6 +1150,7 @@ body.resizing{cursor:col-resize;user-select:none}
       const data = await res.json();
       // Spoken line: fetched now, queued once the reply is up (after install.wav). Never shown.
       const voiceP = typeof data.say === "string" && data.say ? fetchVoice(data.say) : null;
+      const voiceReq = ++voiceSeq; // a clip that arrives after a newer request started is dropped
       if (data.kind === "job") {
         const tk = data.tokens && typeof data.tokens === "object" ? data.tokens : null;
         const talk = tk && typeof tk.talk === "number" ? tk.talk : null;
@@ -1180,7 +1185,11 @@ body.resizing{cursor:col-resize;user-select:none}
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
       }
-      if (voiceP) voiceP.then((u) => { if (u) enqueueAudioUrl(u); });
+      if (voiceP) voiceP.then((u) => {
+        if (!u) return;
+        if (voiceReq === voiceSeq) enqueueAudioUrl(u);
+        else URL.revokeObjectURL(u);
+      });
     } catch (e) {
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {

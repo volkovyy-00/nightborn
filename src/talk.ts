@@ -290,7 +290,8 @@ export async function talk(text: string, deps: TalkDeps): Promise<TalkOutcome> {
       outcome = { kind: "fail", reason: failure ?? "talk_failed", ...s };
     } else {
       const said = splitVoice((session?.getLastAssistantText() ?? "").trim());
-      const chat = said.reply || said.say || "";
+      // A reply that is only a VOICE: line is shown without its [delivery tags].
+      const chat = said.reply || (said.say ?? "").replace(/\[[^\]]*\]\s*/g, "").trim();
       outcome = chat ? { kind: "chat", text: chat, voice: said.say ?? undefined, ...s } : { kind: "fail", reason: "talk_failed", ...s };
     }
   } finally {

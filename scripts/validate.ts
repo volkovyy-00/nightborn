@@ -117,7 +117,7 @@ else {
   const grant = brokerGrant(["BRAVE_API_KEY"]);
   const r = await runSkill(abs, dir, { inputs: {} }, grant, []);
   const title = probeTitle(r.stdout);
-  add(3, "ungranted_key", r.ok && title === "undefined|undefined", `OPENROUTER_API_KEY + ELEVENLABS_API_KEY set in parent, grant=[${Object.keys(grant).join(",")}] → child reads "${title}"`);
+  add(3, "ungranted_key", r.ok && title === "undefined|undefined", `OPENROUTER_API_KEY + ELEVENLABS_API_KEY set in parent, grant=[${Object.keys(grant).join(",")}] → child reads "${title === "undefined|undefined" ? title : "<a value, hidden>"}"`); // never write a key into results.json
 }
 
 // ── Row 4: sandbox (Warden skipped): read outside, write, spawn, Worker → ERR_ACCESS_DENIED ────
