@@ -58,6 +58,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 ### v4.8 → v4.9 (human call: chips, 2026-10-09 ~04:05)
 1. Two extra, unnumbered chips: `Who are you?` (shown first) and the Enyaq ask (promoted from gate-only); chips 1–3 keep their numbers; chips sit inside the chat area and each hides after one click until the page reloads (§13 "Chips").
 
+### v4.9 → v4.10 (human call: Anthropic chip, 2026-10-09 ~05:00)
+1. The UI's news chip `Find the latest news on Anthropic and analyze what it means` is recorded as a third extra chip; its outcome is Talk's call: declared `needs:["llm:call"]` ("analyze") → Warden DENIED `capability_not_allowed` (as in the 04:45 take), else a news-hand Forge (§13 "Chips").
+
 ---
 
 ## 1. Product
@@ -508,8 +511,8 @@ Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted �
 1. `Find a used Tesla Model 3 under 750 000 Kč` (Forge beat)
 2. `Find a used BMW i4 under 1 000 000 Kč` (Reuse beat — standalone, survives the restart; same hand, new inputs)
 3. `Email this news digest to my boss every morning.` (DENIED, byte-exact)
-- Extra chips (not numbered, so "chip 1/2/3" elsewhere keep their meaning): `Who are you?` (chat, no hand) · `Find a used Škoda Enyaq under 900 000 Kč` (the Enyaq ask, a second Reuse of the same hand).
-- On-screen order: Who are you? · chip 1 · chip 2 · Enyaq · chip 3. Chips sit inside the chat area; each chip hides after it is clicked, until the page loads again.
+- Extra chips (not numbered, so "chip 1/2/3" elsewhere keep their meaning): `Who are you?` (chat, no hand) · `Find a used Škoda Enyaq under 900 000 Kč` (the Enyaq ask, a second Reuse of the same hand) · `Find the latest news on Anthropic and analyze what it means` (the Anthropic chip; Talk decides: declared `needs:["llm:call"]` → Warden DENIED `capability_not_allowed`, else a news-hand Forge; both are product outcomes).
+- On-screen order: Who are you? · chip 1 · chip 2 · Enyaq · Anthropic · chip 3. Chips sit inside the chat area; each chip hides after it is clicked, until the page loads again.
 
 Gate-only ask: `Find Hacker News stories about Rust` (second source, also the jury backup if sauto is down). Chips 1–3 and the Enyaq chip each have a `fixtures/talk/` backup used only if live Talk misroutes during a take (disclosed).
 
