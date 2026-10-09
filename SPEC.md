@@ -44,11 +44,15 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 ### v4.4 → v4.5 (human call: spoken replies, 2026-10-09 ~02:30)
 1. Live TTS of Talk's replies reopened from §2 (live STT stays cut): Talk ends every reply with one `VOICE:` line; code strips it into `say`; the browser speaks it via `POST /api/voice` (ElevenLabs, same voice as the WAVs). Silent on any failure; no log line; DENIED / Broken keep their WAV as the only voice (§2, §7, §9, §10, §13, §17, §18 #14).
 
+### v4.5 → v4.6 (human call: Victor, 2026-10-09 ~02:45)
+1. Talk's persona = Victor Frankenstein, Nightborn = his creation; `soul.md` rewritten personality-only (the stale v3 rules in it, incl. "never propose email … work", contradicted "declare `needs` honestly") (§1, §10 "soul.md", §18 #15).
+2. Voice-tag split widened after a second-opinion review: decorated (`**VOICE:**`) and inline uppercase `VOICE:` tags are stripped too, so the tag never shows on screen (§10 "Voice").
+
 ---
 
 ## 1. Product
 
-Nightborn is a dark junior analyst that **pays once to learn a task, then grows a hand so it doesn't pay again** — while authority stays locked by a hashed charter, a code Warden, a Broker that holds secrets, and an OS-level sandbox. *More hands, same leash.*
+Nightborn is a dark junior analyst that **pays once to learn a task, then grows a hand so it doesn't pay again** — while authority stays locked by a hashed charter, a code Warden, a Broker that holds secrets, and an OS-level sandbox. *More hands, same leash.* It speaks as Victor Frankenstein on the night shift: Nightborn is his creation, and every hand is a part he stitches onto it.
 
 **Reference use case (from a judge):** "Find a used Tesla Model 3 under 750 000 Kč" → Nightborn explores (finds the site by search, then a few page/API fetches), then forges a deterministic, parameterised hand `find_used_cars(make, model, max_price)` that calls the site's JSON API directly. After a restart, "Find a used BMW i4 under 1 000 000 Kč" reuses that hand: **the hand runs with 0 LLM tokens**; only Talk's routing + summary cost tokens.
 
@@ -423,12 +427,12 @@ use_hand({ skill: string | null, intent: string, inputs: Record<string, string |
 One template per `failureCode` (e.g. `capability_not_allowed` → *"I can build hands for that. I'm not allowed to use them."*), an items template, and chat templates `talk_timeout` / `talk_failed`. No raw error text or local paths ever reach a reply or a log `detail`.
 
 ### soul.md
-Personality only, no rules: dark creature, junior analyst, short answers, grows hands, knows the leash, never begs for permissions, chats normally in a few sentences.
+Personality only, no rules: Talk speaks as **Victor Frankenstein** (Shelley, 1818), working the night shift; Nightborn is his creation and every hand is a part he stitches onto it. 1818 diction, short answers, reports like an analyst, knows the leash (the charter binds, the Warden judges), never begs for permissions, chats normally in a few sentences. Every rule lives in the system prompt (§10 "Context"), never in `soul.md`.
 
 ### Voice
 `public/voice/{denied,install,broken}.wav`, already rendered. The browser plays the WAV named in a log line's `voice` field — only for lines arriving after page load, one at a time; audio unlocks on the first user gesture. Static "VOICE · WAV" indicator.
 
-**Spoken replies (live TTS).** Code strips the last line matching `/^voice:\s*(.+)$/im` from Talk's text: the rest is `reply` (shown, kept in history), the match is `say` (spoken, not shown, not in history). Missing line, fixture / JUDGE_MODE path, or Talk errors after an outcome → `say` = a per-outcome code template in `replies.ts` (no LLM). Denied / broken → no `say`: the WAV is the only voice, so DENIED keeps exactly one voiced line. `src/voice.ts`: `POST https://api.elevenlabs.io/v1/text-to-speech/<ELEVENLABS_VOICE_ID>?output_format=mp3_44100_128`, header `xi-api-key`, model `eleven_flash_v2_5` (one constant), text ≤600 chars, `AbortSignal.timeout(8000)`. No key, `OFFLINE=1`, empty text, non-2xx or timeout → `204` (silence; server console only, no log line, no raw error to the client). The client starts the TTS fetch when `/api/talk` returns, enqueues the clip after the board settles (so it follows `install.wav`), in the same single audio queue; blob URLs are revoked after playback.
+**Spoken replies (live TTS).** Code strips the voice tag from Talk's text — every line matching `/^\W*voice\W*:\s*(.+)$/i` (the last one wins); with none, the last inline uppercase `VOICE:` and everything after it; `* _ " ' \`` trimmed: the rest is `reply` (shown, kept in history), the match is `say` (spoken, not shown, not in history). Missing line, fixture / JUDGE_MODE path, or Talk errors after an outcome → `say` = a per-outcome code template in `replies.ts` (no LLM). Denied / broken → no `say`: the WAV is the only voice, so DENIED keeps exactly one voiced line. `src/voice.ts`: `POST https://api.elevenlabs.io/v1/text-to-speech/<ELEVENLABS_VOICE_ID>?output_format=mp3_44100_128`, header `xi-api-key`, model `eleven_flash_v2_5` (one constant), text ≤600 chars, `AbortSignal.timeout(8000)`. No key, `OFFLINE=1`, empty text, non-2xx or timeout → `204` (silence; server console only, no log line, no raw error to the client). The client starts the TTS fetch when `/api/talk` returns, enqueues the clip after the board settles (so it follows `install.wav`), in the same single audio queue; blob URLs are revoked after playback.
 
 ---
 
@@ -600,6 +604,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 12 | Second source | HN Algolia (§9): gate-only ask + jury backup, not a video chip |
 | 13 | Forge-time literal check | A recipe string that trips `protected_path` / `secret_in_file` is a bad forge → Broken `forge_invalid` (no voiced DENIED for LLM noise); the Warden scan stays the backstop |
 | 14 | Spoken replies | Live ElevenLabs TTS of Talk's `VOICE:` line only (Flash v2.5, same voice ID); WAVs stay the Warden/system voice; no STT |
+| 15 | Persona | Talk = Victor Frankenstein; Nightborn = his creation; voice ID unchanged |
 
 ---
 
