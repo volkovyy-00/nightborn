@@ -113,7 +113,7 @@ type LogLine = {
 | `Find a used Tesla Model 3 under 750 000 Kč` | Forge: the Explorer finds the site itself (SPEC §13) |
 | `Find a used BMW i4 under 1 000 000 Kč` | Reuse by name after a restart (same hand, new inputs) |
 | `Find a used Škoda Enyaq under 900 000 Kč` | Second Reuse of the same hand |
-| `Find the latest news on Anthropic and analyze what it means` | Forge (or Reuse) of a news hand; Talk's summary is the analysis |
+| `Find the latest news on Anthropic and analyze what it means` | Talk decides: declared `llm:call` → Warden DENIED `capability_not_allowed`; else Forge (or Reuse) of a news hand (SPEC §13) |
 | `Email this news digest to my boss every morning.` | DENIED (tripwire; **exact** string) |
 
 Chips sit inside the chat area (`.net`, under the messages); each chip hides after it is clicked, until the page loads again.
