@@ -1,6 +1,7 @@
 // Runner-owned output schema for skill runs (SPEC §9 "Test and Reuse runs").
 import { z } from "zod";
 import type { Item } from "../src/types.ts";
+import { INPUT_NAME_RE } from "../src/forge.ts";
 
 export const itemSchema = z.object({
   title: z.string(),
@@ -18,7 +19,7 @@ export const manifestSchema = z.object({
   inputs: z
     .array(
       z.object({
-        name: z.string().regex(/^[a-z_]{1,24}$/),
+        name: z.string().regex(INPUT_NAME_RE),
         type: z.enum(["string", "number"]),
         format: z.enum(["text", "slug"]),
         required: z.boolean(),

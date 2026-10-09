@@ -11,7 +11,7 @@ import { createPiSession, sessionStats } from "./pi.ts";
 
 const BRAVE_HOST = "api.search.brave.com";
 const NAME_RE = /^[a-z0-9_]{1,40}$/;
-const INPUT_NAME_RE = /^[a-z_]{1,24}$/;
+export const INPUT_NAME_RE = /^[a-z_]{1,24}$/;
 
 export type ForgeResult =
   | { ok: true; recipe: Recipe; visited: string[]; tokens: number; costUsd: number; ms: number; source: "live" | "fixture" }

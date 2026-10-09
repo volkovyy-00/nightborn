@@ -8,7 +8,7 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
 import type { Job, Recipe } from "./types.ts";
 import { getCharter } from "./charter.ts";
 import { dataPath } from "./paths.ts";
-import { createPiSession, sessionStats } from "./pi.ts";
+import { createPiSession, promptWithLimits, sessionStats } from "./pi.ts";
 import { hostOf, prepareRecipe, type ForgeResult } from "./forge.ts";
 
 const BRAVE_HOST = "api.search.brave.com";
@@ -526,6 +526,11 @@ export function makeResearchTools(opts: { visited: string[]; step: StepLogger; a
   return [webSearch, httpGet];
 }
 
+/** The forge prompt shared by Explorer and Builder: the user's own words (currency/region survive Talk), intent, values. */
+export function forgePrompt(job: Job, request: string | undefined, tail: string): string {
+  return `${request ? `User request: ${JSON.stringify(request.slice(0, 300))}\n` : ""}Intent: ${JSON.stringify(job.intent)}\nUser values: ${JSON.stringify(job.inputs)}\n\n${tail}`;
+}
+
 /**
  * T2 recipe forge: Explorer session → recipe + visited hosts. Each tool call is reported through `step`.
  * `maxSeconds` may only tighten the charter's `recipe_max_seconds` (the fallback after a failed code forge
@@ -537,8 +542,7 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
   const seconds = Math.max(5, Math.min(limits.recipeMaxSeconds, maxSeconds ?? limits.recipeMaxSeconds));
   const visited: string[] = [];
   let captured: Recipe | null = null;
-  const text = toolText;
-  const after = () => (captured ? text("recipe already emitted", true) : null);
+  const after = () => (captured ? toolText("recipe already emitted", true) : null);
   const [webSearch, httpGet] = makeResearchTools({ visited, step, after });
 
   const emit = defineTool({
@@ -568,7 +572,7 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
         );
       captured = { ...p, maxFilter: p.endpoint === "json" && p.maxFilter ? { ...p.maxFilter } : null, map: p.map ? { ...p.map } : null, inputs: p.inputs.map((i) => ({ ...i })), example: { ...p.example } };
       step(`explore: emit_recipe ${p.endpoint} ${p.name}`);
-      return text("recipe received", true);
+      return toolText("recipe received", true);
     },
   });
 
@@ -578,29 +582,11 @@ export async function exploreRecipe(job: Job, step: StepLogger, request?: string
   } catch {
     return { ok: false, reason: "explorer: session failed", tokens: 0, costUsd: 0, ms: Date.now() - t0, source: "live" };
   }
-  let limitHit = false;
-  let turns = 0;
-  const timer = setTimeout(() => {
-    if (captured) return;
-    limitHit = true;
-    void session.abort();
-  }, seconds * 1000);
-  const unsub = session.subscribe((ev) => {
-    if (ev.type === "turn_end" && ++turns >= limits.recipeMaxTurns && !captured) {
-      limitHit = true;
-      void session.abort();
-    }
-  });
-  try {
-    await session.prompt(
-      `${request ? `User request: ${JSON.stringify(request.slice(0, 300))}\n` : ""}Intent: ${JSON.stringify(job.intent)}\nUser values: ${JSON.stringify(job.inputs)}\n\nFind a source (English search queries), read its page digest, then call emit_recipe once.`,
-    );
-  } catch {
-    /* no recipe → forge_invalid below */
-  } finally {
-    clearTimeout(timer);
-    unsub();
-  }
+  const { limitHit } = await promptWithLimits(
+    session,
+    forgePrompt(job, request, "Find a source (English search queries), read its page digest, then call emit_recipe once."),
+    { maxTurns: limits.recipeMaxTurns, maxSeconds: seconds, isDone: () => captured !== null },
+  );
   const { tokens, costUsd } = sessionStats(session);
   session.dispose();
   const ms = Date.now() - t0;

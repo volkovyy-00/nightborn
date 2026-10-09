@@ -12,7 +12,7 @@ import { deniedNeeds, denyAndWipe, installSkill, wardenDeny, wardenFinal, warden
 import { coerceInputs, copyEmailSendTemplate, forgeFromFixture, prepareRecipe, renderRecipe, type ForgeResult } from "./forge.ts";
 import { exploreRecipe } from "./explorer.ts";
 import { buildSnapshot, findJudgeFixture, loadTalkFixture, recordTurn, talk } from "./talk.ts";
-import { runSkill } from "./exec.ts";
+import { runFailure, runSkill } from "./exec.ts";
 import { parseItems, validateOutput } from "../templates/schemas.ts";
 import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisionalGrant } from "./broker.ts";
 
@@ -58,14 +58,6 @@ function line(l: Omit<Parameters<typeof appendLog>[0], "charterHash">, ctx: Ctx)
 function broken(skill: string | null, code: FailureCode, detail: string, ctx: Ctx, actor: "runner" | "test" | "forge" = "runner"): HandResult {
   line({ actor, event: "broken", skill, decision: "fail", failureCode: code, voice: BROKEN_VOICE, detail }, ctx);
   return { outcome: "broken", skill, failureCode: code };
-}
-
-/** Classify a finished skill run: Broken codes per SPEC §9 "Test and Reuse runs". */
-function runFailure(r: Awaited<ReturnType<typeof runSkill>>): { code: FailureCode; detail: string } | null {
-  if (r.timedOut) return { code: "timeout", detail: "run: timeout" };
-  if (r.overflow) return { code: "test_exit_nonzero", detail: "run: output cap" };
-  if (!r.ok) return { code: "test_exit_nonzero", detail: `run: exit ${r.code ?? "signal"}` };
-  return null;
 }
 
 function readManifest(name: string): Manifest | null {
@@ -173,14 +165,6 @@ async function testAndInstall(s: Staged): Promise<HandResult> {
   }
 }
 
-function readStagedManifest(runDir: string): Manifest | null {
-  try {
-    return JSON.parse(readFileSync(path.join(runDir, "manifest.json"), "utf8")) as Manifest;
-  } catch {
-    return null;
-  }
-}
-
 async function create(job: Job, gapDetail: string, ctx: Ctx, deps: RunnerDeps): Promise<HandResult> {
   const t0 = Date.now();
   const named = nullishSkill(job.skill) ? null : job.skill;
@@ -191,34 +175,25 @@ async function create(job: Job, gapDetail: string, ctx: Ctx, deps: RunnerDeps): 
     line({ actor: "forge", event: "forge", skill: named, decision: "pass", detail, ...(ms !== undefined ? { ms } : {}) }, ctx);
 
   // Code forge (SPEC §9 "Code forge"): the Builder writes the hand; a failure before submit_skill falls back to recipe once.
-  const carry: ForgeCost = { tokens: 0, costUsd: 0, ms: 0 };
-  if (deps.buildCode) {
-    const code = await deps.buildCode(job, step, { skillsRoot: skillsRoot(), stdinExtras, runHosts }, ctx.request);
-    if (code.ok) {
-      const manifest = readStagedManifest(code.runDir);
-      const forge: ForgeCost = { tokens: code.tokens, costUsd: code.costUsd, ms: code.ms };
-      if (!manifest) {
-        wipeStaging(code.runDir);
-        line({ actor: "forge", event: "forge", skill: code.name, decision: "fail", detail: "code: manifest unreadable", ...forge }, ctx);
-        return { ...broken(code.name, "forge_invalid", "code: manifest unreadable", ctx), forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
-      }
-      line({ actor: "forge", event: "forge", skill: code.name, decision: "pass", detail: `code: ${manifest.hosts.join(", ")}`, ...forge }, ctx);
-      const testInputs = coerceInputs(manifest.inputs ?? [], job.inputs) ?? code.lastPassingInputs;
-      return testAndInstall({ job, name: code.name, runDir: code.runDir, hosts: manifest.hosts ?? [], testInputs, visited: code.visited, forge, ctx, t0 });
-    }
-    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: `code failed: ${code.reason} → recipe`, tokens: code.tokens, costUsd: code.costUsd, ms: code.ms }, ctx);
-    carry.tokens = code.tokens;
-    carry.costUsd = code.costUsd;
-    carry.ms = code.ms;
+  const code = deps.buildCode ? await deps.buildCode(job, step, { stdinExtras, runHosts }, ctx.request) : null;
+  if (code?.ok) {
+    const forge: ForgeCost = { tokens: code.tokens, costUsd: code.costUsd, ms: code.ms };
+    line({ actor: "forge", event: "forge", skill: code.name, decision: "pass", detail: `code: ${code.manifest.hosts.join(", ")}`, ...forge }, ctx);
+    const testInputs = coerceInputs(code.manifest.inputs, job.inputs) ?? code.lastPassingInputs;
+    return testAndInstall({ job, name: code.name, runDir: code.runDir, hosts: code.manifest.hosts, testInputs, visited: code.visited, forge, ctx, t0 });
   }
+  // The Builder's session cost goes on its own `forge` line (per session, SPEC §12); the hand's total lands on `install`.
+  const carry: ForgeCost = code ? { tokens: code.tokens, costUsd: code.costUsd, ms: code.ms } : { tokens: 0, costUsd: 0, ms: 0 };
+  if (code) line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: `code failed: ${code.reason} → recipe`, ...carry }, ctx);
 
   // Recipe forge. After a code fallback the Explorer gets only what is left of the request budget (never more than the charter's cap).
-  const explorerCap = deps.buildCode ? Math.floor((TALK_BUDGET_MS - (Date.now() - t0) - FALLBACK_RESERVE_MS) / 1000) : undefined;
+  const explorerCap = code ? Math.floor((TALK_BUDGET_MS - (Date.now() - t0) - FALLBACK_RESERVE_MS) / 1000) : undefined;
   const recipe: ForgeResult = offline() || ctx.fixturePath ? forgeFromFixture(job) : await exploreRecipe(job, step, ctx.request, explorerCap);
   const fctx: Ctx = recipe.source === "fixture" ? { ...ctx, source: "fixture" } : ctx;
+  const session: ForgeCost = { tokens: recipe.tokens, costUsd: recipe.costUsd, ms: recipe.ms };
   const forge: ForgeCost = { tokens: recipe.tokens + carry.tokens, costUsd: recipe.costUsd + carry.costUsd, ms: recipe.ms + carry.ms };
   const forgeFail = (reason: string): HandResult => {
-    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: reason, ...forge }, fctx);
+    line({ actor: "forge", event: "forge", skill: named, decision: "fail", detail: reason, ...session }, fctx);
     return { ...broken(named, "forge_invalid", reason, fctx), forgeTokens: forge.tokens, forgeCostUsd: forge.costUsd };
   };
   if (!recipe.ok) return forgeFail(recipe.reason);
@@ -235,7 +210,7 @@ async function create(job: Job, gapDetail: string, ctx: Ctx, deps: RunnerDeps): 
         hand.manifest.recipe?.endpoint === "json"
           ? `recipe: json ${hand.manifest.hosts.join(", ")}`
           : `recipe: ${hand.manifest.recipe?.endpoint} "${hand.manifest.recipe?.queryPattern}"`,
-      ...forge,
+      ...session,
     },
     fctx,
   );

@@ -107,6 +107,38 @@ export async function createPiSession(opts: {
   return session;
 }
 
+/**
+ * Host-enforced forge limits (SPEC §9): prompt the session; abort at `maxSeconds` or `maxTurns` `turn_end`s
+ * unless `isDone()` (the terminating tool ran). `rejected` = prompt() threw (preflight), not a limit.
+ */
+export async function promptWithLimits(
+  session: AgentSession,
+  prompt: string,
+  limits: { maxTurns: number; maxSeconds: number; isDone: () => boolean },
+): Promise<{ limitHit: boolean; rejected: boolean }> {
+  let limitHit = false;
+  let rejected = false;
+  let turns = 0;
+  const stop = () => {
+    if (limits.isDone()) return;
+    limitHit = true;
+    void session.abort();
+  };
+  const timer = setTimeout(stop, limits.maxSeconds * 1000);
+  const unsub = session.subscribe((ev) => {
+    if (ev.type === "turn_end" && ++turns >= limits.maxTurns) stop();
+  });
+  try {
+    await session.prompt(prompt);
+  } catch {
+    rejected = !limitHit;
+  } finally {
+    clearTimeout(timer);
+    unsub();
+  }
+  return { limitHit, rejected };
+}
+
 /** Session token/cost totals (aborted mid-stream calls count 0 → lower bound, SPEC §10). */
 export function sessionStats(session: AgentSession): { tokens: number; costUsd: number } {
   const s = session.getSessionStats();

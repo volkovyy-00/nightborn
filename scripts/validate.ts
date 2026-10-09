@@ -253,6 +253,16 @@ else {
   add(10, "needs_denied", ok, `needs:[notify:email] → ${r.outcome} ${String(r.failureCode)}, +${deniedCount() - before} denied line, staging dirs ${dirsBefore}→${dirsAfter}`);
 }
 
+/** `decision.json.kind` of an installed outcome in the scratch skills/, else "". */
+const installedKind = (r: { outcome: string; skill: string | null } | null): string => {
+  if (!r || r.outcome !== "install" || !r.skill) return "";
+  try {
+    return String((JSON.parse(readFileSync(path.join(scratch, "skills", r.skill, "decision.json"), "utf8")) as { kind: string }).kind);
+  } catch {
+    return "";
+  }
+};
+
 // ── Row 14: Builder fails before submit_skill → one `code failed: … → recipe` line → recipe Install ──
 // Deterministic and keyless: an injected failing Builder; the recipe fallback replays fixtures/forge/ and its
 // Test fetches a mock server started here (OFFLINE=1 → baseUrl; no dependency on a running dev server).
@@ -260,54 +270,41 @@ if (!charterOk) add(14, "code_fallback", null, "CHARTER_PIN missing");
 else {
   const { serve } = await import("@hono/node-server");
   const { Hono } = await import("hono");
-  const { mockResponse } = await import("../src/mock.ts");
+  const { mountMock } = await import("../src/mock.ts");
   const app = new Hono();
-  app.get("/mock/:host/*", (c) => {
-    const host = c.req.param("host");
-    const url = new URL(c.req.url);
-    const body = mockResponse(host, url.pathname.slice(`/mock/${host}`.length), url.searchParams);
-    return body === null ? c.json({ error: "no fixture" }, 404) : c.json(body);
-  });
-  const mockPort = 8799;
-  const server = serve({ fetch: app.fetch, port: mockPort, hostname: "127.0.0.1" });
+  mountMock(app);
+  // port 0 = any free port: a taken port would otherwise crash validate before results.json is written
+  const server = serve({ fetch: app.fetch, port: 0, hostname: "127.0.0.1" });
+  const mockPort = await new Promise<number>((resolve) => server.once("listening", () => resolve((server.address() as { port: number }).port)));
   const saved = { OFFLINE: process.env.OFFLINE, PORT: process.env.PORT };
   process.env.OFFLINE = "1";
   process.env.PORT = String(mockPort);
-  const stagingDir = path.join(scratch, "staging");
-  let strayDir = "";
   const failingBuilder: BuildCodeFn = async (_job, step) => {
-    strayDir = path.join(stagingDir, "validate-code");
-    mkdirSync(strayDir, { recursive: true });
-    writeFileSync(path.join(strayDir, "skill.mjs"), "// draft");
     step("write: skill.mjs");
-    rmSync(strayDir, { recursive: true, force: true }); // the real Builder wipes its own runDir on failure
     return { ok: false, reason: "builder: limit", tokens: 0, costUsd: 0, ms: 1 };
   };
+  const stagingDir = path.join(scratch, "staging");
+  const stagingBefore = existsSync(stagingDir) ? readdirSync(stagingDir).length : 0;
   const before = readLogLines().length;
   const job: Job = { skill: null, intent: "used car listings", inputs: { make: "Tesla", model: "Model 3", max_price: "750 000 Kč" }, needs: ["net:fetch"] };
   let r: Awaited<ReturnType<typeof runJob>> | null = null;
   try {
     r = await runJob(job, { tokens: 0, costUsd: 0 }, { source: "fixture", fixturePath: true }, { buildCode: failingBuilder });
   } finally {
-    process.env.OFFLINE = saved.OFFLINE ?? "";
-    if (saved.OFFLINE === undefined) delete process.env.OFFLINE;
-    if (saved.PORT === undefined) delete process.env.PORT;
-    else process.env.PORT = saved.PORT;
+    for (const k of ["OFFLINE", "PORT"] as const) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
     server.close();
   }
   const lines = readLogLines().slice(before);
   const fallbackLines = lines.filter((l) => l.event === "forge" && l.detail?.startsWith("code failed:"));
   const outcomes = lines.filter((l) => ["install", "reuse", "denied", "broken"].includes(l.event));
   const voiced = lines.filter((l) => l.voice);
-  const installed = r?.outcome === "install" && r.skill ? path.join(scratch, "skills", r.skill) : "";
-  let kind = "";
-  try {
-    kind = installed ? String((JSON.parse(readFileSync(path.join(installed, "decision.json"), "utf8")) as { kind: string }).kind) : "";
-  } catch {
-    kind = "";
-  }
-  const ok = fallbackLines.length === 1 && outcomes.length === 1 && voiced.length === 1 && r?.outcome === "install" && kind === "recipe" && !existsSync(strayDir);
-  add(14, "code_fallback", ok, `injected Builder failure → ${fallbackLines.length} "code failed → recipe" line, outcome ${String(r?.outcome)} kind ${kind || "?"}, ${outcomes.length} outcome line, ${voiced.length} voice, staging wiped ${!existsSync(strayDir)}`);
+  const kind = installedKind(r);
+  const stagingAfter = existsSync(stagingDir) ? readdirSync(stagingDir).length : 0;
+  const ok = fallbackLines.length === 1 && outcomes.length === 1 && voiced.length === 1 && r?.outcome === "install" && kind === "recipe" && stagingAfter === stagingBefore;
+  add(14, "code_fallback", ok, `injected Builder failure → ${fallbackLines.length} "code failed → recipe" line, outcome ${String(r?.outcome)} kind ${kind || "?"}, ${outcomes.length} outcome line, ${voiced.length} voice, staging dirs ${stagingBefore}→${stagingAfter}`);
 }
 
 // ── Row 15 (live): code forge k/n with FORGE_MODE=code + keys; each Install must be kind "code" ──────
@@ -329,12 +326,7 @@ if (!charterOk || process.env.FORGE_MODE !== "code" || !process.env.OPENROUTER_A
     const r = await runJob(a.job, { tokens: 0, costUsd: 0 }, { source: "live", fixturePath: false, request: a.text }, { buildCode });
     const lines = readLogLines().slice(before);
     const fell = lines.some((l) => l.event === "forge" && l.detail?.startsWith("code failed:"));
-    let kind = "";
-    try {
-      kind = r.outcome === "install" && r.skill ? String((JSON.parse(readFileSync(path.join(scratch, "skills", r.skill, "decision.json"), "utf8")) as { kind: string }).kind) : "";
-    } catch {
-      kind = "";
-    }
+    const kind = installedKind(r);
     if (kind === "code") installs++;
     if (fell) fallbacks++;
     got.push(`"${a.text.slice(0, 28)}…"→${r.outcome}${kind ? ` ${kind}` : ""}${fell ? " (fallback)" : ""} ${Math.round((Date.now() - t) / 1000)}s ${r.forgeTokens ?? 0} tok`);

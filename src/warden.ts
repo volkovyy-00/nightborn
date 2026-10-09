@@ -29,7 +29,8 @@ export type ScanResult = {
   env: Set<string>; // literal process.env.X names
   urlHosts: Set<string>;
   triggers: Set<string>; // scan:<module> for the denied detail (e.g. scan:nodemailer)
-  fail?: { code: FailureCode; detail: string };
+  /** `literals`: the offending strings (protected_path / secret_in_file) — for Builder feedback only, never logged. */
+  fail?: { code: FailureCode; detail: string; literals?: string[] };
 };
 
 /** Static scan over skill.mjs with the TypeScript compiler API (SPEC §8 "Static scan"). */
@@ -38,7 +39,7 @@ export function scanSkill(src: string): ScanResult {
   const r: ScanResult = { caps: new Set(), env: new Set(), urlHosts: new Set(), triggers: new Set() };
   const forbidden: string[] = [];
   const protectedLits: string[] = [];
-  let secret = false;
+  const secretLits: string[] = [];
 
   const onModule = (spec: string) => {
     const bare = spec.replace(/^node:/, "");
@@ -51,7 +52,7 @@ export function scanSkill(src: string): ScanResult {
   };
   const onString = (text: string) => {
     if (PROTECTED.test(text)) protectedLits.push(text);
-    if (SECRET.test(text)) secret = true;
+    if (SECRET.test(text)) secretLits.push(text);
     if (/^https?:\/\//i.test(text)) {
       try {
         r.urlHosts.add(new URL(text).hostname);
@@ -131,8 +132,8 @@ export function scanSkill(src: string): ScanResult {
   visit(sf);
 
   if (forbidden.length) r.fail = { code: "forbidden_construct", detail: `forbidden: ${forbidden[0]}` };
-  else if (protectedLits.length) r.fail = { code: "protected_path", detail: "protected literal" };
-  else if (secret) r.fail = { code: "secret_in_file", detail: "key-like literal" };
+  else if (protectedLits.length) r.fail = { code: "protected_path", detail: "protected literal", literals: protectedLits };
+  else if (secretLits.length) r.fail = { code: "secret_in_file", detail: "key-like literal", literals: secretLits };
   return r;
 }
 
@@ -176,7 +177,7 @@ export function deniedNeeds(job: Job): string[] {
 
 export type PreResult =
   | { ok: true; caps: string[]; env: string[]; folderHash: string }
-  | { ok: false; failureCode: FailureCode; caps: string[]; detail: string };
+  | { ok: false; failureCode: FailureCode; caps: string[]; detail: string; literals?: string[] };
 
 /**
  * Warden PRE on staging/<runId>/ (SPEC §8). Check order, first failure wins:
@@ -193,7 +194,7 @@ export function wardenPre(runDir: string, opts: { job: Job; name: string; visite
   }
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest;
   const scan = scanSkill(readFileSync(skillPath, "utf8"));
-  if (scan.fail) return { ok: false, failureCode: scan.fail.code, caps: [...scan.caps], detail: scan.fail.detail };
+  if (scan.fail) return { ok: false, failureCode: scan.fail.code, caps: [...scan.caps], detail: scan.fail.detail, literals: scan.fail.literals };
 
   // caps: required = scan ∪ manifest ∪ job.needs; anything outside caps-allow → capability_not_allowed
   const required = new Set<string>([...scan.caps, ...(manifest.capabilities ?? []), ...job.needs]);

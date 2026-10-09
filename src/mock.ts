@@ -1,5 +1,16 @@
 import { readFileSync, existsSync } from "node:fs";
+import type { Hono } from "hono";
 import { repoPath } from "./paths.ts";
+
+/** `GET /mock/:host/*` → fixture JSON (served by the OFFLINE server and by validate.ts's own mock server). */
+export function mountMock(app: Hono): void {
+  app.get("/mock/:host/*", (c) => {
+    const host = c.req.param("host");
+    const url = new URL(c.req.url);
+    const body = mockResponse(host, url.pathname.slice(`/mock/${host}`.length), url.searchParams);
+    return body === null ? c.json({ error: "no fixture" }, 404) : c.json(body);
+  });
+}
 
 /**
  * OFFLINE provider mock (SPEC §9 "OFFLINE mode"): `/mock/<host>/<path>?<query>` served from flat

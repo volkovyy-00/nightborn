@@ -7,7 +7,7 @@ import { REPO_ROOT, repoPath } from "./paths.ts";
 import { loadAndPinCharter, getCharterHash } from "./charter.ts";
 import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
 import { handleTalk } from "./runner.ts";
-import { mockResponse } from "./mock.ts";
+import { mountMock } from "./mock.ts";
 import { chatReply } from "./replies.ts";
 
 // Load .env from repo root (not cwd)
@@ -75,13 +75,7 @@ app.post("/api/talk", async (c) => {
 
 // OFFLINE: skills request `new URL(u.host + u.pathname + u.search, baseUrl)` → /mock/<host>/<path>?<query>
 if (process.env.OFFLINE === "1") {
-  app.get("/mock/:host/*", (c) => {
-    const host = c.req.param("host");
-    const url = new URL(c.req.url);
-    const pathname = url.pathname.slice(`/mock/${host}`.length);
-    const body = mockResponse(host, pathname, url.searchParams);
-    return body === null ? c.json({ error: "no fixture" }, 404) : c.json(body);
-  });
+  mountMock(app);
 }
 
 app.use("/*", serveStatic({ root: repoPath("public") }));

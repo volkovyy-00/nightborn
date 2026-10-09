@@ -2,7 +2,7 @@
 // (web_search, http_get, write_skill, run_test, submit_skill). Writes only into staging/<runId>/; iterates
 // against the Warden + sandboxed Test in-loop (≤ code_max_test_runs); limits enforced by the host.
 // A failure before submit_skill → the caller falls back to the recipe forge once. No retry after submit.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { Type } from "typebox";
@@ -10,11 +10,11 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
 import type { InputValues, Item, Job, Manifest } from "./types.ts";
 import { getCharter } from "./charter.ts";
 import { dataPath, REPO_ROOT } from "./paths.ts";
-import { createPiSession, sessionStats } from "./pi.ts";
-import { makeResearchTools, toolText, type StepLogger } from "./explorer.ts";
+import { createPiSession, promptWithLimits, sessionStats } from "./pi.ts";
+import { forgePrompt, makeResearchTools, toolText, type StepLogger } from "./explorer.ts";
 import { coerceInputs, slugifyName, uniqueName } from "./forge.ts";
-import { PROTECTED, SECRET, wardenPre, wardenPrecheckDeny, wipeStaging } from "./warden.ts";
-import { runSkill } from "./exec.ts";
+import { wardenPre, wardenPrecheckDeny, wipeStaging } from "./warden.ts";
+import { runFailure, runSkill } from "./exec.ts";
 import { brokerGrant, clearProvisionalGrant, getProvisionalGrant, setProvisionalGrant } from "./broker.ts";
 import { manifestSchema, validateOutput } from "../templates/schemas.ts";
 
@@ -24,12 +24,11 @@ const STDERR_MAX = 2 * 1024; // what the model sees of a failed run (SPEC §9)
 const ITEMS_MAX = 5;
 
 export type CodeForgeResult =
-  | { ok: true; name: string; runDir: string; visited: string[]; lastPassingInputs: InputValues; tokens: number; costUsd: number; ms: number }
+  | { ok: true; name: string; runDir: string; manifest: Manifest; visited: string[]; lastPassingInputs: InputValues; tokens: number; costUsd: number; ms: number }
   | { ok: false; reason: string; tokens: number; costUsd: number; ms: number };
 
-/** Runner-owned plumbing the Builder's in-loop Test needs (keeps builder.ts free of a runner import). */
+/** Runner-owned OFFLINE plumbing the Builder's in-loop Test needs (keeps builder.ts free of a runner import). */
 export type BuilderDeps = {
-  skillsRoot: string;
   stdinExtras: () => { baseUrl?: string };
   runHosts: (hosts: string[]) => string[];
 };
@@ -37,18 +36,6 @@ export type BuilderDeps = {
 export type BuildCodeFn = (job: Job, step: StepLogger, deps: BuilderDeps, request?: string) => Promise<CodeForgeResult>;
 
 // ── system prompt ─────────────────────────────────────────────────────────
-
-/** The string literals in a draft that trip the Warden's regexes — for the model's feedback only (never logged). */
-function offendingLiterals(src: string, re: RegExp): string[] {
-  const out: string[] = [];
-  for (const m of src.matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g)) {
-    const raw = m[1] ?? m[2] ?? m[3] ?? "";
-    // a backtick template is scanned part by part: the text between ${…} placeholders counts as a literal
-    const parts = m[3] !== undefined ? raw.split(/\$\{[^}]*\}/) : [raw];
-    for (const p of parts) if (re.test(p)) out.push(JSON.stringify(p.slice(0, 60)));
-  }
-  return [...new Set(out)].slice(0, 5);
-}
 
 const SKELETON = `// skill.mjs — plain ESM, NO imports. Reads stdin, writes stdout, exits 0.
 let raw = "";
@@ -163,7 +150,7 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
         }
         const r = manifestSchema.safeParse(parsed);
         if (!r.success) throw new Error(`manifest.json: ${r.error.issues.map((i) => `${i.path.join(".")} ${i.message}`).join("; ").slice(0, 300)}`);
-        if (name === null) name = uniqueName(slugifyName(job.skill && job.skill.trim() ? job.skill : r.data.name), deps.skillsRoot);
+        if (name === null) name = uniqueName(slugifyName(job.skill && job.skill.trim() ? job.skill : r.data.name), dataPath("skills"));
         manifest = { ...r.data, name, kind: "code", purpose: r.data.purpose.slice(0, 200) };
         content = `${JSON.stringify(manifest, null, 2)}\n`;
       }
@@ -199,17 +186,11 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
       if (!pre.ok) {
         wardenPrecheckDeny(name, pre.failureCode, pre.caps, pre.detail);
         step(`test ${k}: ${pre.failureCode}`);
-        // The log stays clean (SPEC §12); the model gets the offending literals so it can fix them.
+        // The log stays clean (SPEC §12); the model gets the Warden's own offending literals so it can fix them.
         let hint = "";
-        if (pre.failureCode === "protected_path" || pre.failureCode === "secret_in_file") {
-          let src = "";
-          try {
-            src = readFileSync(path.join(runDir, "skill.mjs"), "utf8");
-          } catch {
-            src = "";
-          }
-          const lits = offendingLiterals(src, pre.failureCode === "protected_path" ? PROTECTED : SECRET);
-          if (lits.length) hint = ` — offending string literals: ${lits.join(", ")}. A string may not start with "/" (use one absolute https template with {placeholders} + .replace(), no "/" separators, no backtick URLs)`;
+        if (pre.literals?.length) {
+          const lits = [...new Set(pre.literals)].slice(0, 5).map((s) => JSON.stringify(s.slice(0, 60)));
+          hint = ` — offending string literals: ${lits.join(", ")}. A string may not start with "/" (use one absolute https template with {placeholders} + .replace(), no "/" separators, no backtick URLs)`;
         } else if (pre.failureCode === "host_not_allowed") {
           hint = ` — every URL host in skill.mjs must be in manifest.hosts and fetched with http_get (visited: ${visited.join(", ") || "none"})`;
         } else if (pre.failureCode === "manifest_mismatch") {
@@ -232,12 +213,17 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
           deps.runHosts(manifest.hosts),
           { signal },
         );
-        if (r.timedOut || r.overflow || !r.ok) {
-          const code = r.timedOut ? "timeout" : "test_exit_nonzero";
-          step(`test ${k}: ${code}`, r.ms);
-          const err = scrubPaths(r.stderr, runDir).slice(0, STDERR_MAX) || `exit ${r.code ?? "signal"}`;
-          console.warn(`[builder] ${name} test ${k} ${code}: ${err.slice(0, 400).replace(/\s+/g, " ")}`); // server console only, never the log
-          throw new Error(`${code}: ${err}`);
+        if (signal?.aborted) {
+          // The session hit its limit mid-run (exec.ts killed the child): not the hand's timeout.
+          step(`test ${k}: aborted`, r.ms);
+          throw new Error("aborted: the forge budget ran out");
+        }
+        const fail = runFailure(r);
+        if (fail) {
+          step(`test ${k}: ${fail.code}`, r.ms);
+          const err = scrubPaths(r.stderr, runDir).slice(0, STDERR_MAX) || fail.detail;
+          console.warn(`[builder] ${name} test ${k} ${fail.code}: ${err.slice(0, 400).replace(/\s+/g, " ")}`); // server console only, never the log
+          throw new Error(`${fail.code}: ${err}`);
         }
         const v = validateOutput(r.stdout);
         if (!v.ok) {
@@ -295,44 +281,18 @@ export const buildCode: BuildCodeFn = async (job, step, deps, request) => {
     return zero("builder: session failed");
   }
 
-  let limitHit = false;
-  let turns = 0;
-  const timer = setTimeout(() => {
-    if (submitted) return;
-    limitHit = true;
-    void session.abort();
-  }, limits.codeMaxSeconds * 1000);
-  const unsub = session.subscribe((ev) => {
-    if (ev.type === "turn_end" && ++turns >= limits.codeMaxTurns && !submitted) {
-      limitHit = true;
-      void session.abort();
-    }
-  });
-  let internal = false;
-  try {
-    await session.prompt(
-      `${request ? `User request: ${JSON.stringify(request.slice(0, 300))}\n` : ""}Intent: ${JSON.stringify(job.intent)}\nUser values: ${JSON.stringify(job.inputs)}\n\nFind a source (English search queries), read it, write the hand, run_test with the user's values, then submit_skill.`,
-    );
-  } catch {
-    internal = !limitHit; // a preflight rejection; a limit abort resolves normally
-  } finally {
-    clearTimeout(timer);
-    unsub();
-  }
+  const { limitHit, rejected } = await promptWithLimits(
+    session,
+    forgePrompt(job, request, "Find a source (English search queries), read it, write the hand, run_test with the user's values, then submit_skill."),
+    { maxTurns: limits.codeMaxTurns, maxSeconds: limits.codeMaxSeconds, isDone: () => submitted },
+  );
   const { tokens, costUsd } = sessionStats(session);
   session.dispose();
   const ms = Date.now() - t0;
-  if (!submitted || !name || !lastPassingInputs) {
+  if (!submitted || !name || !manifest || !lastPassingInputs) {
     wipeStaging(runDir);
-    const reason = limitHit ? "builder: limit" : internal ? "builder: session error" : "builder: no submit_skill";
+    const reason = limitHit ? "builder: limit" : rejected ? "builder: session error" : "builder: no submit_skill";
     return { ok: false, reason, tokens, costUsd, ms };
   }
-  // Sanity: the staged manifest is what the Warden will read.
-  try {
-    JSON.parse(readFileSync(path.join(runDir, "manifest.json"), "utf8"));
-  } catch {
-    wipeStaging(runDir);
-    return { ok: false, reason: "builder: manifest unreadable", tokens, costUsd, ms };
-  }
-  return { ok: true, name, runDir, visited, lastPassingInputs, tokens, costUsd, ms };
+  return { ok: true, name, runDir, manifest, visited, lastPassingInputs, tokens, costUsd, ms };
 };

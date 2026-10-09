@@ -9,6 +9,14 @@ export const OUTPUT_CAP = 1024 * 1024;
 /** Absolute path of the guard preloaded into every skill child (`--import`). */
 export const FETCH_GUARD_PATH = repoPath("src", "fetch-guard.mjs");
 
+/** Classify a finished skill run: Broken codes per SPEC §9 "Test and Reuse runs"; null = ran fine. */
+export function runFailure(r: ExecResult): { code: "timeout" | "test_exit_nonzero"; detail: string } | null {
+  if (r.timedOut) return { code: "timeout", detail: "run: timeout" };
+  if (r.overflow) return { code: "test_exit_nonzero", detail: "run: output cap" };
+  if (!r.ok) return { code: "test_exit_nonzero", detail: `run: exit ${r.code ?? "signal"}` };
+  return null;
+}
+
 export function runSkill(
   absSkillPath: string,
   skillDir: string,

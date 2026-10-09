@@ -671,7 +671,14 @@ body.resizing{cursor:col-resize;user-select:none}
         if (d.startsWith("inputs don't fit")) return { text: `${sk} can't take these inputs, so I'll grow a new hand.`, phase: "forging" };
         return { text: "No hand for this yet. Growing one.", phase: "exploring" };
       case "forge":
+        // FORGE_MODE=code (Builder) steps; the fallback line is a turn, not the end of the request.
+        if ((m = d.match(/^code failed: (.+?) → recipe$/))) return { text: `The code hand didn't make it (${m[1]}). Falling back to a recipe.`, phase: "exploring", bad: true };
         if (l.decision === "fail") return { text: "The forge didn't produce a usable hand.", phase: "forging", bad: true };
+        if ((m = d.match(/^write: (\S+)$/))) return { text: `Wrote ${m[1]}.`, phase: "forging" };
+        if ((m = d.match(/^test (\d+\/\d+): pass · (\d+) items$/))) return { text: `Draft test ${m[1]} passed: ${m[2]} items.`, phase: "testing" };
+        if ((m = d.match(/^test (\d+\/\d+): (\S+)$/))) return { text: `Draft test ${m[1]} failed: ${m[2]}. Rewriting.`, phase: "forging", bad: true };
+        if (d === "submit_skill") return { text: "Submitted the code hand to the Warden.", phase: "warden" };
+        if ((m = d.match(/^code: (.+)$/))) return { text: `Code hand ready${l.tokens ? ` (${l.tokens.toLocaleString("en-US")} tokens)` : ""}, hosts ${m[1]}. Building the hand.`, phase: "warden" };
         if ((m = d.match(/^explore: web_search "(.*)" → (.+)$/))) return { text: `Searched the web for “${m[1]}” (${m[2]}).`, phase: "exploring" };
         if ((m = d.match(/^explore: http_get (\S+) (\d{3})$/))) return { text: `Read ${m[1]}.`, phase: "exploring" };
         if ((m = d.match(/^explore: http_get (\S+) → (.+)$/))) return { text: `Couldn't read ${m[1]} (${m[2]}).`, phase: "exploring", bad: true };
