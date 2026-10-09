@@ -4,6 +4,8 @@
  * submit() writes the inbox file and kick()s; never awaits Forge/Warden.
  */
 
+import { getCharterHash } from "../charter.ts";
+import { appendLog } from "../log.ts";
 import type { CapabilityBrief } from "./brief.ts";
 import { submit as inboxSubmit } from "./inbox.ts";
 import { kick, processNext } from "./worker.ts";
@@ -26,6 +28,16 @@ export function getDoctor(): Doctor {
     singleton = {
       async submit(brief: CapabilityBrief) {
         const r = await inboxSubmit(brief);
+        appendLog({
+          actor: "doctor",
+          event: "doctor",
+          skill: brief.title,
+          decision: "allow",
+          charterHash: getCharterHash(),
+          detail:
+            `enqueued ${brief.requestId} → inbox · intent=${brief.intent.slice(0, 120)}` +
+            (brief.defaultsHint ? ` · defaults=${brief.defaultsHint}` : ""),
+        });
         kick();
         return r;
       },
@@ -42,4 +54,10 @@ export function getDoctor(): Doctor {
 export type { CapabilityBrief } from "./brief.ts";
 export { parseBrief, serializeBrief, briefsEqual } from "./brief.ts";
 export { submit, take, complete, fail, doctorDirs } from "./inbox.ts";
-export { processNext, kick, missingEnvKeys } from "./worker.ts";
+export {
+  processNext,
+  kick,
+  missingEnvKeys,
+  retryParkedComposioBriefs,
+  startComposioDoctorRetryBridge,
+} from "./worker.ts";

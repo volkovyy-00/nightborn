@@ -1,10 +1,15 @@
 {
-  "ts": "2026-10-08T18:02:47.470Z",
+  "ts": "2026-10-09T01:44:19.328Z",
   "results": [
+    {
+      "name": "forge_cli_prose_json",
+      "status": "Works",
+      "detail": "prose+access and prose+skillSource parse"
+    },
     {
       "name": "charter_hash_recipe",
       "status": "Works",
-      "detail": "f2e9ef12"
+      "detail": "9b0284fd"
     },
     {
       "name": "tripwire_email",

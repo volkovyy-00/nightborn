@@ -13,6 +13,7 @@ const MAP: Partial<Record<FailureCode, string>> = {
   timeout: "Skill timed out. Hand broken.",
   schema_invalid: "Test output failed schema. Hand broken.",
   charter_pin_mismatch: "Charter pin mismatch.",
+  doctor_required: "I need Doctor to grow that hand — parking a capability request.",
 };
 
 export function replyFor(code: FailureCode | undefined, fallback: string): string {

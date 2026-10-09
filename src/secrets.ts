@@ -19,7 +19,7 @@ import { readdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { getDefault } from "./defaults.ts";
 import { parseBrief } from "./doctor/brief.ts";
-import { doctorDirs } from "./doctor/inbox.ts";
+import { briefFileStem, doctorDirs } from "./doctor/inbox.ts";
 import { kick, missingEnvKeys } from "./doctor/worker.ts";
 import { emit } from "./events.ts";
 import { REPO_ROOT } from "./paths.ts";
@@ -158,8 +158,7 @@ async function moveWipToInbox(requestIds: string[], root?: string): Promise<stri
   const requeued: string[] = [];
 
   for (const requestId of requestIds) {
-    if (!/^[A-Za-z0-9._-]+$/.test(requestId)) continue;
-    const name = `${requestId}.md`;
+    const name = `${briefFileStem(requestId)}.md`;
     const from = path.join(dirs.wip, name);
     const to = path.join(dirs.inbox, name);
     try {

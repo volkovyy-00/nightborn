@@ -5,8 +5,16 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { REPO_ROOT, repoPath } from "./paths.ts";
 import { loadAndPinCharter, getCharterHash } from "./charter.ts";
-import { appendLog, ensureLogFile, getLogSince } from "./log.ts";
+import { appendLog, ensureLogFile, getLogSince, resolveLogSource } from "./log.ts";
 import { list as listAudit } from "./audit.ts";
+import {
+  getMessagesSince,
+  rehydrateTranscript,
+  subscribe,
+  type TranscriptMessage,
+} from "./transcript.ts";
+import { executeForSkill } from "./composio.ts";
+import { startComposioDoctorRetryBridge } from "./doctor/index.ts";
 import { handleTalk, startAgentRuntime } from "./runner.ts";
 import { mockProviderResponse } from "./mock.ts";
 import {
@@ -25,6 +33,23 @@ if (existsSync(envFile)) {
 }
 
 ensureLogFile();
+rehydrateTranscript();
+
+{
+  const hostChannel = resolveLogSource();
+  if (hostChannel !== "live") {
+    const file =
+      hostChannel === "fixture"
+        ? "surgery.fixture.log"
+        : hostChannel === "smoke"
+          ? "surgery.smoke.log"
+          : `surgery.${hostChannel}.log`;
+    console.warn(
+      `[nightborn] hostChannel=${hostChannel} — writing ${file}; UI polls surgery.log (live). ` +
+        `Unset JUDGE_MODE / SMOKE_AGENT / SURGERY_CHANNEL for the live board.`,
+    );
+  }
+}
 
 try {
   const hash = loadAndPinCharter();
@@ -34,7 +59,7 @@ try {
     skill: null,
     decision: "allow",
     charterHash: hash,
-    detail: "pin ✓",
+    detail: `pin ✓ · channel=${resolveLogSource()}`,
   });
 } catch (e) {
   const err = e as Error & { computed?: string };
@@ -60,12 +85,50 @@ try {
 // Scheduler: once/cron wakes (T11); call site owned by T09.
 startAgentRuntime();
 startScheduler();
+startComposioDoctorRetryBridge();
 
 const app = new Hono();
 
+/**
+ * Skill-scoped Composio proxy — skills POST { tool, arguments } here.
+ * Host holds COMPOSIO_API_KEY; binding must match decision.json / pending forge.
+ */
+app.post("/api/composio/skill/:name/execute", async (c) => {
+  const skillName = decodeURIComponent(c.req.param("name") || "").trim();
+  if (!skillName || !/^[a-z0-9_]+$/i.test(skillName)) {
+    return c.json({ ok: false, error: "invalid skill name" }, 400);
+  }
+  let body: { tool?: string; arguments?: Record<string, unknown> };
+  try {
+    body = (await c.req.json()) as { tool?: string; arguments?: Record<string, unknown> };
+  } catch {
+    return c.json({ ok: false, error: "invalid JSON body" }, 400);
+  }
+  const tool = typeof body.tool === "string" ? body.tool.trim() : "";
+  if (!tool) return c.json({ ok: false, error: "tool required" }, 400);
+  const args =
+    body.arguments && typeof body.arguments === "object" && !Array.isArray(body.arguments)
+      ? body.arguments
+      : {};
+  const result = await executeForSkill(skillName, tool, args);
+  if (!result.ok) {
+    return c.json({ ok: false, error: result.error, tool: result.tool }, 400);
+  }
+  return c.json({
+    ok: true,
+    tool: result.tool,
+    data: result.data,
+    logId: result.logId,
+  });
+});
+
 app.get("/api/log", (c) => {
   const since = Number(c.req.query("since") ?? "0");
-  return c.json(getLogSince(Number.isFinite(since) ? since : 0));
+  // UI always reads live surgery.log; smoke/fixture write separate files.
+  const raw = (c.req.query("source") || "live").toLowerCase();
+  const source =
+    raw === "smoke" || raw === "fixture" || raw === "live" ? raw : "live";
+  return c.json(getLogSince(Number.isFinite(since) ? since : 0, source));
 });
 
 /** Goal-centric audit trail (T01 sink). Optional ?goalId= / ?since= filters. */
@@ -77,6 +140,125 @@ app.get("/api/audit", async (c) => {
     ...(since ? { since } : {}),
   });
   return c.json({ records });
+});
+
+/** Catch-up JSON for debug / late EventSource (id > since). */
+app.get("/api/messages", (c) => {
+  const since = Number(c.req.query("since") ?? "0");
+  const goalId = c.req.query("goalId") || undefined;
+  return c.json(
+    getMessagesSince(Number.isFinite(since) ? since : 0, goalId),
+  );
+});
+
+/**
+ * Live chat stream — text/event-stream.
+ * Replays id > Last-Event-ID (or ?since=), then pushes each appendMessage.
+ */
+app.get("/api/messages/stream", (c) => {
+  const goalId = c.req.query("goalId") || undefined;
+  const lastEventId = c.req.header("Last-Event-ID");
+  const sinceQ = c.req.query("since");
+  const { next: tip } = getMessagesSince(0, goalId);
+  // Fresh connect: live-only. Reconnect / ?since= catch up.
+  let since = tip;
+  if (lastEventId != null && lastEventId !== "") {
+    const n = Number(lastEventId);
+    if (Number.isFinite(n)) since = n;
+  } else if (sinceQ != null && sinceQ !== "") {
+    const n = Number(sinceQ);
+    if (Number.isFinite(n)) since = n;
+  }
+
+  const encoder = new TextEncoder();
+  let closed = false;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let unsub: (() => void) | undefined;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (msg: TranscriptMessage) => {
+        if (closed) return;
+        if (goalId && msg.goalId !== goalId) return;
+        const chunk =
+          `id: ${msg.id}\n` +
+          `event: message\n` +
+          `data: ${JSON.stringify(msg)}\n\n`;
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {
+          cleanup();
+        }
+      };
+
+      try {
+        controller.enqueue(encoder.encode(": connected\n\n"));
+      } catch {
+        cleanup();
+        return;
+      }
+
+      const { messages } = getMessagesSince(since, goalId);
+      for (const m of messages) send(m);
+
+      unsub = subscribe(send);
+      heartbeat = setInterval(() => {
+        if (closed) return;
+        try {
+          controller.enqueue(encoder.encode(": heartbeat\n\n"));
+        } catch {
+          cleanup();
+        }
+      }, 15_000);
+
+      function cleanup() {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsub?.();
+        try {
+          controller.close();
+        } catch {
+          /* already closed */
+        }
+      }
+
+      c.req.raw.signal.addEventListener("abort", cleanup);
+    },
+    cancel() {
+      closed = true;
+      if (heartbeat) clearInterval(heartbeat);
+      unsub?.();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+});
+
+/** @deprecated alias — maps transcript catch-up to old notices shape. */
+app.get("/api/notices", (c) => {
+  const since = Number(c.req.query("since") ?? "0");
+  const { messages, next } = getMessagesSince(
+    Number.isFinite(since) ? since : 0,
+  );
+  return c.json({
+    notices: messages.map((m) => ({
+      id: m.id,
+      ts: m.ts,
+      kind: m.role === "status" ? "status" : "reply",
+      text: m.text,
+      skill: m.skill ?? null,
+      goalId: m.goalId,
+    })),
+    next,
+  });
 });
 
 app.post("/api/talk", async (c) => {

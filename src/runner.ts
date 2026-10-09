@@ -20,7 +20,7 @@ import {
   copyEmailSendTemplate,
   defaultNewsSkillSource,
   ensureRunnableSkillSource,
-  forgeSkillViaPi,
+  forgeSkill,
   loadForgeFixture,
   writeForgedSkill,
 } from "./forge.ts";
@@ -28,14 +28,21 @@ import {
   findJudgeFixture,
   loadTalkFixture,
   planAgentTurn,
-  pushHistory,
+  syncTalkHistoryFromTranscript,
   talkEmitToActions,
   type TalkFixture,
 } from "./talk.ts";
 import type { ForgeArtifact } from "./types.ts";
 import { runSkill } from "./exec.ts";
 import { validateHttpOutput } from "../templates/schemas.ts";
-import { clearProvisionalGrant, grantKeysForCaps, provisionalOr } from "./broker.ts";
+import {
+  clearProvisionalGrant,
+  grantKeysForCaps,
+  provisionalOr,
+  runWithOutboundBlocked,
+  runWithProvisionalScope,
+} from "./broker.ts";
+import { acquireOutboundCall } from "./callGate.ts";
 import {
   newGoalId,
   runAgentLoop,
@@ -44,6 +51,24 @@ import {
 } from "./agent/loop.ts";
 import { append as auditAppend } from "./audit.ts";
 import type { ResumeContext } from "./agent/resume.ts";
+import {
+  appendMessage,
+  recentForTalk,
+  rehydrateTranscript,
+} from "./transcript.ts";
+import {
+  appendListingBatch,
+  isListingHub,
+  parseListingStdout,
+} from "./listings.ts";
+
+function syncHistory(): void {
+  syncTalkHistoryFromTranscript(recentForTalk(10));
+}
+
+function talkText(talk: TalkResult): string {
+  return talk.kind === "chat" ? talk.text : talk.reply;
+}
 
 function skillsRoot(): string {
   return dataPath("skills");
@@ -60,8 +85,16 @@ function formatNewsReply(prefix: string, stdout: string): string {
   } catch {
     return prefix;
   }
-  if (!items.length) return prefix;
-  const lines = items.slice(0, 5).map((it, i) => {
+  const usable = items.filter(
+    (it) => !isListingHub(it.title || "", it.url || ""),
+  );
+  if (!usable.length) {
+    return (
+      `${prefix}\n\n` +
+      `No vehicle detail cards in this batch (${items.length} hits looked like shopping-index hubs).`
+    );
+  }
+  const lines = usable.slice(0, 5).map((it, i) => {
     const title = (it.title || "(untitled)").trim();
     const url = (it.url || "").trim();
     const date = it.date ? ` (${it.date})` : "";
@@ -114,6 +147,7 @@ async function runReuse(
   job: Job,
   source?: "live" | "fixture",
   matchDetail = "by name",
+  goalId?: string,
 ): Promise<TalkResult> {
   const dir = path.join(skillsRoot(), skillName);
   const decision = loadDecision(skillName);
@@ -160,68 +194,156 @@ async function runReuse(
     source,
   });
 
-  const input: { query: string; baseUrl?: string } = { query: job.query };
+  const isCall = decision.capabilities.includes("notify:phone");
+  let query = job.query;
+  let releaseCall: (() => void) | undefined;
+  if (isCall) {
+    const gate = acquireOutboundCall(job.query);
+    if (!gate.ok) {
+      appendLog({
+        actor: "runner",
+        event: "broken",
+        skill: skillName,
+        decision: "fail",
+        charterHash: getCharterHash(),
+        voice: "voice/broken.wav",
+        detail: gate.reason,
+        source,
+      });
+      return {
+        kind: "job",
+        job,
+        outcome: "broken",
+        skill: skillName,
+        reply: gate.reason,
+      };
+    }
+    query = gate.query;
+    releaseCall = gate.release;
+    appendLog({
+      actor: "runner",
+      event: "matched",
+      skill: skillName,
+      decision: "allow",
+      charterHash: getCharterHash(),
+      detail: gate.redirected
+        ? `call gate · redirected ${gate.requestedPhone || "(empty)"} → ${gate.allowedPhone}`
+        : `call gate · dialing ${gate.allowedPhone}`,
+      source,
+    });
+  }
+
+  const input: {
+    query: string;
+    baseUrl?: string;
+    composioProxyUrl?: string;
+  } = { query };
   const base = offlineBaseUrl(decision.capabilities);
   if (base) input.baseUrl = base;
-
-  const result = await runSkill(path.join(dir, "skill.mjs"), dir, input, decision.env, 15_000);
-  if (result.timedOut) {
-    appendLog({
-      actor: "test",
-      event: "broken",
-      skill: skillName,
-      decision: "fail",
-      failureCode: "timeout",
-      charterHash: getCharterHash(),
-      voice: "voice/broken.wav",
-      source,
-    });
-    return {
-      kind: "job",
-      job,
-      outcome: "broken",
-      skill: skillName,
-      failureCode: "timeout",
-      reply: replyFor("timeout", "Timed out."),
-    };
-  }
-  if (!result.ok) {
-    appendLog({
-      actor: "test",
-      event: "broken",
-      skill: skillName,
-      decision: "fail",
-      failureCode: "test_exit_nonzero",
-      charterHash: getCharterHash(),
-      voice: "voice/broken.wav",
-      source,
-    });
-    return {
-      kind: "job",
-      job,
-      outcome: "broken",
-      skill: skillName,
-      failureCode: "test_exit_nonzero",
-      reply: replyFor("test_exit_nonzero", "Run failed."),
-    };
+  if (decision.composio) {
+    const { composioProxyUrlForSkill } = await import("./composio.ts");
+    input.composioProxyUrl = composioProxyUrlForSkill(skillName);
   }
 
-  appendLog({
-    actor: "runner",
-    event: "reuse",
-    skill: skillName,
-    decision: "allow",
-    charterHash: getCharterHash(),
-    caps: decision.capabilities,
-    detail: `reused ${skillName}`,
-    source,
-  });
+  const envKeys = isCall
+    ? [...new Set([...decision.env, ...grantKeysForCaps(decision.capabilities)])]
+    : decision.env;
 
-  const summary = formatNewsReply(`Reused ${skillName}.`, result.stdout);
-  return { kind: "job", job, outcome: "reuse", skill: skillName, reply: summary };
+  if (source === "live" && goalId) {
+    appendMessage({
+      goalId,
+      role: "status",
+      skill: skillName,
+      text: `Running ${skillName}…`,
+    });
+  }
+
+  try {
+    const result = await runSkill(path.join(dir, "skill.mjs"), dir, input, envKeys, 15_000);
+    if (result.timedOut) {
+      appendLog({
+        actor: "test",
+        event: "broken",
+        skill: skillName,
+        decision: "fail",
+        failureCode: "timeout",
+        charterHash: getCharterHash(),
+        voice: "voice/broken.wav",
+        source,
+      });
+      return {
+        kind: "job",
+        job,
+        outcome: "broken",
+        skill: skillName,
+        failureCode: "timeout",
+        reply: replyFor("timeout", "Timed out."),
+      };
+    }
+    if (!result.ok) {
+      appendLog({
+        actor: "test",
+        event: "broken",
+        skill: skillName,
+        decision: "fail",
+        failureCode: "test_exit_nonzero",
+        charterHash: getCharterHash(),
+        voice: "voice/broken.wav",
+        source,
+      });
+      return {
+        kind: "job",
+        job,
+        outcome: "broken",
+        skill: skillName,
+        failureCode: "test_exit_nonzero",
+        reply: replyFor("test_exit_nonzero", "Run failed."),
+      };
+    }
+
+    appendLog({
+      actor: "runner",
+      event: "reuse",
+      skill: skillName,
+      decision: "allow",
+      charterHash: getCharterHash(),
+      caps: decision.capabilities,
+      detail: `reused ${skillName}`,
+      source,
+    });
+
+    if (goalId && source === "live") {
+      const parsed = parseListingStdout(result.stdout);
+      if (parsed.rawCount > 0) {
+        await appendListingBatch(goalId, skillName, query, parsed.usable, {
+          rawCount: parsed.rawCount,
+          hubCount: parsed.hubCount,
+        });
+      }
+    }
+
+    const summary = formatNewsReply(`Reused ${skillName}.`, result.stdout);
+    return { kind: "job", job, outcome: "reuse", skill: skillName, reply: summary };
+  } finally {
+    releaseCall?.();
+  }
 }
 
 async function runCreate(
+  job: Job,
+  forgeOverride: TalkFixture["forge"] | undefined,
+  source?: "live" | "fixture",
+  gapLogged = false,
+): Promise<TalkResult> {
+  // Never place real Bland calls during Create forge/test/install.
+  return runWithProvisionalScope(() =>
+    runWithOutboundBlocked(() =>
+      runCreateInner(job, forgeOverride, source, gapLogged),
+    ),
+  );
+}
+
+async function runCreateInner(
   job: Job,
   forgeOverride: TalkFixture["forge"] | undefined,
   source?: "live" | "fixture",
@@ -266,9 +388,9 @@ async function runCreate(
             { ...fx, skillSource: fx.skillSource || defaultNewsSkillSource() },
             job.intent,
           )
-        : await forgeSkillViaPi(job.intent, job.query, job.skill);
-    } else {
-      artifact = await forgeSkillViaPi(job.intent, job.query, job.skill);
+        : await forgeSkill(job.intent, job.query, job.skill);
+  } else {
+    artifact = await forgeSkill(job.intent, job.query, job.skill);
     }
     if (!forgeOverride && job.skill) {
       artifact = { ...artifact, name: job.skill };
@@ -350,76 +472,90 @@ async function runCreate(
     };
   }
 
-  const input: { query: string; baseUrl?: string } = { query: testQuery };
-  const base = offlineBaseUrl(pre.caps);
-  if (base) input.baseUrl = base;
+  const isCall = pre.caps.includes("notify:phone");
+  // Create-path call hands: skip live dial (rate limit + real outbound); warden-only.
+  if (!isCall) {
+    const input: { query: string; baseUrl?: string } = { query: testQuery };
+    const base = offlineBaseUrl(pre.caps);
+    if (base) input.baseUrl = base;
 
-  const result = await runSkill(
-    path.join(runDir, "skill.mjs"),
-    runDir,
-    input,
-    provisionalOr(grantKeysForCaps(pre.caps)),
-    15_000,
-  );
+    const result = await runSkill(
+      path.join(runDir, "skill.mjs"),
+      runDir,
+      input,
+      provisionalOr(grantKeysForCaps(pre.caps)),
+      15_000,
+    );
 
-  if (result.timedOut || !result.ok) {
-    const code = result.timedOut ? "timeout" : "test_exit_nonzero";
+    if (result.timedOut || !result.ok) {
+      const code = result.timedOut ? "timeout" : "test_exit_nonzero";
+      appendLog({
+        actor: "test",
+        event: "broken",
+        skill: skillName,
+        decision: "fail",
+        failureCode: code,
+        charterHash: getCharterHash(),
+        voice: "voice/broken.wav",
+        source,
+      });
+      clearProvisionalGrant();
+      wipeStaging(runDir);
+      return {
+        kind: "job",
+        job,
+        outcome: "broken",
+        skill: skillName,
+        failureCode: code,
+        reply: replyFor(code, "Test failed."),
+      };
+    }
+
+    const validated = validateHttpOutput(result.stdout);
+    if (!validated.ok) {
+      appendLog({
+        actor: "test",
+        event: "broken",
+        skill: skillName,
+        decision: "fail",
+        failureCode: "schema_invalid",
+        charterHash: getCharterHash(),
+        voice: "voice/broken.wav",
+        detail: validated.reason,
+        source,
+      });
+      clearProvisionalGrant();
+      wipeStaging(runDir);
+      return {
+        kind: "job",
+        job,
+        outcome: "broken",
+        skill: skillName,
+        failureCode: "schema_invalid",
+        reply: replyFor("schema_invalid", "Bad schema."),
+      };
+    }
+
     appendLog({
       actor: "test",
-      event: "broken",
+      event: "test",
       skill: skillName,
-      decision: "fail",
-      failureCode: code,
+      decision: "pass",
       charterHash: getCharterHash(),
-      voice: "voice/broken.wav",
+      detail: `pass · ${validated.data.items.length} items`,
       source,
     });
-    clearProvisionalGrant();
-    wipeStaging(runDir);
-    return {
-      kind: "job",
-      job,
-      outcome: "broken",
-      skill: skillName,
-      failureCode: code,
-      reply: replyFor(code, "Test failed."),
-    };
-  }
-
-  const validated = validateHttpOutput(result.stdout);
-  if (!validated.ok) {
+  } else {
     appendLog({
       actor: "test",
-      event: "broken",
+      event: "test",
       skill: skillName,
-      decision: "fail",
-      failureCode: "schema_invalid",
+      decision: "pass",
       charterHash: getCharterHash(),
-      voice: "voice/broken.wav",
-      detail: validated.reason,
+      detail: "skipped live call test · notify:phone · warden-only install",
       source,
     });
-    clearProvisionalGrant();
-    wipeStaging(runDir);
-    return {
-      kind: "job",
-      job,
-      outcome: "broken",
-      skill: skillName,
-      failureCode: "schema_invalid",
-      reply: replyFor("schema_invalid", "Bad schema."),
-    };
   }
-
-  appendLog({
-    actor: "test",
-    event: "test",
-    skill: skillName,
-    decision: "pass",
-    charterHash: getCharterHash(),
-    detail: `pass · ${validated.data.items.length} items`,
-    source,
-  });
 
   const fin = wardenFinal(runDir, skillName, pre.folderHash, pre.caps);
   if (!fin.ok) {
@@ -448,56 +584,63 @@ async function runCreate(
 }
 
 async function runEmailDenied(source?: "live" | "fixture"): Promise<TalkResult> {
-  const job: Job = {
-    skill: null,
-    intent: "email digest",
-    query: "news digest",
-    needs: ["notify:email"],
-    template: "email_send",
-  };
-  const runId = randomUUID().slice(0, 8);
-  const runDir = dataPath("staging", runId);
-  copyEmailSendTemplate(runDir);
+  return runWithProvisionalScope(async () => {
+    const job: Job = {
+      skill: null,
+      intent: "email digest",
+      query: "news digest",
+      needs: ["notify:email"],
+      template: "email_send",
+    };
+    const runId = randomUUID().slice(0, 8);
+    const runDir = dataPath("staging", runId);
+    copyEmailSendTemplate(runDir);
 
-  appendLog({
-    actor: "forge",
-    event: "forge",
-    skill: "email_send",
-    decision: "allow",
-    charterHash: getCharterHash(),
-    detail: "fixed template, no LLM",
-    source,
-  });
+    appendLog({
+      actor: "forge",
+      event: "forge",
+      skill: "email_send",
+      decision: "allow",
+      charterHash: getCharterHash(),
+      detail: "fixed template, no LLM",
+      source,
+    });
 
-  const pre = wardenPre(runDir, job, "email_send", { skipLogPrecheck: true });
-  if (!pre.ok) {
-    denyAndWipe(runDir, "email_send", pre.failureCode, pre.caps, pre.detail);
+    const pre = wardenPre(runDir, job, "email_send", { skipLogPrecheck: true });
+    if (!pre.ok) {
+      denyAndWipe(runDir, "email_send", pre.failureCode, pre.caps, pre.detail);
+      return {
+        kind: "job",
+        job,
+        outcome: "denied",
+        skill: "email_send",
+        failureCode: pre.failureCode,
+        reply: replyFor(pre.failureCode, "Denied."),
+      };
+    }
+    // Should not allow
+    wipeStaging(runDir);
     return {
       kind: "job",
       job,
-      outcome: "denied",
+      outcome: "broken",
       skill: "email_send",
-      failureCode: pre.failureCode,
-      reply: replyFor(pre.failureCode, "Denied."),
+      failureCode: "forge_invalid",
+      reply: "Unexpected allow on email_send.",
     };
-  }
-  // Should not allow
-  wipeStaging(runDir);
-  return {
-    kind: "job",
-    job,
-    outcome: "broken",
-    skill: "email_send",
-    failureCode: "forge_invalid",
-    reply: "Unexpected allow on email_send.",
-  };
+  });
 }
 
-/** Existing Runner Create/Reuse path — used as sequential `run_skill` by the agent loop. */
+/**
+ * Runner path for `run_skill`.
+ * Live: Reuse only — Create/Install is Doctor-only (`doctor_required`).
+ * Fixture + forge override: still Create for JUDGE/validate demos.
+ */
 export async function executeJob(
   job: Job,
   forge?: TalkFixture["forge"],
   source?: "live" | "fixture",
+  goalId?: string,
 ): Promise<TalkResult> {
   appendLog({
     actor: "talk",
@@ -511,18 +654,51 @@ export async function executeJob(
 
   const choice = chooseReuse(job);
   if (choice.mode === "reuse") {
-    return runReuse(choice.skill, job, source, choice.detail);
+    return runReuse(choice.skill, job, source, choice.detail, goalId);
   }
+
+  // Fixture inject-forge still exercises Create; live (and fixture without forge) must use Doctor.
+  const allowFixtureCreate = source === "fixture" && !!forge;
+  if (allowFixtureCreate) {
+    appendLog({
+      actor: "runner",
+      event: "gap",
+      skill: null,
+      decision: "allow",
+      charterHash: getCharterHash(),
+      detail: choice.detail,
+      source,
+    });
+    return runCreate(job, forge, source, /* gapLogged */ true);
+  }
+
   appendLog({
     actor: "runner",
     event: "gap",
-    skill: null,
+    skill: job.skill,
     decision: "allow",
+    failureCode: "doctor_required",
     charterHash: getCharterHash(),
-    detail: choice.detail,
+    detail: `recognized gap · Doctor growing · ${choice.detail}`,
     source,
   });
-  return runCreate(job, forge, source, /* gapLogged */ true);
+  return {
+    kind: "job",
+    job,
+    outcome: "needs_capability",
+    skill: job.skill,
+    failureCode: "doctor_required",
+    reply: replyFor("doctor_required", "Doctor required."),
+  };
+}
+
+function growingSkillFromLoop(result: AgentLoopResult): string | null {
+  for (let i = result.skillResults.length - 1; i >= 0; i--) {
+    const r = result.skillResults[i]!;
+    if (r.kind === "job" && r.outcome === "needs_capability" && r.skill) return r.skill;
+  }
+  const m = /Doctor forging ([a-z0-9_]+)/i.exec(result.text);
+  return m?.[1] ?? null;
 }
 
 function loopResultToTalk(result: AgentLoopResult): TalkResult {
@@ -534,6 +710,13 @@ function loopResultToTalk(result: AgentLoopResult): TalkResult {
   return { kind: "chat", text: result.text };
 }
 
+/** Talk JSON + UI hints (waiting / growing limb). */
+export type TalkApiResult = TalkResult & {
+  goalId?: string;
+  status?: AgentLoopResult["status"];
+  growingSkill?: string | null;
+};
+
 async function runLoopFromActions(
   goalId: string,
   userText: string | undefined,
@@ -541,6 +724,10 @@ async function runLoopFromActions(
   forge: TalkFixture["forge"] | undefined,
   source: "live" | "fixture",
 ): Promise<TalkResult> {
+  if (userText) {
+    appendMessage({ goalId, role: "user", text: userText });
+    syncHistory();
+  }
   let planned = false;
   const loopResult = await runAgentLoop(
     { goalId, userText },
@@ -550,33 +737,62 @@ async function runLoopFromActions(
         planned = true;
         return actions;
       },
-      runSkill: (job) => executeJob(job, forge, source),
+      runSkill: (job) => executeJob(job, forge, source, goalId),
     },
   );
   const talk = loopResultToTalk(loopResult);
-  pushHistory("assistant", talk.kind === "chat" ? talk.text : talk.reply);
+  appendMessage({ goalId, role: "assistant", text: talkText(talk) });
+  syncHistory();
   return talk;
 }
 
-export async function handleTalk(text: string, fixtureName?: string): Promise<TalkResult> {
-  pushHistory("user", text);
+/** Serialize Talk turns so overlapping POSTs cannot race history / park / grants. */
+let talkMutex: Promise<void> = Promise.resolve();
 
+async function withTalkMutex<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = talkMutex;
+  let release!: () => void;
+  talkMutex = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
+}
+
+export async function handleTalk(text: string, fixtureName?: string): Promise<TalkApiResult> {
+  return withTalkMutex(() => handleTalkUnlocked(text, fixtureName));
+}
+
+async function handleTalkUnlocked(
+  text: string,
+  fixtureName?: string,
+): Promise<TalkApiResult> {
   // Explicit fixture file
   if (fixtureName) {
     const fx = loadTalkFixture(fixtureName);
     if (!fx) {
+      const goalId = newGoalId(text);
+      appendMessage({ goalId, role: "user", text });
       const r = { kind: "chat" as const, text: `Unknown fixture ${fixtureName}` };
-      pushHistory("assistant", r.text);
-      return r;
+      appendMessage({ goalId, role: "assistant", text: r.text });
+      syncHistory();
+      return { ...r, goalId };
     }
     return finishFromEmit(text, fx.talk, fx.forge, "fixture");
   }
 
   // Tripwire before Talk — DENIED specimen; no doctor / agent loop
   if (tripwireMatch(text)) {
+    const goalId = newGoalId(text);
+    appendMessage({ goalId, role: "user", text });
     const r = await runEmailDenied("live");
-    pushHistory("assistant", r.kind === "chat" ? r.text : r.reply);
-    return r;
+    appendMessage({ goalId, role: "assistant", text: talkText(r) });
+    syncHistory();
+    return { ...r, goalId };
   }
 
   const judged = findJudgeFixture(text);
@@ -586,11 +802,13 @@ export async function handleTalk(text: string, fixtureName?: string): Promise<Ta
 
   // Live planner → host action loop (Doctor submit is non-blocking; wait parks)
   const goalId = newGoalId(text);
+  appendMessage({ goalId, role: "user", text });
+  syncHistory();
   const loopResult = await runAgentLoop(
     { goalId, userText: text },
     {
       plan: planAgentTurn,
-      runSkill: (job) => executeJob(job, undefined, "live"),
+      runSkill: (job) => executeJob(job, undefined, "live", goalId),
     },
   );
   await auditAppend({
@@ -604,8 +822,20 @@ export async function handleTalk(text: string, fixtureName?: string): Promise<Ta
     },
   });
   const talk = loopResultToTalk(loopResult);
-  pushHistory("assistant", talk.kind === "chat" ? talk.text : talk.reply);
-  return talk;
+  appendMessage({
+    goalId,
+    role: "assistant",
+    text: talkText(talk),
+    skill: talk.kind === "job" ? talk.skill : null,
+  });
+  syncHistory();
+  const api: TalkApiResult = {
+    ...talk,
+    goalId,
+    status: loopResult.status,
+    growingSkill: growingSkillFromLoop(loopResult),
+  };
+  return api;
 }
 
 async function finishFromEmit(
@@ -614,25 +844,31 @@ async function finishFromEmit(
   forge: TalkFixture["forge"] | undefined,
   source: "live" | "fixture",
 ): Promise<TalkResult> {
+  const goalId = newGoalId(userText);
   // Tripwire still wins over fixture job if raw text matches — except denied-email fixture path uses tripwire via text
   if (tripwireMatch(userText) && source !== "fixture") {
+    appendMessage({ goalId, role: "user", text: userText });
     const r = await runEmailDenied(source);
-    pushHistory("assistant", r.reply);
+    appendMessage({ goalId, role: "assistant", text: r.reply });
+    syncHistory();
     return r;
   }
   // For fixture denied-email, talk may be job — still run email path if needs notify
   if (emit.kind === "job" && emit.job.needs.includes("notify:email")) {
+    appendMessage({ goalId, role: "user", text: userText });
     const r = await runEmailDenied(source);
-    pushHistory("assistant", r.reply);
+    appendMessage({ goalId, role: "assistant", text: r.reply });
+    syncHistory();
     return r;
   }
   if (tripwireMatch(userText)) {
+    appendMessage({ goalId, role: "user", text: userText });
     const r = await runEmailDenied(source);
-    pushHistory("assistant", r.reply);
+    appendMessage({ goalId, role: "assistant", text: r.reply });
+    syncHistory();
     return r;
   }
 
-  const goalId = newGoalId(userText);
   return runLoopFromActions(goalId, userText, talkEmitToActions(emit), forge, source);
 }
 
@@ -641,30 +877,119 @@ async function finishFromEmit(
  * Call once from server startup.
  */
 export function startAgentRuntime(): () => void {
+  rehydrateTranscript();
   return wireAgentResume({
     plan: planAgentTurn,
-    runSkill: (job) => executeJob(job, undefined, "live"),
-    async onResult(result: AgentLoopResult, resume: ResumeContext) {
+    runSkill: (job, goalId) => executeJob(job, undefined, "live", goalId),
+    async onStart(wake: ResumeContext) {
+      if (wake.event.type === "capability.ready" && wake.skill) {
+        const more = wake.allSatisfied
+          ? "all hands ready"
+          : `${wake.remainingRequestIds.length} still growing`;
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          skill: wake.skill,
+          text: `Installed ${wake.skill} — continuing (${more})…`,
+        });
+        return;
+      }
+      if (wake.event.type === "capability.needs_secret") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: "Waiting on a secret…",
+        });
+        return;
+      }
+      if (wake.event.type === "access.needs_connect") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: `Waiting on Composio connect (${wake.event.toolkit})…`,
+        });
+        return;
+      }
+      if (wake.event.type === "access.ready") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: `Connected ${wake.event.toolkit} — Doctor still forging…`,
+        });
+        return;
+      }
+      if (wake.event.type === "capability.failed") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: `Capability failed (${wake.requestId ?? "unknown"})…`,
+        });
+        return;
+      }
+      if (wake.event.type === "access.failed") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: `Composio access failed (${wake.event.toolkit})…`,
+        });
+        return;
+      }
+      if (wake.event.type === "schedule.fired") {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          text: `Schedule ${wake.event.scheduleId} fired…`,
+        });
+      }
+    },
+    async onResult(result: AgentLoopResult, wake: ResumeContext) {
+      const skill =
+        wake.skill ??
+        (wake.event.type === "capability.ready" ? wake.event.skill : null);
       appendLog({
         actor: "talk",
         event: "job",
-        skill: resume.skill,
+        skill,
         decision: "allow",
         charterHash: getCharterHash(),
-        detail: `resume:${result.status}:${resume.requestId}`,
+        detail: `wake:${wake.event.type}:${result.status}:${wake.requestId ?? ""}`,
       });
       await auditAppend({
         type: "agent.resume",
-        goalId: resume.goalId,
-        summary: `Resumed on capability.ready → ${resume.skill}`,
+        goalId: wake.goalId,
+        summary: `Woke on ${wake.event.type}${skill ? ` → ${skill}` : ""}`,
         data: {
-          requestId: resume.requestId,
-          skill: resume.skill,
+          eventType: wake.event.type,
+          requestId: wake.requestId ?? null,
+          skill: skill,
           status: result.status,
-          allSatisfied: resume.allSatisfied,
+          allSatisfied: wake.allSatisfied,
         },
       });
-      if (result.text) pushHistory("assistant", result.text);
+      const text =
+        result.text ||
+        (result.skillResults.length
+          ? result.skillResults
+              .map((r) => (r.kind === "chat" ? r.text : r.reply))
+              .filter(Boolean)
+              .join("\n\n")
+          : "");
+      if (text) {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "assistant",
+          skill,
+          text: text.length > 4000 ? `${text.slice(0, 4000)}\n…` : text,
+        });
+        syncHistory();
+      } else if (wake.event.type === "capability.ready" && skill) {
+        appendMessage({
+          goalId: wake.goalId,
+          role: "status",
+          skill,
+          text: `Finished ${skill} (${result.status}).`,
+        });
+      }
     },
   });
 }

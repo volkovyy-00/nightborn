@@ -1,10 +1,33 @@
 import { mkdirSync, writeFileSync, readFileSync, copyFileSync, unlinkSync, existsSync } from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { REPO_ROOT } from "../src/paths.ts";
 import { charterHashFromBytes } from "../src/hash.ts";
 import { tripwireMatch, DENIED_PROMPT } from "../src/tripwire.ts";
 
 const results: { name: string; status: "Works" | "Simulated" | "Incomplete"; detail: string }[] = [];
+
+// Cursor CLI forge: prose-prefixed envelope.result must unwrap
+{
+  const r = spawnSync(
+    process.execPath,
+    ["--import", "tsx", path.join(REPO_ROOT, "scripts/check-forge-parse.ts")],
+    { cwd: REPO_ROOT, encoding: "utf8" },
+  );
+  const ok = r.status === 0;
+  results.push({
+    name: "forge_cli_prose_json",
+    status: ok ? "Works" : "Incomplete",
+    detail: ok
+      ? "prose+access and prose+skillSource parse"
+      : (r.stderr || r.stdout || `exit ${r.status}`).slice(0, 200),
+  });
+  if (!ok) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exitCode = 1;
+  }
+}
 
 // Charter pin recipe
 {

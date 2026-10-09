@@ -4,13 +4,14 @@ Fixture-driven path for **T14 — Used-car path smoke**.
 
 ## What it proves
 
-1. Explore (stub observation of listing sites)
-2. `request_capability` briefs land in `doctor/inbox/` (Markdown + frontmatter)
-3. Agent `wait` parks the goal
-4. In-process Doctor forges scrapers (`listings.http_scrape`) → `capability.ready`
-5. Agent resume on ready (no user re-prompt)
-6. Optional call capability → `capability.needs_secret` → `.env` reload / retry → ready
-7. Audit lines include `why` on capability request / doctor secret block / forge
+1. Live Create gate: `executeJob` with a missing skill → `doctor_required` (no install); loop auto-enqueues Doctor + parks
+2. Explore (stub observation of listing sites)
+3. `request_capability` briefs land in `doctor/inbox/` (Markdown + frontmatter)
+4. Agent `wait` parks the goal
+5. In-process Doctor forges scrapers (`listings.http_scrape`) → `capability.ready`
+6. Agent resume on ready (no user re-prompt)
+7. Optional call capability → `capability.needs_secret` → `.env` reload / retry → ready
+8. Audit lines include `why` on capability request / doctor secret block / forge
 
 No live Bland credits. OFFLINE mock HTTP (and mock Bland) is started **inside** the smoke script — you do not need `npm start`.
 
@@ -26,6 +27,8 @@ Requires a valid `CHARTER_PIN` in repo-root `.env` (same as `npm start`).
 `BLAND_API_KEY` may be present in `.env`; the smoke temporarily unsets it to exercise `needs_secret`, then reloads from `.env` (or injects a fake offline key if the file has none).
 
 Exit `0` = all asserts passed. Failures print which check broke.
+
+Surgery lines go to **`surgery.smoke.log`** (not the host UI `surgery.log`).
 
 ### Optional: skip call / needs_secret leg
 

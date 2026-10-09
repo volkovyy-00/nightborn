@@ -265,6 +265,8 @@ type AgentAction =
   | { type: "run_skill"; skill: string | null; intent: string; query: string; needs: string[] }
   | { type: "request_capability"; brief: CapabilityBrief }
   | { type: "request_capability_change"; skill: string; brief: CapabilityBrief }
+  | { type: "request_access"; toolkit: string; requestId: string; why: string }
+  | { type: "run_composio_tool"; tool: string; arguments: Record<string, unknown>; intent: string }
   | { type: "write_memory"; path: string; markdown: string }
   | { type: "schedule"; schedule: ScheduleSpec }
   | { type: "wait"; reason: string; requestIds?: string[] };
@@ -355,6 +357,9 @@ type RuntimeEvent =
   | { type: "capability.ready"; requestId: string; goalId: string; skill: string }
   | { type: "capability.failed"; requestId: string; goalId: string; error: string }
   | { type: "capability.needs_secret"; requestId: string; envKeys: string[]; message: string }
+  | { type: "access.needs_connect"; requestId: string; goalId: string; toolkit: string; redirectUrl: string; message: string }
+  | { type: "access.ready"; requestId: string; goalId: string; toolkit: string }
+  | { type: "access.failed"; requestId: string; goalId: string; toolkit: string; error: string }
   | { type: "secrets.provided"; envKeys: string[] }
   | { type: "schedule.fired"; scheduleId: string; goalId: string }
   | { type: "audit.flag"; auditId: string; note: string };
@@ -366,6 +371,8 @@ interface EventBus {
 ```
 
 UI may toast these; the **agent** must resume without requiring a new user prompt.
+
+**Composio (skill-scoped):** Talk uses `request_capability` only. Forge may request Composio access for the skill under forge → Connect Link → Doctor re-forges → `decision.json.composio` → runtime host proxy `/api/composio/skill/<name>/execute`. `COMPOSIO_API_KEY` is host-only. Email/SMTP toolkits must not be allow-listed.
 
 ### 6.5 Defaults registry
 
@@ -389,6 +396,12 @@ voice.outbound_bland:
   notes: |
     POST https://api.bland.ai/v1/calls
     Conversational: one question per turn.
+
+composio.apify:
+  caps: [net:fetch]
+  envKeys: [COMPOSIO_API_KEY]
+  notes: |
+    Host Composio Tool Router; not Broker APIFY_TOKEN.
 ```
 
 ### 6.6 Audit (eval-ready)
@@ -492,7 +505,7 @@ MVP can be **in-process** (same Node host, file inbox + EventEmitter) with zero 
 
 | Current piece | Reuse |
 |---------------|--------|
-| Talk `emit_job` / `emit_chat` | Becomes one action source; loop + wait/request_capability added |
+| Talk `emit_chat` / `emit_actions` | Action source; growth via `request_capability` + wait (Doctor-only Create; no `emit_job`) |
 | Runner Create/Reuse + Forge `skillSource` | Doctor’s install path |
 | Warden + charter + Broker | Unchanged leash |
 | `surgery.log` | Keep for pipeline; **Audit** is a parallel, richer, goal-centric log |

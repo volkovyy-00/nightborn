@@ -10,7 +10,7 @@
  * submit() only enqueues (returns immediately). Does not call Forge (T07).
  */
 
-import { access, mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { repoPath } from "../paths.ts";
 import { type CapabilityBrief, parseBrief, serializeBrief } from "./brief.ts";
@@ -42,11 +42,59 @@ async function ensureDirs(dirs: DoctorDirs): Promise<void> {
   );
 }
 
+/** Filesystem stem for a requestId — never throws; brief body keeps the original id. */
+export function briefFileStem(requestId: string): string {
+  const slug = requestId
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120);
+  return slug || "request";
+}
+
 function briefFileName(requestId: string): string {
-  if (!/^[A-Za-z0-9._-]+$/.test(requestId)) {
-    throw new Error(`doctor inbox: unsafe requestId ${JSON.stringify(requestId)}`);
+  return `${briefFileStem(requestId)}.md`;
+}
+
+function parkedComposioPath(dirs: DoctorDirs, requestId: string): string {
+  return path.join(dirs.wip, `${briefFileStem(requestId)}.parked-composio`);
+}
+
+/** Mark a WIP brief as parked waiting for Composio Connect (not an active forge). */
+export async function markParkedComposio(
+  requestId: string,
+  root?: string,
+): Promise<void> {
+  const dirs = doctorDirs(root);
+  await ensureDirs(dirs);
+  await writeFile(parkedComposioPath(dirs, requestId), "composio\n", "utf8");
+}
+
+/** Remove parked-composio sidecar if present. */
+export async function clearParkedComposio(
+  requestId: string,
+  root?: string,
+): Promise<void> {
+  const dirs = doctorDirs(root);
+  try {
+    await unlink(parkedComposioPath(dirs, requestId));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
-  return `${requestId}.md`;
+}
+
+/** True when WIP brief has the parked-composio sidecar. */
+export async function isParkedComposio(
+  requestId: string,
+  root?: string,
+): Promise<boolean> {
+  const dirs = doctorDirs(root);
+  try {
+    await access(parkedComposioPath(dirs, requestId));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** List pending brief filenames (sorted) in a directory. */
@@ -93,17 +141,32 @@ export async function take(root?: string): Promise<CapabilityBrief | null> {
   return parseBrief(markdown);
 }
 
-/** Mark a wip brief complete: move wip → done. */
+/** Mark a wip brief complete: move wip → done (idempotent if already done / reclaim inbox). */
 export async function complete(requestId: string, root?: string): Promise<void> {
-  await moveWip(requestId, "done", root);
+  await settleBrief(requestId, "done", root);
 }
 
 /** Mark a wip brief failed: move wip → failed. */
 export async function fail(requestId: string, root?: string): Promise<void> {
-  await moveWip(requestId, "failed", root);
+  await settleBrief(requestId, "failed", root);
 }
 
-async function moveWip(
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Move brief to done/failed.
+ * - Prefer WIP.
+ * - If WIP missing and dest already has it → no-op (idempotent complete).
+ * - If WIP missing and inbox has it (stolen re-queue) → move inbox → dest.
+ */
+async function settleBrief(
   requestId: string,
   dest: "done" | "failed",
   root: string | undefined,
@@ -111,13 +174,22 @@ async function moveWip(
   const dirs = doctorDirs(root);
   await ensureDirs(dirs);
   const name = briefFileName(requestId);
-  const from = path.join(dirs.wip, name);
-  const to = path.join(dirs[dest], name);
+  const wipPath = path.join(dirs.wip, name);
+  const destPath = path.join(dirs[dest], name);
+  const inboxPath = path.join(dirs.inbox, name);
 
-  try {
-    await access(from);
-  } catch {
-    throw new Error(`doctor inbox: no wip brief for requestId ${requestId}`);
+  await clearParkedComposio(requestId, root);
+
+  if (await fileExists(wipPath)) {
+    await rename(wipPath, destPath);
+    return;
   }
-  await rename(from, to);
+  if (await fileExists(destPath)) {
+    return;
+  }
+  if (await fileExists(inboxPath)) {
+    await rename(inboxPath, destPath);
+    return;
+  }
+  throw new Error(`doctor inbox: no wip brief for requestId ${requestId}`);
 }

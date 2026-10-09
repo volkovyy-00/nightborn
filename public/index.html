@@ -153,14 +153,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 .dstamp.on{display:inline-block}
 .conn{font:500 12px 'Geist Mono',monospace;color:var(--mute)}
 .conn.err{color:var(--red)}
-.audit-tog{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font:600 12px 'Geist Mono',monospace;letter-spacing:.08em;color:var(--mute);border:1px solid #2B343B;border-radius:999px;padding:6px 12px;min-height:36px}
-.audit-tog:hover{border-color:#3A464E;color:var(--ink)}
-.audit-tog input{accent-color:var(--cyan);margin:0}
-.audit-tog.on{color:var(--cyan);border-color:#1F5A50}
-.audit-panel{display:none;padding:16px 14px;flex-direction:column;gap:6px}
-.audit-panel.on{display:flex}
-.audit-row{font:400 12px/1.45 'Geist Mono',monospace;color:var(--mute);padding:3px 8px;border-radius:4px;overflow-wrap:anywhere;white-space:pre-wrap}
-.audit-row .a-ts{color:#6E7880}.audit-row .a-type{color:var(--cyan)}.audit-row .a-sum{color:var(--ink)}.audit-row .a-why{color:var(--amber);display:block;padding-left:1ch;margin-top:2px}
 @keyframes slam{0%{transform:rotate(-2deg) scale(1.6);opacity:0}100%{transform:rotate(-2deg) scale(1);opacity:1}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes blink{50%{opacity:.2}}
@@ -189,10 +181,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     <div style="font-family:'Instrument Serif',serif;font-style:italic;font-size:36px;line-height:1">Nightborn</div>
     <div class="mono-muted" id="clock">night shift · --:--</div>
     <div class="conn" id="conn">connecting…</div>
-    <label class="audit-tog" id="auditTog" title="Show goal audit trail">
-      <input type="checkbox" id="auditChk" autocomplete="off">
-      <span>Audit</span>
-    </label>
   </div>
   <div style="display:flex;align-items:center;gap:14px">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E8E4DA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10.5" width="16" height="10" rx="2"></rect><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"></path></svg>
@@ -301,16 +289,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         <button type="button" class="chip" data-chip>News on OpenAI</button>
         <button type="button" class="chip chip-deny" data-chip>Email this news digest to my boss every morning.</button>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-        <span class="kicker" style="width:100%">VOICE NOTE BEAT</span>
-        <button type="button" class="chip" id="vnCreature">1 · Send note (Frankenstein voice)</button>
-        <button type="button" class="chip" data-chip>That does not sound like you, did you get a cold?</button>
-        <button type="button" class="chip" id="vnRecord">2 · Record my voice (~20s)</button>
-        <button type="button" class="chip" id="vnUpload">2b · Upload sample</button>
-        <button type="button" class="chip" id="vnLearned" disabled>3 · Send note again (learned voice)</button>
-        <input type="file" id="vnFile" accept="audio/*,.mp3,.wav,.webm,.m4a" hidden>
-        <span class="mono-muted" id="vnStatus">voice: creature only</span>
-      </div>
       <form id="talkForm" style="display:flex;gap:8px;flex-wrap:wrap">
         <label for="nbf-in" class="sr">Message Nightborn</label>
         <input id="nbf-in" class="inp" type="text" autocomplete="off" placeholder="Message Nightborn">
@@ -319,14 +297,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     </section>
   </aside>
 </div>
-
-<section class="panel audit-panel" id="auditPanel" aria-hidden="true">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px;gap:12px;flex-wrap:wrap">
-    <span class="kicker">AUDIT</span>
-    <span class="mono-muted" id="auditMeta">ts · type · summary</span>
-  </div>
-  <div id="auditList"></div>
-</section>
 
 <section class="panel" style="padding:16px 14px;display:flex;flex-direction:column;gap:4px">
   <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 6px">
@@ -349,7 +319,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   ];
   const EVENT_STAGE = {
     gap: "gap", matched: "gap",
-    forge: "forge",
+    forge: "forge", doctor: "forge",
     precheck: "warden", denied: "warden",
     test: "test", broken: "test",
     final: "install", install: "install", reuse: "install",
@@ -398,7 +368,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   };
   const chips = [...document.querySelectorAll("[data-chip]")];
 
-  /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[], auditOn: boolean, goalId: string|null, auditRecords: any[]}} */
+  /** @type {{lines: any[], since: number, firstPoll: boolean, busy: boolean, audioUnlocked: boolean, bootHash: string|null, msgs: any[], auditOn: boolean, goalId: string|null, auditRecords: any[], growingSkill: string|null, runningSkill: string|null, seenMsgIds: Record<number, boolean>, pendingUser: string|null, sseOk: boolean, agentWaiting: boolean, agentFinalizing: boolean, hostChannel: string|null}} */
   const state = {
     lines: [],
     since: 0,
@@ -410,6 +380,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     auditOn: false,
     goalId: null,
     auditRecords: [],
+    growingSkill: null,
+    runningSkill: null,
+    seenMsgIds: Object.create(null),
+    pendingUser: null,
+    sseOk: false,
+    agentWaiting: false,
+    agentFinalizing: false,
+    hostChannel: null,
   };
 
   /** @type {HTMLAudioElement[]} */
@@ -434,6 +412,23 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     el.send.disabled = b;
     el.input.disabled = b;
     chips.forEach((c) => { c.disabled = b; });
+  }
+
+  function refreshBusyFromAgent() {
+    setBusy(state.agentWaiting || state.agentFinalizing);
+  }
+
+  function connLabel() {
+    if (state.hostChannel && state.hostChannel !== "live") {
+      const file =
+        state.hostChannel === "fixture"
+          ? "surgery.fixture.log"
+          : state.hostChannel === "smoke"
+            ? "surgery.smoke.log"
+            : "surgery." + state.hostChannel + ".log";
+      return "host writes " + file + " · UI reads live";
+    }
+    return state.sseOk ? "live · sse + /api/log" : "live · /api/log";
   }
 
   function unlockAudioOnce() {
@@ -477,12 +472,21 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     });
   }
 
+  function isDoctorGap(l) {
+    if (!l) return false;
+    if (l.failureCode === "doctor_required") return true;
+    return /recognized gap|Doctor growing/i.test(String(l.detail || ""));
+  }
+
   function derive(log) {
     const st = { gap: "idle", forge: "idle", warden: "idle", test: "idle", install: "idle" };
     const det = { gap: "", forge: "", warden: "", test: "", install: "" };
     let jobIdx = -1;
     log.forEach((l, i) => { if (l.event === "job") jobIdx = i; });
-    const out = { st, det, pending: false, term: null, skill: null, lastStage: null, job: null };
+    const out = {
+      st, det, pending: false, term: null, skill: null, lastStage: null, job: null,
+      doctorGrowing: false, growingSkill: null,
+    };
     if (jobIdx < 0) return out;
     out.job = log[jobIdx];
     out.skill = out.job.skill;
@@ -493,15 +497,48 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       if (l.event !== "broken") {
         det[stage] = l.event === "final"
           ? ("PRE ✓ · " + (l.detail || ""))
-          : (l.detail || l.event);
+          : (l.event === "doctor"
+            ? (l.detail || "fill a recipe")
+            : (l.detail || l.event));
       }
       out.lastStage = stage;
+      if (l.event === "gap" && isDoctorGap(l)) {
+        out.doctorGrowing = true;
+        out.growingSkill = l.skill || out.skill;
+        det.gap = l.detail || "need vs installed";
+      }
+      if (l.event === "doctor") {
+        out.doctorGrowing = true;
+        if (l.skill) out.growingSkill = l.skill;
+      }
       if (["install", "reuse", "denied", "broken"].includes(l.event)) out.term = l;
     });
+    // Multi-limb growth: keep building while Talk reported wait (mid-limb reuse is not done).
+    if (state.agentWaiting) {
+      out.pending = true;
+      out.doctorGrowing = true;
+      if (!out.growingSkill) out.growingSkill = state.growingSkill;
+      st.gap = "done";
+      if (!det.gap) det.gap = "need vs installed";
+      st.forge = "active";
+      det.forge = det.forge || "fill a recipe";
+      if (!out.lastStage || out.lastStage === "install") out.lastStage = "forge";
+      out.term = null;
+      return out;
+    }
     const t = out.term;
     if (!t) {
       out.pending = true;
-      if (out.lastStage) st[out.lastStage] = "active";
+      if (out.doctorGrowing && (out.lastStage === "gap" || out.lastStage === "forge")) {
+        // Gap recognized; limb is growing while forge may not be in the log yet.
+        st.gap = "done";
+        if (!det.gap) det.gap = "need vs installed";
+        st.forge = "active";
+        det.forge = det.forge || "fill a recipe";
+        out.lastStage = "forge";
+      } else if (out.lastStage) {
+        st[out.lastStage] = "active";
+      }
     } else if (t.event === "denied") {
       st.warden = "fail";
       det.warden = "PRE · " + ((t.caps || []).join(", ") || t.failureCode || "") + " ∉ charter";
@@ -517,6 +554,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     } else if (t.event === "reuse") {
       ["forge", "warden", "test"].forEach((k) => { st[k] = "bypass"; det[k] = "skipped"; });
       det.install = "reuse · " + (t.detail || "");
+    } else if (t.event === "install" && out.doctorGrowing) {
+      if (!det.gap || det.gap === "need vs installed") {
+        det.gap = "need vs installed";
+      }
     }
     return out;
   }
@@ -557,13 +598,90 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         const b = document.createElement("div");
         b.className = "bubble-n";
         const t = document.createElement("div");
-        t.className = m.voice ? "nb-text nb-voice" : (m.plain ? "nb-plain" : "nb-text");
-        t.textContent = m.text;
+        t.className = m.voice
+          ? "nb-text nb-voice"
+          : (m.plain || m.status ? "nb-plain" : "nb-text");
+        fillTextWithLinks(t, m.text || "");
         b.appendChild(t);
         row.appendChild(b);
       }
       el.msgs.appendChild(row);
     });
+  }
+
+  function ingestTranscriptMessage(m) {
+    if (!m || typeof m.id !== "number") return false;
+    if (state.seenMsgIds[m.id]) return false;
+    state.seenMsgIds[m.id] = true;
+    if (typeof m.goalId === "string" && m.goalId) state.goalId = m.goalId;
+    if (m.role === "user") {
+      if (state.pendingUser && m.text === state.pendingUser) {
+        state.pendingUser = null;
+        return false;
+      }
+      state.msgs.push({ who: "user", text: m.text || "" });
+      return true;
+    }
+    if (m.role === "status") {
+      state.runningSkill = m.skill || state.runningSkill;
+      const t = m.text || "";
+      if (/still growing/i.test(t)) {
+        state.agentWaiting = true;
+        state.agentFinalizing = false;
+      } else if (/all hands ready/i.test(t)) {
+        state.agentFinalizing = true;
+      } else if (/Waiting on a secret|Waiting on Composio|Capability failed|Composio access failed|Schedule .+ fired/i.test(t)) {
+        state.agentWaiting = true;
+        state.agentFinalizing = false;
+      }
+      refreshBusyFromAgent();
+      state.msgs.push({ who: "nb", text: t || "Working…", status: true, plain: true });
+      return true;
+    }
+    // assistant
+    state.runningSkill = null;
+    if (state.agentFinalizing) {
+      // Final deals / wrap-up after all hands ready.
+      state.growingSkill = null;
+      state.agentWaiting = false;
+      state.agentFinalizing = false;
+      refreshBusyFromAgent();
+    } else if (state.agentWaiting && m.skill) {
+      // Intermediate per-limb reuse — keep growing / busy.
+      state.growingSkill = m.skill;
+    } else {
+      // Chat-only wake (needs_secret / failed / schedule) or normal reply — unlock.
+      state.growingSkill = null;
+      state.agentWaiting = false;
+      state.agentFinalizing = false;
+      refreshBusyFromAgent();
+    }
+    state.msgs.push({ who: "nb", text: m.text || "", plain: true });
+    return true;
+  }
+
+  function connectMessageStream() {
+    if (state.es) {
+      try { state.es.close(); } catch (_) {}
+      state.es = null;
+    }
+    const es = new EventSource("/api/messages/stream");
+    state.es = es;
+    es.addEventListener("message", (ev) => {
+      try {
+        const m = JSON.parse(ev.data);
+        if (ingestTranscriptMessage(m)) render();
+      } catch (_) { /* bad event */ }
+    });
+    es.onopen = () => {
+      state.sseOk = true;
+      if (el.conn && !el.conn.classList.contains("err")) {
+        el.conn.textContent = connLabel();
+      }
+    };
+    es.onerror = () => {
+      state.sseOk = false;
+    };
   }
 
   function tagView(pos, num, slotState, name, extra) {
@@ -588,7 +706,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       stamp: "",
     };
     if (slotState === "vacant") { o.name = "— vacant —"; o.l2 = "awaiting a need"; }
-    else if (slotState === "forging") { o.kicker += " · SEWING"; o.l2 = "recipe http · params"; }
+    else if (slotState === "forging") {
+      o.kicker += " · SEWING";
+      o.l2 = "recipe http · params";
+    }
     else if (slotState === "scan") { o.kicker += " · WARDEN"; o.l2 = (extra && extra.caps) || "net:fetch ⊆ charter"; }
     else if (slotState === "testing") { o.kicker += " · TEST"; o.l2 = "run · validate"; }
     else if (slotState === "alive" || slotState === "flow") {
@@ -660,15 +781,24 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       el.stations.appendChild(div);
     });
 
-    // mode pill
+    // mode pill (visual wording matches pi/nightborn-ui)
     let mode = "idle";
     let modeText = "IDLE · WAITING FOR A JOB";
-    if (d.pending) {
+    const names = { gap: "GAP", forge: "FORGE", warden: "WARDEN", test: "TEST", install: "INSTALL" };
+    const buildSkill = d.growingSkill || d.skill || state.growingSkill || state.runningSkill || "…";
+    if (state.runningSkill || state.agentWaiting || d.pending) {
       mode = "build";
-      const names = { gap: "GAP", forge: "FORGE", warden: "WARDEN", test: "TEST", install: "INSTALL" };
-      modeText = "BUILD · " + (d.skill || "…") + (d.lastStage ? " · " + names[d.lastStage] : "");
-    } else if (t && t.event === "install") { mode = "done"; modeText = "INSTALLED · " + t.skill; }
-    else if (t && t.event === "reuse") { mode = "reuse"; modeText = "REUSE · NO BUILD · " + t.skill; }
+      modeText = "BUILD · " + buildSkill + (d.lastStage ? " · " + names[d.lastStage] : "");
+    } else if (t && t.event === "install") {
+      mode = "done";
+      modeText = "INSTALLED · " + t.skill;
+      if (!state.agentWaiting) state.growingSkill = null;
+    }
+    else if (t && t.event === "reuse") {
+      mode = "reuse";
+      modeText = "REUSE · NO BUILD · " + t.skill;
+      if (!state.agentWaiting) state.growingSkill = null;
+    }
     else if (t && t.event === "denied") { mode = "deny"; modeText = "DENIED · " + (t.failureCode || "denied"); }
     else if (t && t.event === "broken") { mode = "deny"; modeText = "BROKEN · " + (t.failureCode || "broken"); }
     el.modePill.className = "mode mode-" + mode;
@@ -683,10 +813,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       }
     });
     const building = d.pending && ["forge", "warden", "test"].includes(d.lastStage);
-    const aName = graftSkills[0] || (d.skill && d.skill !== "email_send" ? d.skill : null);
+    const growingLimb = d.pending && (d.doctorGrowing || state.growingSkill);
+    const limbName = d.growingSkill || d.skill || state.growingSkill;
+    const aName = graftSkills[0] || (limbName && limbName !== "email_send" ? limbName : null);
     let aState = "vacant";
     if (graftSkills[0]) {
       aState = (t && t.event === "reuse" && t.skill === graftSkills[0]) ? "flow" : "alive";
+    } else if (growingLimb && aName) {
+      aState = ({ forge: "forging", warden: "scan", test: "testing", gap: "forging" })[d.lastStage] || "forging";
     } else if (d.skill && d.skill !== "email_send" && d.pending) {
       aState = ({ forge: "forging", warden: "scan", test: "testing" })[d.lastStage] || "vacant";
     } else if (t && t.event === "broken" && t.skill && t.skill !== "email_send") {
@@ -754,11 +888,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
     // log tail
     el.logTail.innerHTML = "";
-    const tail = log.slice(-12);
+    const tail = log.slice(-24);
     tail.forEach((l, i) => {
       const bad = l.decision === "deny" || l.decision === "fail" || l.event === "denied" || l.event === "broken";
       const div = document.createElement("div");
-      div.className = "ln" + (i === tail.length - 1 ? " ln-new" : "") + (bad ? " ln-deny" : "");
+      div.className =
+        "ln" +
+        (i === tail.length - 1 ? " ln-new" : "") +
+        (bad ? " ln-deny" : "");
       const sh = shortHash(l.charterHash);
       div.innerHTML =
         '<span class="c-t"></span><span class="c-e"></span><span class="c-a"></span><span class="c-d"></span><span class="c-h"></span>';
@@ -790,12 +927,16 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         state.bootHash = null;
       }
 
+      if (typeof data.hostChannel === "string" && data.hostChannel) {
+        state.hostChannel = data.hostChannel;
+      }
+
       if (state.firstPoll) {
         state.lines = state.lines.concat(lines);
         state.since = next;
         state.firstPoll = false;
-        el.conn.textContent = "live · /api/log";
-        el.conn.classList.remove("err");
+        el.conn.textContent = connLabel();
+        el.conn.classList.toggle("err", !!(state.hostChannel && state.hostChannel !== "live"));
         render();
         return;
       }
@@ -805,8 +946,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         if (l.voice) enqueueVoice(l.voice);
       }
       state.since = next;
-      el.conn.textContent = "live · /api/log";
-      el.conn.classList.remove("err");
+      el.conn.textContent = connLabel();
+      el.conn.classList.toggle("err", !!(state.hostChannel && state.hostChannel !== "live"));
       render();
     } catch (e) {
       el.conn.textContent = "offline · waiting for host :8787";
@@ -816,6 +957,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
 
   function setAuditOn(on) {
     state.auditOn = !!on;
+    if (!el.auditChk || !el.auditTog || !el.auditPanel) {
+      state.auditOn = false;
+      return;
+    }
     el.auditChk.checked = state.auditOn;
     el.auditTog.classList.toggle("on", state.auditOn);
     el.auditPanel.classList.toggle("on", state.auditOn);
@@ -823,13 +968,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     if (state.auditOn) pollAudit();
     else {
       state.auditRecords = [];
-      el.auditList.replaceChildren();
-      el.auditMeta.textContent = "ts · type · summary";
+      if (el.auditList) el.auditList.replaceChildren();
+      if (el.auditMeta) el.auditMeta.textContent = "ts · type · summary";
     }
   }
 
   function renderAudit() {
-    if (!state.auditOn) return;
+    if (!state.auditOn || !el.auditList) return;
     const rows = state.auditRecords.slice(-80);
     el.auditList.replaceChildren();
     if (!rows.length) {
@@ -853,9 +998,32 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
         el.auditList.appendChild(div);
       });
     }
-    el.auditMeta.textContent = state.goalId
-      ? "goal · " + state.goalId + " · " + rows.length + " shown"
-      : "all goals · " + rows.length + " shown";
+    if (el.auditMeta) {
+      el.auditMeta.textContent = state.goalId
+        ? "goal · " + state.goalId + " · " + rows.length + " shown"
+        : "all goals · " + rows.length + " shown";
+    }
+  }
+
+  function fillTextWithLinks(el, text) {
+    const s = String(text || "");
+    const re = /https?:\/\/[^\s<>"')\]]+/g;
+    let last = 0;
+    let m;
+    while ((m = re.exec(s))) {
+      if (m.index > last) el.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const a = document.createElement("a");
+      a.href = m[0];
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = m[0];
+      a.style.color = "var(--cyan)";
+      a.style.wordBreak = "break-all";
+      el.appendChild(a);
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) el.appendChild(document.createTextNode(s.slice(last)));
+    if (!s) el.textContent = "";
   }
 
   function escapeHtml(s) {
@@ -867,7 +1035,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   }
 
   async function pollAudit() {
-    if (!state.auditOn) return;
+    if (!state.auditOn || !el.auditList) return;
     try {
       const q = state.goalId
         ? "?goalId=" + encodeURIComponent(state.goalId)
@@ -890,7 +1058,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       state.auditRecords = records;
       renderAudit();
     } catch (_) {
-      if (!el.auditList.childElementCount) {
+      if (el.auditList && !el.auditList.childElementCount) {
         const err = document.createElement("div");
         err.className = "audit-row";
         err.textContent = "audit unreachable";
@@ -904,6 +1072,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     if (!t || state.busy) return;
     unlockAudioOnce();
     setBusy(true);
+    state.pendingUser = t;
     state.msgs.push({ who: "user", text: t });
     renderMsgs();
     el.input.value = "";
@@ -916,24 +1085,36 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
       if (!res.ok) throw new Error("HTTP " + res.status);
       const data = await res.json();
       if (typeof data.goalId === "string" && data.goalId) state.goalId = data.goalId;
-      if (data.kind === "chat") {
-        state.msgs.push({ who: "nb", text: data.text || "", plain: true });
-      } else if (data.kind === "job") {
-        const voiceish = data.outcome === "denied" || data.outcome === "broken";
-        state.msgs.push({
-          who: "nb",
-          text: data.reply || data.outcome || "",
-          voice: voiceish,
-          plain: data.outcome === "broken",
-        });
+      if (typeof data.growingSkill === "string" && data.growingSkill) {
+        state.growingSkill = data.growingSkill;
+      }
+      if (data.status === "waiting") {
+        state.agentWaiting = true;
+        state.agentFinalizing = false;
       } else {
-        state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
+        state.agentWaiting = false;
+        state.agentFinalizing = false;
+      }
+      // Assistant / status lines arrive via SSE transcript — Talk only sets meta / errors.
+      if (data.kind === "job" && (data.outcome === "denied" || data.outcome === "broken")) {
+        // Voice-ish denied still needs a bubble if SSE lags; prefer SSE when present.
+        if (!state.sseOk) {
+          state.msgs.push({
+            who: "nb",
+            text: data.reply || data.outcome || "",
+            voice: data.outcome === "denied",
+            plain: data.outcome === "broken",
+          });
+        }
       }
       if (state.auditOn) pollAudit();
     } catch (e) {
+      state.pendingUser = null;
+      state.agentWaiting = false;
+      state.agentFinalizing = false;
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {
-      setBusy(false);
+      refreshBusyFromAgent();
       render();
     }
   }
@@ -1104,7 +1285,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
     })
     .catch(() => {});
 
-  el.auditChk.addEventListener("change", () => setAuditOn(el.auditChk.checked));
+  if (el.auditChk) {
+    el.auditChk.addEventListener("change", () => setAuditOn(el.auditChk.checked));
+  }
   setAuditOn(false);
 
   fmtClock();
@@ -1113,6 +1296,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:'Geist',system-u
   poll();
   setInterval(poll, 1000);
   setInterval(() => { if (state.auditOn) pollAudit(); }, 2000);
+  connectMessageStream();
 })();
 </script>
 </body>

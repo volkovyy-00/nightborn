@@ -12,8 +12,25 @@ export type RuntimeEvent =
   | {
       type: "capability.needs_secret";
       requestId: string;
+      goalId: string;
       envKeys: string[];
       message: string;
+    }
+  | {
+      type: "access.needs_connect";
+      requestId: string;
+      goalId: string;
+      toolkit: string;
+      redirectUrl: string;
+      message: string;
+    }
+  | { type: "access.ready"; requestId: string; goalId: string; toolkit: string }
+  | {
+      type: "access.failed";
+      requestId: string;
+      goalId: string;
+      toolkit: string;
+      error: string;
     }
   | { type: "secrets.provided"; envKeys: string[] }
   | { type: "schedule.fired"; scheduleId: string; goalId: string }

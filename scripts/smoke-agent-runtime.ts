@@ -25,7 +25,7 @@ import { doctorDirs } from "../src/doctor/inbox.ts";
 import { subscribe, type RuntimeEvent } from "../src/events.ts";
 import { ensureLogFile } from "../src/log.ts";
 import { mockProviderResponse } from "../src/mock.ts";
-import { REPO_ROOT, repoPath } from "../src/paths.ts";
+import { dataPath, REPO_ROOT, repoPath } from "../src/paths.ts";
 import { executeJob } from "../src/runner.ts";
 import {
   reloadEnvFromDotfile,
@@ -83,10 +83,14 @@ async function startMockServer(port: number): Promise<Server> {
   const server = createServer(async (req, res) => {
     try {
       const u = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
-      const m = u.pathname.match(/^\/mock\/([^/]+)(?:\/v1\/calls)?\/?$/);
+      // Match host OFFLINE mocks: /mock/:provider, /mock/:provider/v1/calls,
+      // /mock/:provider/res/v1/web|news/search
+      const m = u.pathname.match(
+        /^\/mock\/([^/]+)(?:\/(?:v1\/calls|res\/v1\/(?:web|news)\/search))?\/?$/,
+      );
       if (!m) {
         res.writeHead(404, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "not found" }));
+        res.end(JSON.stringify({ error: "not found", path: u.pathname }));
         return;
       }
       const provider = m[1]!;
@@ -177,9 +181,91 @@ function fileExists(p: string): boolean {
   return existsSync(p);
 }
 
+/** Live Create must not install; loop auto-routes doctor_required → submit + park. */
+async function assertDoctorOnlyGate(
+  checks: Check[],
+  stamp: string,
+): Promise<void> {
+  const push = (name: string, ok: boolean, detail: string) => {
+    checks.push({ name, ok, detail });
+    console.log(`${ok ? "PASS" : "FAIL"}  ${name} — ${detail}`);
+  };
+
+  const missing = `smoke_no_create_${stamp}`;
+  const skillDir = path.join(dataPath("skills"), missing);
+  const blocked = await executeJob(
+    {
+      skill: missing,
+      intent: "used car listings scrape",
+      query: "BMW under 10k",
+      needs: ["net:fetch"],
+    },
+    undefined,
+    "live",
+  );
+  push(
+    "live_create_blocked",
+    blocked.kind === "job" &&
+      blocked.outcome === "needs_capability" &&
+      blocked.failureCode === "doctor_required",
+    blocked.kind === "job"
+      ? `${blocked.outcome}/${blocked.failureCode}`
+      : blocked.text,
+  );
+  push("live_create_no_install", !fileExists(skillDir), skillDir);
+
+  // Loop redirect without calling real executeJob Create (mock doctor_required).
+  const gateGoal = `goal_doctor_gate_${stamp}`;
+  const exec = await executeActions(
+    [
+      {
+        type: "run_skill",
+        skill: missing,
+        intent: "used car listings scrape",
+        query: "BMW under 10k",
+        needs: ["net:fetch"],
+      },
+    ],
+    {
+      goalId: gateGoal,
+      runSkill: async (job) => ({
+        kind: "job",
+        job,
+        outcome: "needs_capability",
+        skill: job.skill,
+        failureCode: "doctor_required",
+        reply: "Doctor required.",
+      }),
+    },
+  );
+  const parked = await loadParkedGoal(gateGoal);
+  const reqOk =
+    exec.waiting &&
+    !!parked &&
+    (exec.requestIds?.length ?? 0) >= 1 &&
+    parked.requestIds.includes(exec.requestIds![0]!);
+  push(
+    "doctor_required_parks",
+    reqOk,
+    `waiting=${exec.waiting} requestIds=${exec.requestIds?.join(",") ?? "(none)"}`,
+  );
+  // Brief enqueued (inbox or already taken to wip by Doctor kick).
+  const dirs = doctorDirs();
+  const rid = exec.requestIds?.[0];
+  const briefLanded =
+    !!rid &&
+    (fileExists(path.join(dirs.inbox, `${rid}.md`)) ||
+      fileExists(path.join(dirs.wip, `${rid}.md`)) ||
+      fileExists(path.join(dirs.done, `${rid}.md`)));
+  push("doctor_required_enqueued", briefLanded, rid ?? "no requestId");
+}
+
 async function main(): Promise<void> {
   loadDotEnv();
   process.env.OFFLINE = "1";
+  // Isolate surgery lines from the host UI log (surgery.log).
+  process.env.SMOKE_AGENT = "1";
+  process.env.SURGERY_CHANNEL = "smoke";
   // Avoid Pi planner / live forge — Doctor uses defaults scaffolds.
   process.env.JUDGE_MODE = process.env.JUDGE_MODE || "1";
 
@@ -193,8 +279,11 @@ async function main(): Promise<void> {
   process.env.PORT = String(port);
   const mock = await startMockServer(port);
 
-  ensureLogFile();
+  ensureLogFile(); // → surgery.smoke.log
   loadAndPinCharter();
+
+  const checks: Check[] = [];
+  await assertDoctorOnlyGate(checks, stamp);
 
   const events: RuntimeEvent[] = [];
   const unsubEvents = subscribe((e) => {
@@ -286,6 +375,9 @@ async function main(): Promise<void> {
     plan,
     runSkill,
     onResult(_result, resume) {
+      if (resume.event.type !== "capability.ready" || !resume.requestId || !resume.skill) {
+        return;
+      }
       resumes.push({
         goalId: resume.goalId,
         requestId: resume.requestId,
@@ -295,7 +387,6 @@ async function main(): Promise<void> {
     },
   });
 
-  const checks: Check[] = [];
   const push = (name: string, ok: boolean, detail: string) => {
     checks.push({ name, ok, detail });
     console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
@@ -397,6 +488,10 @@ async function main(): Promise<void> {
         why: fx.call.why,
       };
 
+      // Doctor skips secret checks while OFFLINE=1; flip briefly so needs_secret fires.
+      const offlineWas = process.env.OFFLINE;
+      process.env.OFFLINE = "0";
+
       // Re-park for the call capability (same goal).
       const callExec = await executeActions(
         [
@@ -421,10 +516,12 @@ async function main(): Promise<void> {
             (e) =>
               e.type === "capability.needs_secret" &&
               e.requestId === callId &&
+              e.goalId === goalId &&
               e.envKeys.includes("BLAND_API_KEY"),
           ),
         READY_TIMEOUT_MS,
       );
+      process.env.OFFLINE = offlineWas ?? "1";
       const needs = events.find(
         (e) => e.type === "capability.needs_secret" && e.requestId === callId,
       );

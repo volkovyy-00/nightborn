@@ -16,6 +16,8 @@ export type CapabilityBrief = {
   defaultsHint?: string;
   /** Skill name if this is a patch request. */
   changeOf?: string;
+  /** Verbatim user message — Forge prompt authoritative input. */
+  userAsk?: string;
   /** For audit + later eval. */
   why: string;
 };
@@ -35,6 +37,18 @@ export type AgentAction =
     }
   | { type: "request_capability"; brief: CapabilityBrief }
   | { type: "request_capability_change"; skill: string; brief: CapabilityBrief }
+  | {
+      type: "request_access";
+      toolkit: string;
+      requestId: string;
+      why: string;
+    }
+  | {
+      type: "run_composio_tool";
+      tool: string;
+      arguments: Record<string, unknown>;
+      intent: string;
+    }
   | { type: "write_memory"; path: string; markdown: string }
   | { type: "schedule"; schedule: ScheduleSpec }
   | { type: "wait"; reason: string; requestIds?: string[] };

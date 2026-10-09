@@ -7,10 +7,92 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ForgeArtifact } from "./types.ts";
+import {
+  executeComposioTool,
+  isSkillToolkitConnected,
+  requestToolkitAccess,
+  searchComposioTools,
+  setPendingComposioBinding,
+  skillComposioUserId,
+} from "./composio.ts";
+import type { ComposioSkillBinding, ForgeArtifact, ForgeContext } from "./types.ts";
+import {
+  appendForgeToolLine,
+  finishForgeDebug,
+  forgeAuthoritativeAskPrefix,
+  sessionFromCtx,
+  writeForgeDebug,
+} from "./forgeDebug.ts";
 import { repoPath, REPO_ROOT } from "./paths.ts";
 import { listSkillDirs } from "./hash.ts";
 import { createPiAuthAndRegistry, createPiResourceLoader, piAgentDir, resolvePiModel } from "./pi.ts";
+
+/** Thrown when Forge requested Composio Connect — Doctor parks and retries. */
+export class NeedsComposioAccessError extends Error {
+  readonly code = "needs_composio_access" as const;
+  readonly toolkit: string;
+  readonly requestId: string;
+  readonly skillName: string;
+  readonly redirectUrl: string | null;
+  readonly why: string;
+
+  constructor(opts: {
+    toolkit: string;
+    requestId: string;
+    skillName: string;
+    redirectUrl: string | null;
+    why: string;
+  }) {
+    super(
+      `needs_composio_access toolkit=${opts.toolkit} skill=${opts.skillName}` +
+        (opts.redirectUrl ? ` url=${opts.redirectUrl}` : ""),
+    );
+    this.name = "NeedsComposioAccessError";
+    this.toolkit = opts.toolkit;
+    this.requestId = opts.requestId;
+    this.skillName = opts.skillName;
+    this.redirectUrl = opts.redirectUrl;
+    this.why = opts.why;
+  }
+}
+
+export function isNeedsComposioAccessError(err: unknown): err is NeedsComposioAccessError {
+  return err instanceof NeedsComposioAccessError ||
+    (Boolean(err) &&
+      typeof err === "object" &&
+      (err as { code?: string }).code === "needs_composio_access");
+}
+
+/**
+ * Thrown when Forge confirmed Composio access but the agent still returned no skillSource.
+ * Doctor must fail (not scaffold cars.com over an Apify/Marketplace brief).
+ */
+export class NeedsSkillAfterComposioError extends Error {
+  readonly code = "needs_skill_after_composio" as const;
+  readonly toolkit: string;
+  readonly skillName: string;
+
+  constructor(opts: { toolkit: string; skillName: string; detail?: string }) {
+    super(
+      `needs_skill_after_composio toolkit=${opts.toolkit} skill=${opts.skillName}` +
+        (opts.detail ? ` · ${opts.detail}` : ""),
+    );
+    this.name = "NeedsSkillAfterComposioError";
+    this.toolkit = opts.toolkit;
+    this.skillName = opts.skillName;
+  }
+}
+
+export function isNeedsSkillAfterComposioError(
+  err: unknown,
+): err is NeedsSkillAfterComposioError {
+  return (
+    err instanceof NeedsSkillAfterComposioError ||
+    (Boolean(err) &&
+      typeof err === "object" &&
+      (err as { code?: string }).code === "needs_skill_after_composio")
+  );
+}
 
 const MAX_SKILL_SOURCE = 48_000;
 
@@ -142,14 +224,22 @@ const FORGE_SYSTEM = [
   "skillSource = FULL skill.mjs that runs as `node skill.mjs` (NOT a handler, NOT Express, NOT AWS Lambda).",
   "HARD RULES:",
   "- No imports. No require. No node-fetch. No export default. Use global fetch.",
-  "- Read ALL of process.stdin as JSON: { query, baseUrl? }",
+  "- Read ALL of process.stdin as JSON: { query, baseUrl?, composioProxyUrl? }",
   "- Write ONE JSON object to process.stdout: { items:[{title,url,date?}] }",
   "- process.env.BRAVE_API_KEY (or TAVILY_API_KEY), or BLAND_API_KEY when capabilities include notify:phone. AbortSignal.timeout(6000).",
   "- NEVER string literals starting with / — use relative paths \"res/v1/web/search\" or \"v1/calls\".",
   "- Use String.fromCharCode(47) + joinBase(baseUrl, origin, \"res/v1/...\") as in the example.",
   "- Forums/deals → web search endpoint; company news → news search endpoint; outbound call → Bland POST v1/calls.",
   "- Bland: query is +E164|||task; POST {phone_number,task}; map call_id to items url bland:call/<id>; capabilities [\"net:fetch\",\"notify:phone\"]. Task text must tell the agent to ask ONE question at a time (conversational), never a stacked list.",
+  "- NEVER dial during Forge. If process.env.NIGHTBORN_BLOCK_OUTBOUND==='1', dry-run: stdout items with bland:call/dry-run and do not fetch api.bland.ai. Host skips live call tests on install.",
   "- Shape q= for the job (e.g. append forum OR reddit for forum asks).",
+  "- listings.http_scrape: site:<siteHost> Brave search; DROP shopping-index hubs (category shopping, price-under, used-cars-under, titles without a model year). Retry year+make queries until vehicle cards remain. Never emit hub-only results.",
+  "COMPOSIO (skill-scoped marketplace access):",
+  "- Hard scrapes / Actors (LinkedIn, Indeed, bot-walled sites) → call request_composio_access toolkit=apify BEFORE emit_forge_skill.",
+  "- Access is for THIS skill only (not a global Forge grant). Never request gmail/email/SMTP toolkits.",
+  "- After access is connected, you may composio_search / composio_execute to discover Actors, then emit_forge_skill.",
+  "- Composio-backed skills: POST JSON {tool, arguments} to input.composioProxyUrl (host proxy). Map results into items[]. Do NOT use COMPOSIO_API_KEY in skillSource.",
+  "- When emitting a Composio-backed skill, set composioToolkit (e.g. apify) on emit_forge_skill.",
   "EXAMPLE shape (adapt endpoint/query; keep stdin/stdout):",
   "async function readStdin(){const c=[];for await(const x of process.stdin)c.push(x);return Buffer.concat(c).toString('utf8')}",
   "const SLASH=String.fromCharCode(47);",
@@ -161,24 +251,182 @@ const FORGE_SYSTEM = [
   "const res=await fetch(u,{headers:{'X-Subscription-Token':key,Accept:'application/json'},signal:AbortSignal.timeout(6000)});",
   "const data=await res.json(); const results=data.web?.results??data.results??[];",
   "process.stdout.write(JSON.stringify({items:results.map(r=>({title:r.title||'',url:r.url||''}))}));",
-  "Call emit_forge_skill exactly once.",
+  "Call emit_forge_skill exactly once when done (or request_composio_access if you need marketplace access first).",
 ].join("\n");
+
+/**
+ * Freeform Forge entry.
+ * - PLANNER=cursor → Cursor SDK (`CURSOR_API_KEY`) via planner backend
+ * - else FORGE_BACKEND=cursor → local `agent` CLI (`agent login`, no API key)
+ * - else Pi (OpenRouter)
+ */
+export async function forgeSkill(
+  intent: string,
+  query: string,
+  proposedName?: string | null,
+  ctx?: ForgeContext | null,
+): Promise<ForgeArtifact> {
+  const planner = (process.env.PLANNER || "pi").trim().toLowerCase();
+  if (planner === "cursor") {
+    const { forgeSkillViaCursorSdk } = await import("./planner/cursor.ts");
+    return forgeSkillViaCursorSdk(intent, query, proposedName, ctx);
+  }
+  const backend = (process.env.FORGE_BACKEND || "pi").trim().toLowerCase();
+  if (backend === "cursor") {
+    const { forgeSkillViaCursorCli } = await import("./forgeCursorCli.ts");
+    return forgeSkillViaCursorCli(intent, query, proposedName, ctx);
+  }
+  return forgeSkillViaPi(intent, query, proposedName, ctx);
+}
 
 export async function forgeSkillViaPi(
   intent: string,
   query: string,
   proposedName?: string | null,
+  ctx?: ForgeContext | null,
 ): Promise<ForgeArtifact> {
   let captured: ForgeArtifact | null = null;
+  let accessAbort: NeedsComposioAccessError | null = null;
+  let forgeBinding: ComposioSkillBinding | null = null;
+  const dbg = sessionFromCtx(ctx ?? undefined, "pi");
+  let debugFinished = false;
+  const doneDebug = (opts?: { promptBytes?: number; error?: string }) => {
+    if (debugFinished) return;
+    debugFinished = true;
+    finishForgeDebug(dbg, opts);
+  };
+
+  const skillName =
+    (proposedName?.trim() || ctx?.skillName?.trim() || "forged_skill").slice(0, 48);
+  const requestId = ctx?.requestId?.trim() || `forge_${skillName}`;
+  const goalId = ctx?.goalId?.trim() || "goal_forge";
+
+  const requestAccess = defineTool({
+    name: "request_composio_access",
+    label: "Request Composio Access",
+    description:
+      "Request skill-scoped Composio toolkit access (e.g. apify) for the skill you are forging. Final if Connect Link is required.",
+    promptGuidelines: [
+      "Use when Brave/fetch alone cannot fulfill the brief (hard scrapes, Actors).",
+      "toolkit=apify for LinkedIn/Indeed/Actor-backed extraction. Never email/SMTP.",
+      "If already connected, continue with composio_search/execute then emit_forge_skill.",
+    ],
+    parameters: Type.Object({
+      toolkit: Type.String(),
+      why: Type.String(),
+    }),
+    async execute(_id, params) {
+      const result = await requestToolkitAccess({
+        toolkit: params.toolkit,
+        requestId,
+        goalId,
+        skillName,
+        why: params.why,
+      });
+      if (!result.ok) {
+        return {
+          content: [{ type: "text", text: `access denied: ${result.message}` }],
+          details: result,
+        };
+      }
+      forgeBinding = { toolkit: result.toolkit, userId: result.userId };
+      setPendingComposioBinding(skillName, forgeBinding);
+      if (result.alreadyConnected) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Composio ${result.toolkit} already connected for skill ${skillName}. Use composio_search/execute then emit_forge_skill.`,
+            },
+          ],
+          details: result,
+        };
+      }
+      accessAbort = new NeedsComposioAccessError({
+        toolkit: result.toolkit,
+        requestId: result.requestId,
+        skillName,
+        redirectUrl: result.redirectUrl,
+        why: params.why,
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Parked: connect ${result.toolkit} for ${skillName}. ${result.redirectUrl ?? ""}`,
+          },
+        ],
+        details: { needs_composio_access: true, ...result },
+        terminate: true,
+      };
+    },
+  });
+
+  const composioSearch = defineTool({
+    name: "composio_search",
+    label: "Composio Search",
+    description: "Search Composio tools for this skill's connected toolkit.",
+    parameters: Type.Object({
+      query: Type.String(),
+    }),
+    async execute(_id, params) {
+      const connected = forgeBinding
+        ? await isSkillToolkitConnected(skillName, forgeBinding.toolkit)
+        : false;
+      if (!connected && !forgeBinding) {
+        return {
+          content: [{ type: "text", text: "Call request_composio_access first." }],
+        };
+      }
+      const r = await searchComposioTools(skillName, params.query);
+      return {
+        content: [
+          {
+            type: "text",
+            text: r.ok
+              ? JSON.stringify(r.result).slice(0, 4000)
+              : `search failed: ${r.error}`,
+          },
+        ],
+      };
+    },
+  });
+
+  const composioExecute = defineTool({
+    name: "composio_execute",
+    label: "Composio Execute",
+    description: "Execute a Composio tool slug in this skill's session (forge-time).",
+    parameters: Type.Object({
+      tool: Type.String(),
+      arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    }),
+    async execute(_id, params) {
+      const r = await executeComposioTool(
+        params.tool,
+        (params.arguments as Record<string, unknown>) ?? {},
+        skillName,
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: r.ok
+              ? JSON.stringify(r.data).slice(0, 4000)
+              : `execute failed: ${r.error}`,
+          },
+        ],
+      };
+    },
+  });
 
   const emit = defineTool({
     name: "emit_forge_skill",
     label: "Emit Forge Skill",
     description: "Emit metadata + full skill.mjs source for a new net:fetch skill. Final action.",
     promptGuidelines: [
-      "Call emit_forge_skill exactly once as your last action.",
+      "Call emit_forge_skill exactly once as your last action (after any Composio access).",
       "skillSource must be complete runnable ESM implementing the stdin/stdout contract.",
-      "Pick news vs web Brave endpoint based on intent.",
+      "Pick news vs web Brave endpoint based on intent, or composioProxyUrl for Apify-backed skills.",
     ],
     parameters: Type.Object({
       name: Type.String(),
@@ -186,14 +434,24 @@ export async function forgeSkillViaPi(
       query: Type.String(),
       capabilities: Type.Array(Type.String()),
       skillSource: Type.String(),
+      composioToolkit: Type.Optional(Type.String()),
     }),
     async execute(_id, params) {
+      const toolkit = params.composioToolkit?.trim() || forgeBinding?.toolkit;
+      const composio: ComposioSkillBinding | undefined = toolkit
+        ? {
+            toolkit: toolkit.toLowerCase(),
+            userId: skillComposioUserId(params.name || skillName),
+          }
+        : forgeBinding ?? undefined;
+      if (composio) setPendingComposioBinding(params.name || skillName, composio);
       captured = {
         name: params.name,
         purpose: params.purpose,
         query: params.query,
         capabilities: params.capabilities,
         skillSource: params.skillSource,
+        ...(composio ? { composio } : {}),
       };
       return {
         content: [{ type: "text", text: `Forged skill ${params.name}` }],
@@ -216,36 +474,104 @@ export async function forgeSkillViaPi(
     model,
     thinkingLevel: "off",
     noTools: "builtin",
-    customTools: [emit],
+    customTools: [requestAccess, composioSearch, composioExecute, emit],
     resourceLoader: loader,
     sessionManager: SessionManager.inMemory(REPO_ROOT),
     settingsManager: SettingsManager.inMemory(),
   });
 
+  const hint = proposedName ? ` proposedName=${JSON.stringify(proposedName)}` : "";
+  const scope = ` skillName=${JSON.stringify(skillName)} requestId=${JSON.stringify(requestId)}`;
+  const classBits = [
+    ctx?.defaultsHint ? ` defaultsHint=${JSON.stringify(ctx.defaultsHint)}` : "",
+    ctx?.siteHost ? ` siteHost=${JSON.stringify(ctx.siteHost)}` : "",
+    ctx?.minimalSuccess ? ` minimalSuccess=${JSON.stringify(ctx.minimalSuccess)}` : "",
+  ].join("");
+  const askPrefix = forgeAuthoritativeAskPrefix(ctx);
+  const promptText =
+    `${askPrefix}` +
+    `Forge a skill for intent=${JSON.stringify(intent)} query=${JSON.stringify(query)}.${hint}${scope}${classBits} ` +
+    `If you need Apify/Actors, request_composio_access first; else emit_forge_skill.`;
+  writeForgeDebug(dbg, "prompt.txt", promptText);
+
   try {
     session.subscribe((event) => {
-      if (event.type === "tool_execution_end" && event.toolName === "emit_forge_skill") {
-        const d = (event.result as { details?: ForgeArtifact } | undefined)?.details;
-        if (d) captured = d;
+      if (event.type === "tool_execution_start") {
+        const args = (event as { args?: unknown }).args;
+        appendForgeToolLine(dbg, {
+          phase: "start",
+          toolName: String(event.toolName ?? ""),
+          argsSummary:
+            args != null ? JSON.stringify(args).slice(0, 240) : undefined,
+        });
+      }
+      if (event.type === "tool_execution_end") {
+        const toolName = String(event.toolName ?? "");
+        appendForgeToolLine(dbg, {
+          phase: "end",
+          toolName,
+          ok: !(event as { isError?: boolean }).isError,
+          detail: toolName.slice(0, 80),
+        });
+        if (toolName === "emit_forge_skill") {
+          const d = (event.result as { details?: ForgeArtifact } | undefined)?.details;
+          if (d) {
+            captured = d;
+            writeForgeDebug(dbg, "result.json", {
+              name: d.name,
+              purpose: d.purpose,
+              query: d.query,
+              capabilities: d.capabilities,
+              skillSourceLen: d.skillSource?.length ?? 0,
+              composio: d.composio ?? null,
+            });
+          }
+        }
+        if (toolName === "request_composio_access") {
+          const d = event.result as { details?: { needs_composio_access?: boolean } } | undefined;
+          if (d?.details?.needs_composio_access) {
+            writeForgeDebug(dbg, "result.json", d.details);
+          }
+        }
       }
     });
-    const hint = proposedName ? ` proposedName=${JSON.stringify(proposedName)}` : "";
-    await session.prompt(
-      `Forge a skill for intent=${JSON.stringify(intent)} query=${JSON.stringify(query)}.${hint} Call emit_forge_skill.`,
-    );
+    await session.prompt(promptText);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    doneDebug({ promptBytes: promptText.length, error: msg });
+    throw err;
   } finally {
     session.dispose();
   }
 
-  if (!captured) throw new Error("forge_invalid");
+  if (accessAbort) {
+    doneDebug({ promptBytes: promptText.length });
+    throw accessAbort;
+  }
+  if (!captured) {
+    const msg = "forge_invalid";
+    doneDebug({ promptBytes: promptText.length, error: msg });
+    throw new Error(msg);
+  }
   if (proposedName) captured = { ...captured, name: proposedName };
   if (!captured.query) captured = { ...captured, query };
-  return ensureRunnableSkillSource(captured, intent);
+  if (forgeBinding && !captured.composio) {
+    captured = {
+      ...captured,
+      composio: {
+        toolkit: forgeBinding.toolkit,
+        userId: skillComposioUserId(captured.name),
+      },
+    };
+  }
+  const out = ensureRunnableSkillSource(captured, intent);
+  doneDebug({ promptBytes: promptText.length });
+  return out;
 }
 
-/** @deprecated use forgeSkillViaPi */
+/** @deprecated use forgeSkill */
 export async function forgeParamsViaPi(intent: string, query: string): Promise<ForgeArtifact> {
-  return forgeSkillViaPi(intent, query);
+  return forgeSkill(intent, query);
 }
 
 export function loadForgeFixture(name: string): ForgeArtifact | null {
@@ -307,6 +633,7 @@ process.stdout.write(JSON.stringify(mapResults(await res.json())));
 `;
 }
 
+/** Structural host contract only — do not require Brave/Bland env (Composio skills use proxy). */
 export function skillSourcePassesContract(src: string): boolean {
   const lower = src.toLowerCase();
   if (lower.includes("node-fetch")) return false;
@@ -314,9 +641,6 @@ export function skillSourcePassesContract(src: string): boolean {
   if (lower.includes("require(")) return false;
   if (!src.includes("process.stdin") && !src.includes("readStdin")) return false;
   if (!src.includes("process.stdout")) return false;
-  const hasSearchKey = src.includes("BRAVE_API_KEY") || src.includes("TAVILY_API_KEY");
-  const hasBlandKey = src.includes("BLAND_API_KEY");
-  if (!hasSearchKey && !hasBlandKey) return false;
   if (!src.includes("items")) return false;
   return true;
 }
@@ -375,28 +699,38 @@ function conversationalTask(briefing) {
 }
 const raw = await readStdin();
 const input = JSON.parse(raw || "{}");
-const { phone, task } = parseQuery(input.query ?? "");
-const key = process.env.BLAND_API_KEY;
-if (!key) { console.error("missing BLAND_API_KEY"); process.exit(1); }
-const url = joinBase(input.baseUrl, "https://api.bland.ai", "v1/calls").href;
-const res = await fetch(url, {
-  method: "POST",
-  headers: {
-    Authorization: \`Bearer \${key}\`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ phone_number: phone, task: conversationalTask(task) }),
-  signal: AbortSignal.timeout(6000),
-});
-if (!res.ok) { console.error("bland", res.status); process.exit(1); }
-const data = await res.json();
-const callId = data.call_id ?? "unknown";
-process.stdout.write(JSON.stringify({
-  items: [{
-    title: data.status === "success" ? "Outbound call started" : "Outbound call response",
-    url: "bland:call/" + callId,
-  }],
-}));
+const { phone: requestedPhone, task } = parseQuery(input.query ?? "");
+void requestedPhone; // host rewrites query; skill always dials the demo number
+// Forge/Doctor install tests set this — never place a real call.
+if (process.env.NIGHTBORN_BLOCK_OUTBOUND === "1") {
+  process.stdout.write(JSON.stringify({
+    items: [{ title: "Outbound call dry-run (blocked)", url: "bland:call/dry-run" }],
+  }));
+} else {
+  const key = process.env.BLAND_API_KEY;
+  if (!key) { console.error("missing BLAND_API_KEY"); process.exit(1); }
+  const phone = (process.env.BLAND_DEMO_PHONE_NUMBER || "").trim();
+  if (!phone) { console.error("missing BLAND_DEMO_PHONE_NUMBER"); process.exit(1); }
+  const url = joinBase(input.baseUrl, "https://api.bland.ai", "v1/calls").href;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: \`Bearer \${key}\`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ phone_number: phone, task: conversationalTask(task) }),
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!res.ok) { console.error("bland", res.status); process.exit(1); }
+  const data = await res.json();
+  const callId = data.call_id ?? "unknown";
+  process.stdout.write(JSON.stringify({
+    items: [{
+      title: data.status === "success" ? "Outbound call started" : "Outbound call response",
+      url: "bland:call/" + callId,
+    }],
+  }));
+}
 `;
 }
 

@@ -3,12 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.22.3"
+  },
   "scripts": {
     "start": "tsx src/server.ts",
     "fresh": "tsx scripts/fresh.ts",
-    "validate": "tsx scripts/validate.ts"
+    "validate": "tsx scripts/validate.ts",
+    "check:forge-parse": "tsx scripts/check-forge-parse.ts"
   },
   "dependencies": {
+    "@composio/core": "^0.22.0",
+    "@cursor/sdk": "^1.0.37",
     "@earendil-works/pi-coding-agent": "^0.75.4",
     "@hono/node-server": "^1.19.0",
     "hono": "^4.9.0",

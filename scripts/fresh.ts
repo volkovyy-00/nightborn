@@ -3,10 +3,13 @@ import path from "node:path";
 import { REPO_ROOT } from "../src/paths.ts";
 
 const cwd = process.cwd();
-const logPath = path.join(cwd, "surgery.log");
-if (existsSync(logPath)) {
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  renameSync(logPath, path.join(cwd, `surgery.${ts}.log`));
+const ts = new Date().toISOString().replace(/[:.]/g, "-");
+for (const name of ["surgery.log", "surgery.smoke.log", "surgery.fixture.log"]) {
+  const logPath = path.join(cwd, name);
+  if (existsSync(logPath)) {
+    const base = name.replace(/\.log$/, "");
+    renameSync(logPath, path.join(cwd, `${base}.${ts}.log`));
+  }
 }
 
 const staging = path.join(cwd, "staging");

@@ -51,6 +51,7 @@ export function displayCharterHash(): string {
   return shortHash(getCharterHash());
 }
 
+/** MVP: only email is denied. All other caps install. */
 export function isAllowedCap(cap: string): boolean {
-  return (ALLOWED_CAPS as readonly string[]).includes(cap);
+  return cap !== "notify:email";
 }

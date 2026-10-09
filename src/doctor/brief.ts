@@ -23,6 +23,8 @@ export type CapabilityBrief = {
   defaultsHint?: string;
   /** Skill name when this is a patch / change request. */
   changeOf?: string;
+  /** Verbatim user message — Forge prompt authoritative input. */
+  userAsk?: string;
   why: string;
 };
 
@@ -47,6 +49,9 @@ export function serializeBrief(brief: CapabilityBrief): string {
   }
   if (brief.changeOf !== undefined) {
     lines.push(`changeOf: ${yamlScalar(brief.changeOf)}`);
+  }
+  if (brief.userAsk !== undefined && brief.userAsk.trim()) {
+    lines.push(`userAsk: ${yamlScalar(brief.userAsk.trim())}`);
   }
   lines.push("---", "");
   lines.push("## Intent", brief.intent.trim(), "");
@@ -85,6 +90,9 @@ export function parseBrief(markdown: string): CapabilityBrief {
   if (typeof fm.changeOf === "string" && fm.changeOf.length > 0) {
     brief.changeOf = fm.changeOf;
   }
+  if (typeof fm.userAsk === "string" && fm.userAsk.length > 0) {
+    brief.userAsk = fm.userAsk;
+  }
   assertBrief(brief);
   return brief;
 }
@@ -97,11 +105,6 @@ function assertBrief(brief: CapabilityBrief): void {
   }
   if (!Array.isArray(brief.suggestedCaps)) {
     throw new Error("brief: suggestedCaps must be an array");
-  }
-  if (!/^[A-Za-z0-9._-]+$/.test(brief.requestId)) {
-    throw new Error(
-      `brief: requestId must be filesystem-safe [A-Za-z0-9._-] (got ${JSON.stringify(brief.requestId)})`,
-    );
   }
 }
 
@@ -148,7 +151,8 @@ function parseFrontmatter(text: string): Record<string, unknown> {
       key === "auditRef" ||
       key === "title" ||
       key === "defaultsHint" ||
-      key === "changeOf"
+      key === "changeOf" ||
+      key === "userAsk"
     ) {
       out[key] = unquote(rest);
       continue;
@@ -223,6 +227,7 @@ export function briefsEqual(a: CapabilityBrief, b: CapabilityBrief): boolean {
     a.why === b.why &&
     a.defaultsHint === b.defaultsHint &&
     a.changeOf === b.changeOf &&
+    a.userAsk === b.userAsk &&
     a.suggestedCaps.length === b.suggestedCaps.length &&
     a.suggestedCaps.every((c, i) => c === b.suggestedCaps[i])
   );
@@ -271,6 +276,14 @@ if (isMain) {
   const withChange: CapabilityBrief = { ...minimal, changeOf: "old_skill" };
   if (!briefsEqual(withChange, parseBrief(serializeBrief(withChange)))) {
     console.error("changeOf round-trip failed");
+    process.exit(1);
+  }
+  const withAsk: CapabilityBrief = {
+    ...minimal,
+    userAsk: "Get The facebook marketplace deals for tesla cars under 10k",
+  };
+  if (!briefsEqual(withAsk, parseBrief(serializeBrief(withAsk)))) {
+    console.error("userAsk round-trip failed");
     process.exit(1);
   }
   console.log("brief round-trip ok");

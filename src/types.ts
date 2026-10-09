@@ -5,7 +5,8 @@ export type Actor =
   | "runner"
   | "broker"
   | "user"
-  | "test";
+  | "test"
+  | "doctor";
 
 export type LogEvent =
   | "boot"
@@ -19,7 +20,9 @@ export type LogEvent =
   | "install"
   | "reuse"
   | "denied"
-  | "broken";
+  | "broken"
+  /** Doctor inbox / progress (receive, working, ready, needs_secret). */
+  | "doctor";
 
 export type FailureCode =
   | "charter_pin_mismatch"
@@ -33,7 +36,9 @@ export type FailureCode =
   | "forge_invalid"
   | "test_exit_nonzero"
   | "timeout"
-  | "schema_invalid";
+  | "schema_invalid"
+  /** Live Create blocked — only Doctor may install new skills. */
+  | "doctor_required";
 
 export type LogLine = {
   ts: string;
@@ -45,7 +50,8 @@ export type LogLine = {
   charterHash: string;
   caps?: string[];
   voice?: string;
-  source?: "live" | "fixture";
+  /** live → surgery.log (UI); fixture → surgery.fixture.log; smoke → surgery.smoke.log */
+  source?: "live" | "fixture" | "smoke";
   detail?: string;
 };
 
@@ -62,11 +68,17 @@ export type TalkResult =
   | {
       kind: "job";
       job: Job;
-      outcome: "install" | "reuse" | "denied" | "broken";
+      outcome: "install" | "reuse" | "denied" | "broken" | "needs_capability";
       skill: string | null;
       failureCode?: FailureCode;
       reply: string;
     };
+
+/** Skill-scoped Composio binding (host proxy; never puts COMPOSIO_API_KEY in child env). */
+export type ComposioSkillBinding = {
+  toolkit: string;
+  userId: string;
+};
 
 /** Create-path Forge artifact. skillSource required on live path; optional for legacy fixtures. */
 export type ForgeArtifact = {
@@ -75,10 +87,26 @@ export type ForgeArtifact = {
   query: string;
   capabilities: string[];
   skillSource?: string;
+  /** Present when Forge requested/used Composio for this skill. */
+  composio?: ComposioSkillBinding;
 };
 
 /** @deprecated alias — use ForgeArtifact */
 export type ForgeParams = ForgeArtifact;
+
+/** Context for skill-scoped Forge (Doctor passes brief ids + optional hints). */
+export type ForgeContext = {
+  skillName: string;
+  requestId: string;
+  goalId: string;
+  /** Verbatim user ask — forge prompt line 1 when set. */
+  userAsk?: string;
+  defaultsHint?: string;
+  siteHost?: string;
+  minimalSuccess?: string;
+  /** Absolute path to durable forge_debug dump dir (set by Doctor when FORGE_DEBUG on). */
+  debugDir?: string;
+};
 
 export type DecisionJson = {
   skill: string;
@@ -89,6 +117,8 @@ export type DecisionJson = {
   capabilities: string[];
   env: string[];
   decidedAt: string;
+  /** Skill-owned Composio session binding (optional). */
+  composio?: ComposioSkillBinding;
 };
 
 export type Manifest = {
