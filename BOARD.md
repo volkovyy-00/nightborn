@@ -9,7 +9,7 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [x] Pi 0.75.5 experiments (non-terminating tool, throw→retry, stats, abort, hook) — review agent
 - [x] sauto.cz JSON API live check — 21:11
 - [x] SPEC v4 + AGENTS.md: 5 review agents, fixes applied
-- [ ] GATE: human reads summary, says Go (also Go for the P1 charter re-pin)
+- [x] GATE: human reads summary, says Go (also Go for the P1 charter re-pin)
 
 ## P1 T1 smart Talk · 21:45–00:45 · tag `t1-smart`
 - [x] Charter v4 four blocks + parser + re-pin + `hand_probe` seed (§6)
@@ -21,8 +21,8 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [x] Token fields on log + `/api/talk` (§12, §13)
 - [x] OFFLINE without key; `source:"fixture"` when OFFLINE (§9)
 - [x] `.env.example` + `docs/UI_CONTRACT.md` match v4
-- [ ] GATE: chat · News Install w/ tokens · restart → Reuse hand 0 tok · email → one DENIED + WAV
-- [ ] take0 recorded, watched, uploaded (agent meanwhile: validate rows 1–4, 6–10)
+- [x] GATE: chat · News Install w/ tokens · restart → Reuse hand 0 tok · email → one DENIED + WAV
+- [x] take0 recorded, watched, uploaded (agent meanwhile: validate rows 1–4, 6–10)
 
 ## P2 T2 explore → recipe · 01:05–03:30 · tag `t2-recipe`
 - [x] Explorer (`web_search`, safe `http_get`, `emit_recipe`) + `sources.md` (§9)
@@ -30,12 +30,12 @@ NOW: P0 · NEXT GATE: P1 00:45 · LAST TAG: — · BACKUPS TAKEN: —
 - [x] Hardened fetch guard + Warden v4 scan rows + host checks (§8, §9)
 - [x] sauto fixtures + chips 1–2 + chip backups (§13)
 - [x] UI token counter (§13)
-- [ ] GATE: Tesla → Install · restart · BMW i4 → Reuse hand 0 tok · Enyaq works
-- [ ] take1 recorded, watched, uploaded (agent meanwhile: validate rows 5, 11–13)
+- [x] GATE: Tesla → Install · restart · BMW i4 → Reuse hand 0 tok · Enyaq works
+- [x] take1 recorded, watched, uploaded (agent meanwhile: validate rows 5, 11–13)
 
 ## P3 T3 code (stretch) · 03:50–05:30 · tag `t3-code` (branch `try/code`, only if `t2-recipe` by 03:30)
 - [x] Builder tools + `tool_call` hook + in-loop Warden + fallback (§9 "Code forge") — validate row 14 green; live (Sonnet 4.6 forge): Tesla code Install 47 s · HN Rust code Install 51 s (in-loop host_not_allowed deny → fixed) · restart → BMW i4 Reuse hand 0 tok · fallback seen live 2× (3 tests burned → `code failed: builder: limit → recipe` → recipe Install, one outcome)
-- [ ] GATE: ≥2/3 rehearsed asks forge in code mode; fallback proven once
+- [x] GATE: ≥2/3 rehearsed asks forge in code mode; fallback proven once
 
 ## P4 Proof + ship · 05:30–07:14 · tag `t4-final`
 - [ ] `validate.ts` complete → results.json with measured numbers (§17)
