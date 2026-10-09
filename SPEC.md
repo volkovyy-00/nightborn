@@ -49,7 +49,8 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 2. Voice-tag split widened after a second-opinion review: decorated (`**VOICE:**`) and inline uppercase `VOICE:` tags are stripped too, so the tag never shows on screen (§10 "Voice").
 
 ### v4.6 → v4.7 (human call after the first listen, 2026-10-09 ~03:00)
-1. Spoken replies switch from Flash v2.5 to `eleven_v4` at 192 kbps with one optional audio tag: the WAVs were rendered with v4 + tags (ElevenLabs history), so Flash sounded like a different speaker. Spoken clips play via Web Audio: as an `<audio>` element, a ≥5 s clip became a macOS Now Playing session and Bluetooth earbuds launched Apple Music after it (§10 "Voice", §18 #14).
+1. Spoken replies switch from Flash v2.5 to `eleven_v4` at 192 kbps with one optional audio tag: the WAVs were rendered with v4 + tags (ElevenLabs history), so Flash sounded like a different speaker (§10 "Voice", §18 #14).
+2. Apple Music opening after a spoken clip = the JBL Bluetooth earbuds send an AVRCP Play when the audio stream stops; with no Now Playing app, macOS launches Music (system log, 03:03:47). Not fixable in the page (a Web Audio attempt was reverted): record and demo without those earbuds (§14 "After freeze").
 
 ---
 
@@ -435,7 +436,7 @@ Personality only, no rules: Talk speaks as **Victor Frankenstein** (Shelley, 181
 ### Voice
 `public/voice/{denied,install,broken}.wav`, already rendered. The browser plays the WAV named in a log line's `voice` field — only for lines arriving after page load, one at a time; audio unlocks on the first user gesture. Static "VOICE · WAV" indicator.
 
-**Spoken replies (live TTS).** Code strips the voice tag from Talk's text — every line matching `/^\W*voice\W*:\s*(.+)$/i` (the last one wins); with none, the last inline uppercase `VOICE:` and everything after it; `* _ " ' \`` trimmed: the rest is `reply` (shown, kept in history), the match is `say` (spoken, not shown, not in history). Missing line, fixture / JUDGE_MODE path, or Talk errors after an outcome → `say` = a per-outcome code template in `replies.ts` (no LLM). Denied / broken → no `say`: the WAV is the only voice, so DENIED keeps exactly one voiced line. `src/voice.ts`: `POST https://api.elevenlabs.io/v1/text-to-speech/<ELEVENLABS_VOICE_ID>?output_format=mp3_44100_192`, header `xi-api-key`, model `eleven_v4` (one constant; the model the WAVs were rendered with), text ≤600 chars, `AbortSignal.timeout(8000)`. The `VOICE:` line may open with one v4 audio tag (`[thoughtful]`, `[stern]`, `[excited]`, `[sighs]`, `[short pause]`), as the WAV renders do. No key, `OFFLINE=1`, empty text, non-2xx or timeout → `204` (silence; server console only, no log line, no raw error to the client). The client starts the TTS fetch when `/api/talk` returns, enqueues the clip after the board settles (so it follows `install.wav`), in the same single audio queue; spoken clips play through Web Audio (`AudioContext`), not an `<audio>` element, so a clip ≥5 s never becomes a macOS "Now Playing" session (which let Bluetooth earbuds launch Apple Music after playback).
+**Spoken replies (live TTS).** Code strips the voice tag from Talk's text — every line matching `/^\W*voice\W*:\s*(.+)$/i` (the last one wins); with none, the last inline uppercase `VOICE:` and everything after it; `* _ " ' \`` trimmed: the rest is `reply` (shown, kept in history), the match is `say` (spoken, not shown, not in history). Missing line, fixture / JUDGE_MODE path, or Talk errors after an outcome → `say` = a per-outcome code template in `replies.ts` (no LLM). Denied / broken → no `say`: the WAV is the only voice, so DENIED keeps exactly one voiced line. `src/voice.ts`: `POST https://api.elevenlabs.io/v1/text-to-speech/<ELEVENLABS_VOICE_ID>?output_format=mp3_44100_192`, header `xi-api-key`, model `eleven_v4` (one constant; the model the WAVs were rendered with), text ≤600 chars, `AbortSignal.timeout(8000)`. The `VOICE:` line may open with one v4 audio tag (`[thoughtful]`, `[stern]`, `[excited]`, `[sighs]`, `[short pause]`), as the WAV renders do. No key, `OFFLINE=1`, empty text, non-2xx or timeout → `204` (silence; server console only, no log line, no raw error to the client). The client starts the TTS fetch when `/api/talk` returns, enqueues the clip after the board settles (so it follows `install.wav`), in the same single audio queue; blob URLs are revoked after playback.
 
 ---
 
@@ -606,7 +607,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 11 | Charter | §6 blocks (`llm:call` denied for hands); re-pinned in P1 with human Go |
 | 12 | Second source | HN Algolia (§9): gate-only ask + jury backup, not a video chip |
 | 13 | Forge-time literal check | A recipe string that trips `protected_path` / `secret_in_file` is a bad forge → Broken `forge_invalid` (no voiced DENIED for LLM noise); the Warden scan stays the backstop |
-| 14 | Spoken replies | Live ElevenLabs TTS of Talk's `VOICE:` line only (`eleven_v4`, 192 kbps, same voice ID as the WAVs; Web Audio playback); WAVs stay the Warden/system voice; no STT |
+| 14 | Spoken replies | Live ElevenLabs TTS of Talk's `VOICE:` line only (`eleven_v4`, 192 kbps, same voice ID as the WAVs); WAVs stay the Warden/system voice; no STT |
 | 15 | Persona | Talk = Victor Frankenstein; Nightborn = his creation; voice ID unchanged |
 
 ---
