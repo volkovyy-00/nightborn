@@ -1,7 +1,7 @@
 // Spoken replies (SPEC §10 "Voice"): ElevenLabs TTS of Talk's `say` line. Server only; the key never reaches a hand.
 // Any failure → null → the route answers 204 and the page stays silent. No log line, no raw error to the client.
 
-const MODEL = "eleven_flash_v2_5";
+const MODEL = "eleven_v4"; // same model as the WAV renders (supports [audio tags])
 const MAX_CHARS = 600;
 const TIMEOUT_MS = 8000;
 
@@ -12,7 +12,7 @@ export async function speak(text: string): Promise<ArrayBuffer | null> {
   if (!key || !voiceId || process.env.OFFLINE === "1" || !t) return null;
   try {
     const res = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_192`,
       {
         method: "POST",
         headers: { "xi-api-key": key, "content-type": "application/json", accept: "audio/mpeg" },

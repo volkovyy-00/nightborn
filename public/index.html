@@ -465,8 +465,17 @@ body.resizing{cursor:col-resize;user-select:none}
     }
   }
 
-  /** @type {HTMLAudioElement[]} */
+  /** One clip at a time; each entry starts its clip and calls `done` exactly when it stops. @type {Array<(done: () => void) => void>} */
   const voiceQueue = [];
+  /** Web Audio for spoken replies: no media element → no macOS "Now Playing" session (SPEC §10 "Voice"). */
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (C) audioCtx = new C();
+    }
+    return audioCtx;
+  }
   let voicePlaying = false;
   /** @type {HTMLAudioElement|null} */
   let unlockAudio = null;
@@ -490,6 +499,7 @@ body.resizing{cursor:col-resize;user-select:none}
   }
 
   function unlockAudioOnce() {
+    try { const c = getAudioCtx(); if (c && c.state !== "running") c.resume(); } catch (_) {} // every gesture
     if (state.audioUnlocked) return;
     state.audioUnlocked = true;
     try {
@@ -501,29 +511,43 @@ body.resizing{cursor:col-resize;user-select:none}
   function enqueueVoice(path) {
     if (!path || state.firstPoll) return;
     const src = path.startsWith("/") ? path : "/" + path;
-    const a = new Audio(src);
-    voiceQueue.push(a);
+    voiceQueue.push((done) => {
+      const a = new Audio(src); // WAVs are < 5 s: Chrome keeps them transient (no Now Playing)
+      a.onended = a.onerror = done;
+      a.play().catch(done);
+    });
     pumpVoice();
   }
 
-  /** Spoken reply (SPEC §10 "Voice"): POST /api/voice → blob URL, or null on 204 / any error (silence). */
+  /** Spoken reply (SPEC §10 "Voice"): POST /api/voice → decoded AudioBuffer, or null on 204 / any error (silence). */
   async function fetchVoice(text) {
     try {
+      const c = getAudioCtx();
+      if (!c) return null;
       const res = await fetch("/api/voice", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text }),
       });
       if (res.status !== 200) return null;
-      return URL.createObjectURL(await res.blob());
+      return await c.decodeAudioData(await res.arrayBuffer());
     } catch (_) {
       return null;
     }
   }
 
   /** Same single queue as the WAVs; no firstPoll guard (this follows a request made after load). */
-  function enqueueAudioUrl(url) {
-    voiceQueue.push(new Audio(url));
+  function enqueueBuffer(buf) {
+    voiceQueue.push((done) => {
+      const c = getAudioCtx();
+      if (!c || c.state !== "running") return done(); // never unlocked: skip, don't stall the queue
+      const s = c.createBufferSource();
+      s.buffer = buf;
+      s.connect(c.destination);
+      s.onended = done;
+      setTimeout(done, (buf.duration + 1) * 1000); // backstop if onended never fires
+      s.start();
+    });
     pumpVoice();
   }
 
@@ -534,17 +558,15 @@ body.resizing{cursor:col-resize;user-select:none}
     }
     voicePlaying = true;
     el.wave.classList.add("wave-on");
-    const a = voiceQueue.shift();
+    const start = voiceQueue.shift();
     let fired = false;
     const done = () => {
-      if (fired) return; // onerror and a play() rejection can both fire
+      if (fired) return; // error + rejection, or onended + backstop, can both fire
       fired = true;
-      if (a.src.startsWith("blob:")) URL.revokeObjectURL(a.src);
       voicePlaying = false;
       pumpVoice();
     };
-    a.onended = a.onerror = done;
-    a.play().catch(done);
+    try { start(done); } catch (_) { done(); }
   }
 
   function derive(log) {
@@ -1183,7 +1205,7 @@ body.resizing{cursor:col-resize;user-select:none}
       } else {
         state.msgs.push({ who: "nb", text: "Unexpected response.", plain: true });
       }
-      if (voiceP) voiceP.then((u) => { if (u) enqueueAudioUrl(u); });
+      if (voiceP) voiceP.then((buf) => { if (buf) enqueueBuffer(buf); });
     } catch (e) {
       state.msgs.push({ who: "nb", text: "Host unreachable. Is the server on :8787?", plain: true });
     } finally {
