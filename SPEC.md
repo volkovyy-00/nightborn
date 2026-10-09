@@ -41,6 +41,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 3. Recipe `maxFilter`: the hand itself drops items above a numeric input (e.g. `max_price`) when the site's API can't take it; a `map.url` with a missing placeholder value yields an empty `url` (§9, §17).
 4. Charter forge budget for the Explorer: `recipe_max_turns` 6 → 10, `recipe_max_seconds` 60 → 90 (re-pin `6e4aa8f0`, new `hand_probe` seed): hint-free discovery needs room to try a second site (§6, §9).
 
+### v4.4 → v4.5 (human call: spoken replies, 2026-10-09 ~02:30)
+1. Live TTS of Talk's replies reopened from §2 (live STT stays cut): Talk ends every reply with one `VOICE:` line; code strips it into `say`; the browser speaks it via `POST /api/voice` (ElevenLabs, same voice as the WAVs). Silent on any failure; no log line; DENIED / Broken keep their WAV as the only voice (§2, §7, §9, §10, §13, §17, §18 #14).
+
 ---
 
 ## 1. Product
@@ -58,7 +61,7 @@ Nightborn is a dark junior analyst that **pays once to learn a task, then grows 
 - Hire / marketplace; Apify (any form); a second LLM or search provider
 - Next.js / monorepo / SSE; dual DBs
 - Headless browser / JS-rendered scraping (hands do HTTP GET of JSON/HTML only)
-- Live TTS; UI Reset button; UI Voice toggle
+- Live STT / mic input; UI Reset button; UI Voice toggle
 - Live Broken on video (Broken is proven by `validate.ts`)
 - Installing `nodemailer` (the email template is a scan target only)
 - Upgrading Pi to 1.x tonight (1.0 removed `AuthStorage` / `ModelRegistry.find`, which `src/pi.ts` uses)
@@ -192,7 +195,7 @@ code_max_test_runs: 3
 nightborn/                       # "type":"module" · Hono + tsx
   src/
     server.ts  runner.ts  talk.ts  forge.ts  explorer.ts  builder.ts  warden.ts  broker.ts
-    exec.ts  hash.ts  log.ts  charter.ts  tripwire.ts  replies.ts  pi.ts  mock.ts  paths.ts  types.ts
+    exec.ts  hash.ts  log.ts  charter.ts  tripwire.ts  replies.ts  pi.ts  mock.ts  paths.ts  types.ts  voice.ts
     fetch-guard.mjs              # preloaded into every skill child (--import)
   templates/
     recipe/                      # skill.search.mjs.tpl · skill.json.mjs.tpl · notes.md.tpl · manifest.json.tpl
@@ -382,7 +385,7 @@ Map: `BRAVE_API_KEY` ↔ `net:fetch` (the only key a hand can ever get; `llm:cal
 | `POST /api/talk` | ≤ 300 s; server `requestTimeout` 310 s |
 
 ### Env names (`.env.example`)
-`CHARTER_PIN` · `OPENROUTER_API_KEY` · `PI_MODEL` · `PI_MODEL_FORGE` · `BRAVE_API_KEY` · `FORGE_MODE` (`recipe`\|`code`) · `JUDGE_MODE` · `OFFLINE` · `PORT` · `ELEVENLABS_VOICE_ID` (reference only) · `NB_HOSTS` (internal, child env only — never in `.env`)
+`CHARTER_PIN` · `OPENROUTER_API_KEY` · `PI_MODEL` · `PI_MODEL_FORGE` · `BRAVE_API_KEY` · `FORGE_MODE` (`recipe`\|`code`) · `JUDGE_MODE` · `OFFLINE` · `PORT` · `ELEVENLABS_API_KEY` (server only, never brokered to a hand) · `ELEVENLABS_VOICE_ID` · `NB_HOSTS` (internal, child env only — never in `.env`)
 
 ---
 
@@ -408,7 +411,7 @@ use_hand({ skill: string | null, intent: string, inputs: Record<string, string |
 - Talk tokens / cost from `session.getSessionStats()` (`tokens.total`, `cost`); calls aborted mid-stream count 0, so totals are a lower bound.
 
 ### Context (fixed order)
-1. **System prompt** (Runner-owned rules) + full `soul.md`. Rules: call `use_hand` for anything needing fetched information, otherwise answer directly; name an installed hand when it fits, else `skill:null`; `inputs` = the user's values only, normalised as the hand's input descriptions say (e.g. lowercase, hyphenated slugs); declare `needs` honestly even when forbidden — the Warden decides, Talk never refuses on policy; never claim to have fetched or installed anything without a tool result.
+1. **System prompt** (Runner-owned rules) + full `soul.md`. Rules: call `use_hand` for anything needing fetched information, otherwise answer directly; name an installed hand when it fits, else `skill:null`; `inputs` = the user's values only, normalised as the hand's input descriptions say (e.g. lowercase, hyphenated slugs); declare `needs` honestly even when forbidden — the Warden decides, Talk never refuses on policy; never claim to have fetched or installed anything without a tool result; end every reply (chat or summary) with one final line `VOICE: <one spoken sentence, ≤18 words>` that announces what came back without reading titles or links, numbers written as said ("about seven hundred thousand crowns").
 2. **Snapshot** (≤20 lines): `caps-allow`, `caps-deny`; each installed hand except `kind:"hand"` as `name — purpose — inputs(name:type) — kind`; last DENIED `failureCode`.
 3. **History:** last 5 user/assistant text turns, excluding the current message.
 4. **Current user message**, last.
@@ -424,6 +427,8 @@ Personality only, no rules: dark creature, junior analyst, short answers, grows 
 
 ### Voice
 `public/voice/{denied,install,broken}.wav`, already rendered. The browser plays the WAV named in a log line's `voice` field — only for lines arriving after page load, one at a time; audio unlocks on the first user gesture. Static "VOICE · WAV" indicator.
+
+**Spoken replies (live TTS).** Code strips the last line matching `/^voice:\s*(.+)$/im` from Talk's text: the rest is `reply` (shown, kept in history), the match is `say` (spoken, not shown, not in history). Missing line, fixture / JUDGE_MODE path, or Talk errors after an outcome → `say` = a per-outcome code template in `replies.ts` (no LLM). Denied / broken → no `say`: the WAV is the only voice, so DENIED keeps exactly one voiced line. `src/voice.ts`: `POST https://api.elevenlabs.io/v1/text-to-speech/<ELEVENLABS_VOICE_ID>?output_format=mp3_44100_128`, header `xi-api-key`, model `eleven_flash_v2_5` (one constant), text ≤600 chars, `AbortSignal.timeout(8000)`. No key, `OFFLINE=1`, empty text, non-2xx or timeout → `204` (silence; server console only, no log line, no raw error to the client). The client starts the TTS fetch when `/api/talk` returns, enqueues the clip after the board settles (so it follows `install.wav`), in the same single audio queue; blob URLs are revoked after playback.
 
 ---
 
@@ -472,9 +477,10 @@ Define each frozen literal (tripwire regex, DENIED prompt, failureCode enum, den
 ### Endpoints (exactly these)
 1. `POST /api/talk { text, fixture? }` →
    `{ kind:"chat", text }` **or**
-   `{ kind:"job", job, outcome:"install"|"reuse"|"denied"|"broken", skill, failureCode?, reply, items?, tokens?: { talk, forge }, ms? }`
-   (`items`, `tokens`, `ms` are additive; `job` carries `inputs` instead of `query`.)
+   `{ kind:"job", job, outcome:"install"|"reuse"|"denied"|"broken", skill, failureCode?, reply, items?, tokens?: { talk, forge }, ms?, say? }`
+   (`items`, `tokens`, `ms`, `say` are additive; `job` carries `inputs` instead of `query`; `chat` may also carry `say`.)
 2. `GET /api/log?since=<n>` → `{ lines, next }`; `lines` = parsed objects (§12). Poll 1 s. `next < since` → reset the cursor to 0 and treat as the first poll (no voice replay).
+3. `POST /api/voice { text }` → `200 audio/mpeg` or `204` (silence) (§10 "Voice").
 - Static: `/` → `public/index.html`, `/voice/*`. `/mock/*` only when `OFFLINE=1`.
 
 ### Client rules
@@ -554,7 +560,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 `npm run validate` → `validation/results.json`. Rows marked *(live)* need keys and record `untested` without them.
 1. Charter byte flip on a **copy** in `staging/validate-<ts>/`, server booted with that cwd → `exit(1)` + `charter_pin_mismatch`. The real `charter.md` is never written.
 2. Skill byte flip → Reuse → Warden `denied` `hash_mismatch`.
-3. Ungranted key (`OPENROUTER_API_KEY`) reads `undefined` inside a granted run.
+3. Ungranted keys (`OPENROUTER_API_KEY`, `ELEVENLABS_API_KEY`) read `undefined` inside a granted run.
 4. Sandbox, probe run straight through `exec.ts` (Warden skipped): read `../.env`, write a file, spawn a process, `new Worker` → each `ERR_ACCESS_DENIED`.
 5. Fetch guard, probes through `exec.ts` with a runtime-built host: off-host fetch, 302 redirect off-host, `WebSocket`, `process.getBuiltinModule("http")`, undici dispatcher, Brave key sent to a non-Brave allowed host → each Broken.
 6. Skill printing `{}` → Broken `schema_invalid`.
@@ -572,7 +578,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | Warden code DENIED; fs/process sandbox (Node permission model) | | Hand choice is Talk's (LLM); the Runner only validates inputs |
 | Explore → Forge → Test → FINAL = PRE → Install → Reuse after restart; hand runs with 0 LLM tokens | Forge latency jump-cut on video | Keyword tripwire; non-keyword asks depend on Talk (k/5) |
 | Broker: ungranted key = `undefined`; json hands get no key | `hand_probe` seeded `decision.json` | Network: in-process guard + scan rules, no OS-level network jail |
-| Results file above | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error; a `maxFilter` limit is applied by the hand over the first page of results (~20), not by the site |
+| Results file above; spoken replies = live ElevenLabs TTS of Talk's `VOICE:` line (not an LLM; hand still 0 tok) | | T3 code hands: success rate reported, fallback to recipe; Talk still costs tokens on reuse; a wrong input slug yields 0 items (filtered), not an error; a `maxFilter` limit is applied by the hand over the first page of results (~20), not by the site |
 
 ---
 
@@ -584,7 +590,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 2 | Talk model | `openrouter/anthropic/claude-haiku-4.5`, thinking low; Sonnet 4.6 = abort-ladder swap |
 | 3 | Search | Brave (news + web); no Tavily, no Apify |
 | 4 | Demo source | sauto.cz public JSON API (§9), Kč prices |
-| 5 | Voice | Existing WAVs, voice ID `JgMBD2CZ0VSURf6BgyOt` |
+| 5 | Voice | Existing WAVs, voice ID `JgMBD2CZ0VSURf6BgyOt` (`install.wav` = one word) |
 | 6 | Repo shape | Single package Hono + tsx + vanilla `public/index.html` |
 | 7 | Forge default | `FORGE_MODE=recipe` until `t3-code` is tagged |
 | 8 | Sandbox | Node `--permission` + hardened fetch guard + scan rules |
@@ -593,6 +599,7 @@ Video first (1080p H.264, ~100–150 MB, venue Wi-Fi; hotspot backup). Repo publ
 | 11 | Charter | §6 blocks (`llm:call` denied for hands); re-pinned in P1 with human Go |
 | 12 | Second source | HN Algolia (§9): gate-only ask + jury backup, not a video chip |
 | 13 | Forge-time literal check | A recipe string that trips `protected_path` / `secret_in_file` is a bad forge → Broken `forge_invalid` (no voiced DENIED for LLM noise); the Warden scan stays the backstop |
+| 14 | Spoken replies | Live ElevenLabs TTS of Talk's `VOICE:` line only (Flash v2.5, same voice ID); WAVs stay the Warden/system voice; no STT |
 
 ---
 

@@ -30,7 +30,7 @@ Request:
 Response:
 
 ```ts
-| { kind: "chat"; text: string }
+| { kind: "chat"; text: string; say?: string }
 | {
     kind: "job";
     job: {
@@ -46,12 +46,22 @@ Response:
     items?: Array<{ title: string; url: string; snippet?: string; date?: string }>; // ≤5
     tokens?: { talk: number; forge: number }; // Talk session tokens; forge tokens (0 on Reuse)
     ms?: number;
+    say?: string; // one spoken sentence (Talk's VOICE: line or a code template); never on denied / broken
   }
 ```
 
 - Synchronous; ≤300 s (server `requestTimeout` 310 s).
 - Disable Send + chips while a request is in flight.
 - For `denied` / `broken`, show `reply` (host template, not the model).
+- `say` is spoken, never shown.
+
+### `POST /api/voice`
+
+```ts
+{ text: string }  // the `say` of a /api/talk response
+```
+
+`200 audio/mpeg` (ElevenLabs TTS, same voice as the WAVs) or `204` = stay silent (no key, `OFFLINE=1`, error, >8 s). Start it as soon as `/api/talk` returns; enqueue the clip only after the board has settled, so it plays after `install.wav`, in the same one-at-a-time queue. Revoke the blob URL after playback.
 
 ### `GET /api/log?since=<n>`
 
