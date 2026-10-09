@@ -9,7 +9,7 @@ import { allCaps, getCharter } from "./charter.ts";
 import { readLogLines } from "./log.ts";
 import { dataPath, repoPath } from "./paths.ts";
 import { createPiSession, sessionStats } from "./pi.ts";
-import { chatReply, itemsReply, replyFor, sayFor } from "./replies.ts";
+import { chatReply, itemsReply, replyFor } from "./replies.ts";
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 const HISTORY_TURNS = 5;
@@ -141,12 +141,7 @@ export function splitVoice(text: string): { reply: string; say: string | null } 
       reply = trimTag(reply.slice(0, i));
     }
   }
-  return { reply, say: say ? say.slice(0, 300) : null };
-}
-
-function firstSentence(text: string): string {
-  const m = text.match(/^[\s\S]*?[.!?](?=\s|$)/);
-  return (m ? m[0] : text).trim().slice(0, 300);
+  return { reply, say: say || null };
 }
 
 // ── Talk ─────────────────────────────────────────────────────────────────
@@ -282,22 +277,21 @@ export async function talk(text: string, deps: TalkDeps): Promise<TalkOutcome> {
     if (done) {
       const { job, result } = done;
       let reply: string;
-      let say: string | undefined;
+      let voice: string | undefined;
       if (isFailure(result)) {
-        reply = replyFor(result.failureCode); // denied / broken: the WAV is the only voice
+        reply = replyFor(result.failureCode);
       } else {
         const said = splitVoice(failure ? "" : (session?.getLastAssistantText() ?? "").trim());
         reply = said.reply || itemsReply(result.items);
-        say = said.say ?? sayFor(result);
+        voice = said.say ?? undefined;
       }
-      outcome = { kind: "job", job, result, reply, ...(say ? { say } : {}), ...s };
+      outcome = { kind: "job", job, result, reply, voice, ...s };
     } else if (failure || runnerCrashed) {
       outcome = { kind: "fail", reason: failure ?? "talk_failed", ...s };
     } else {
       const said = splitVoice((session?.getLastAssistantText() ?? "").trim());
       const chat = said.reply || said.say || "";
-      const say = said.say ?? firstSentence(chat);
-      outcome = chat ? { kind: "chat", text: chat, ...(say ? { say } : {}), ...s } : { kind: "fail", reason: "talk_failed", ...s };
+      outcome = chat ? { kind: "chat", text: chat, voice: said.say ?? undefined, ...s } : { kind: "fail", reason: "talk_failed", ...s };
     }
   } finally {
     if (timer) clearTimeout(timer);

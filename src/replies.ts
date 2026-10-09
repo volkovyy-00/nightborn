@@ -43,10 +43,15 @@ export function sayFor(r: HandResult): string | undefined {
     return n ? `[excited] Another hand is stitched on. It brought back ${count(n, "result")}.` : "[sighs] The new hand found nothing this time.";
   }
   if (r.outcome === "reuse") {
-    const c = count(n, "result");
-    return n ? `[thoughtful] An old hand served again, without a thought. ${c[0].toUpperCase()}${c.slice(1)}.` : "[sighs] An old hand served again, and found nothing.";
+    return n ? `[thoughtful] An old hand served again, without a thought. It brought back ${count(n, "result")}.` : "[sighs] An old hand served again, and found nothing.";
   }
   return undefined; // denied / broken: the WAV is the only voice
+}
+
+/** Spoken-line fallback for a chat reply without a VOICE: line: its first sentence. */
+export function chatSay(text: string): string {
+  const m = text.match(/^[\s\S]*?[.!?](?=\s|$)/);
+  return (m ? m[0] : text).trim();
 }
 
 const CHAT_REPLIES = {

@@ -210,15 +210,15 @@ export type TalkDeps = {
 };
 
 export type TalkOutcome =
-  | { kind: "chat"; text: string; say?: string; tokens: number; costUsd: number }
+  | { kind: "chat"; text: string; voice?: string; tokens: number; costUsd: number }
   | {
       kind: "job";
       job: Job;
       result: HandResult;
       /** Model-written summary (install/reuse) or the replies.ts template (denied/broken/summary failure). */
       reply: string;
-      /** Spoken line: Talk's VOICE: line or the sayFor template; absent on denied / broken. */
-      say?: string;
+      /** Talk's own VOICE: line, if it wrote one; the Runner picks the spoken `say` (SPEC §10 "Voice"). */
+      voice?: string;
       tokens: number;
       costUsd: number;
     }

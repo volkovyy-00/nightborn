@@ -500,10 +500,7 @@ body.resizing{cursor:col-resize;user-select:none}
 
   function enqueueVoice(path) {
     if (!path || state.firstPoll) return;
-    const src = path.startsWith("/") ? path : "/" + path;
-    const a = new Audio(src);
-    voiceQueue.push(a);
-    pumpVoice();
+    enqueueAudioUrl(path.startsWith("/") ? path : "/" + path);
   }
 
   /** Spoken reply (SPEC §10 "Voice"): POST /api/voice → blob URL, or null on 204 / any error (silence). */
