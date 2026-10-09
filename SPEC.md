@@ -52,6 +52,9 @@ Rewrite on the solo human's call: Max left the build; Pi + OpenRouter replace Op
 1. Spoken replies switch from Flash v2.5 to `eleven_v4` at 192 kbps with one optional audio tag: the WAVs were rendered with v4 + tags (ElevenLabs history), so Flash sounded like a different speaker (§10 "Voice", §18 #14).
 2. Apple Music opening after a spoken clip = the JBL Bluetooth earbuds send an AVRCP Play when the audio stream stops; with no Now Playing app, macOS launches Music (system log, 03:03:47). Not fixable in the page (a Web Audio attempt was reverted): record and demo without those earbuds (§14 "After freeze").
 
+### v4.7 → v4.8 (human call: arc sound, 2026-10-09 ~03:30)
+1. Electric crackle while the build arc flickers (forge / warden / test of this page's pending request): synthesized in the page with Web Audio (no file), quiet, under the voice queue, fades out before `install.wav`; DENIED's red arc stays silent (§13 "Client rules").
+
 ---
 
 ## 1. Product
@@ -492,7 +495,7 @@ Define each frozen literal (tripwire regex, DENIED prompt, failureCode enum, den
 - Static: `/` → `public/index.html`, `/voice/*`. `/mock/*` only when `OFFLINE=1`.
 
 ### Client rules
-First poll sets the cursor silently; voice only for newer lines, one at a time; unlock audio on the first gesture; never reload mid-take; Send + chips disabled while a request is pending.
+First poll sets the cursor silently; voice only for newer lines, one at a time; unlock audio on the first gesture; never reload mid-take; Send + chips disabled while a request is pending. While the violet build arc flickers for this page's pending request, a quiet electric crackle plays (Web Audio, synthesized, no file, not in the voice queue, no toggle); it fades out when the arc stops; the red DENIED arc is silent.
 
 ### Must regions
 Header: CHARTER LOCKED + short hash + "charter unchanged since boot · granted ⊆ charter" (red if any line's `charterHash` differs) · log tail · workbench (reply, items, chips, input) · GRANTS / NEVER lists (static copy of `caps-allow` / `caps-deny`, refreshed at every re-pin) · AUTHORITY +0 (union of `caps` on install/reuse minus `caps-allow`).
